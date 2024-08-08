@@ -5,13 +5,13 @@
 #define UNIT_CONTROLLED 1
 #define UNIT_INDUCED 2
 #define UNIT_SUPPRESSED 3
-#define UNIT_DEAD 4
+#define UNIT_FAILED 4
 #define UNIT_FREEZING_ROARINGED 5
 #define isalive(s) (\
 {\
 		int _r;\
 		switch(s){\
-			case UNIT_DEAD:\
+			case UNIT_FAILED:\
 			case UNIT_FREEZING_ROARINGED:\
 				_r=0;\
 				break;\
@@ -62,6 +62,7 @@
 
 #define TYPES_DEVINE (TYPE_DEVINEGRASS|TYPE_ALKALIFIRE|TYPE_DEVINEWATER)
 #define TYPES_ALL (0x0fffff)
+#define TYPES_REGULAR (0x01ffff)
 
 #define TYPES_GRASS_EFFECT (TYPE_WATER|TYPE_LIGHT|TYPE_ROCK|TYPE_SOIL)
 #define TYPES_GRASS_WEAK (TYPE_FIRE|TYPE_STEEL|TYPE_MACHINE|TYPE_DRAGON)

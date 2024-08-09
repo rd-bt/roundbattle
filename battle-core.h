@@ -249,8 +249,33 @@
 		_r;\
 }\
 )
+
 #define STRENGTH_MAX (+8)
 #define STRENGTH_MIN (-8)
+
+#define ACT_MOVE0 0
+#define ACT_MOVE1 1
+#define ACT_MOVE2 2
+#define ACT_MOVE3 3
+#define ACT_MOVE4 4
+#define ACT_MOVE5 5
+#define ACT_MOVE6 6
+#define ACT_MOVE7 7
+#define ACT_NORMALATTACK 8
+#define ACT_GIVEUP 9
+#define ACT_UNIT0 10
+#define ACT_UNIT1 11
+#define ACT_UNIT2 12
+#define ACT_UNIT3 13
+#define ACT_UNIT4 14
+#define ACT_UNIT5 15
+struct unit;
+struct player;
+struct move {
+	const char *id,*name;
+	void (*action)(struct unit *subject,int arg);
+	int type,mlevel,cooldown,unused;
+};
 struct unit_base {
 	const char *name;
 	unsigned long max_hp,atk;
@@ -260,6 +285,8 @@ struct unit_base {
 		physical_bonus,magical_bonus,
 		physical_derate,magical_derate;
 	int type0,type1,level,unused;
+	struct move moves[8];
+	struct move pmoves[2];
 };
 struct strength {
 	int atk,def,speed,hit,avoid,
@@ -271,6 +298,7 @@ struct abnormal {
 	int burnt,poisoned,parasitized,cursed,radiated;//controlled
 	int asleep,frozen,paralysed,stunned,petrified;
 };
+
 struct unit {
 	struct unit_base base;
 	unsigned long hp,atk;
@@ -280,15 +308,20 @@ struct unit {
 	double cirt_effect,
 		physical_bonus,magical_bonus,
 		physical_derate,magical_derate;
+	//struct effect *effects;
+	int type0,type1,state,unused;
+	struct move moves[8];
+	struct move pmoves[2];
 	struct strength strengths;
 	struct abnormal abnormals;
-	struct effect *effects;
-	int type0,type1,state,unused;
+	struct player *owner;
+	struct move *current_move;
 };
 struct player {
 	struct unit units[6];
 	struct unit *front;
 	struct player *enemy;
+	int (*selector)(struct player *);
 };
 
 int unit_kill(struct unit *up);
@@ -305,4 +338,14 @@ unsigned long normal_attack(struct unit *dest,struct unit *src);
 
 unsigned long heal(struct unit *dest,struct unit *src,unsigned long value);
 
+unsigned long sethp(struct unit *dest,unsigned long hp);
+
+unsigned long addhp(struct unit *dest,long hp);
+
+struct unit *gettarget(struct unit *u);
+
+const char *type2str(int type);
+
+int rand_selector(struct player *p);
+int manual_selector(struct player *p);
 #endif

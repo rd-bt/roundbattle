@@ -38,6 +38,8 @@
 #define AF_NORMAL 32
 #define AF_NOFLOAT 64
 
+#define MF_NOCONTROL 1
+
 #define TYPE_VOID (0)
 #define TYPE_GRASS (1<<0)
 #define TYPE_FIRE (1<<1)
@@ -262,19 +264,33 @@
 #define ACT_MOVE6 6
 #define ACT_MOVE7 7
 #define ACT_NORMALATTACK 8
-#define ACT_GIVEUP 9
+#define ACT_ABORT 9
 #define ACT_UNIT0 10
 #define ACT_UNIT1 11
 #define ACT_UNIT2 12
 #define ACT_UNIT3 13
 #define ACT_UNIT4 14
 #define ACT_UNIT5 15
+#define ACT_GIVEUP 16
+
+#define ABNORMAL_BURNT 1
+#define ABNORMAL_POISONED 2
+#define ABNORMAL_PARASITIZED 4
+#define ABNORMAL_CURSED 8
+#define ABNORMAL_RADIATED 16
+#define ABNORMAL_ASLEEP 32
+#define ABNORMAL_FROZEN 64
+#define ABNORMAL_PARALYSED 256
+#define ABNORMAL_STUNNED 512
+#define ABNORMAL_PETRIFIED 1024
+#define ABNORMAL_CONTROL (ABNORMAL_ASLEEP|ABNORMAL_FROZEN|ABNORMAL_PARALYSED|ABNORMAL_STUNNED|ABNORMAL_PETRIFIED)
+#define ABNORMAL_ALL 2047
 struct unit;
 struct player;
 struct move {
 	const char *id,*name;
 	void (*action)(struct unit *subject,int arg);
-	int type,mlevel,cooldown,unused;
+	int type,mlevel,prior,cooldown,flag,unused;
 };
 struct unit_base {
 	const char *name;
@@ -315,13 +331,14 @@ struct unit {
 	struct strength strengths;
 	struct abnormal abnormals;
 	struct player *owner;
-	struct move *current_move;
+	struct move *move_cur;
 };
 struct player {
 	struct unit units[6];
 	struct unit *front;
 	struct player *enemy;
 	int (*selector)(struct player *);
+	int action,unused;
 };
 
 int unit_kill(struct unit *up);
@@ -336,7 +353,7 @@ int test(double prob);
 
 unsigned long normal_attack(struct unit *dest,struct unit *src);
 
-unsigned long heal(struct unit *dest,struct unit *src,unsigned long value);
+unsigned long heal(struct unit *dest,unsigned long value);
 
 unsigned long sethp(struct unit *dest,unsigned long hp);
 
@@ -344,8 +361,15 @@ unsigned long addhp(struct unit *dest,long hp);
 
 struct unit *gettarget(struct unit *u);
 
+void unit_abnormal(struct unit *u,int abnormals,int round);
+
+void unit_cooldown_decrease(struct unit *u,int round);
+
+void unit_effect_round_decrease(struct unit *u,int round);
+
+int setcooldown(struct move *m,int round);
+
 const char *type2str(int type);
 
-int rand_selector(struct player *p);
-int manual_selector(struct player *p);
+
 #endif

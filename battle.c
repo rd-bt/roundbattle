@@ -2,6 +2,81 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+int canaction2(struct player *p,int act);
+int rand_selector(struct player *p){
+	int x;
+redo:
+	x=lrand48()%9;
+	if(x==8)
+		return 8;
+	if(p->front->moves[x].id==NULL)
+		goto redo;
+	return x;
+}
+int manual_selector(struct player *p){
+	char buf[32],*endp;
+	int r,n=0,cool;
+reselect:
+	printf("Select the action of %s\n",p->front->base.name);
+	if(!canaction2(p,ACT_NORMALATTACK))
+		printf("[x]");
+	else
+		printf("[ ]");
+	printf("a: Normal attack (%s)\n",type2str(p->front->type0));
+	for(r=0;r<8;++r){
+		if(!p->front->moves[r].id)
+			break;
+		if(!canaction2(p,r))
+			printf("[x]");
+		else
+			printf("[ ]");
+		printf("%d: %s (%s)",r,p->front->moves[r].name,type2str(p->front->moves[r].type));
+		cool=p->front->moves[r].cooldown;
+		if(cool)
+			printf(" cooldown rounds:%d\n",cool);
+		else printf("\n");
+		++n;
+	}
+	printf("q: Abort the action\n");
+	printf("g: Give up\n");
+	printf(">");
+	fgets(buf,32,stdin);
+	endp=strchr(buf,'\n');
+	if(endp)*endp=0;
+	switch(*buf){
+		case 'Q':
+		case 'q':
+			if(buf[1]!=0)
+				goto unknown;
+			r=ACT_ABORT;
+			break;
+		case 'G':
+		case 'g':
+			if(buf[1]!=0)
+				goto unknown;
+			r=ACT_GIVEUP;
+			break;
+		case 'A':
+		case 'a':
+			if(buf[1]!=0)
+				goto unknown;
+			r=ACT_NORMALATTACK;
+			break;
+		case '0' ... '9':
+			r=strtol(buf,&endp,10);
+			if(r>=n||*endp)goto unknown;
+			break;
+		default:
+unknown:
+			printf("Unkonwn action:%s\n",buf);
+			goto reselect;
+	}
+	if(!canaction2(p,r)){
+		printf("The action %s is unavailable now.\n",buf);
+		goto reselect;
+	}
+	return r;
+}
 void unit_fillattr(struct unit *u){
 	u->hp=u->base.max_hp;
 	u->atk=u->base.atk;
@@ -24,6 +99,7 @@ void unit_fillattr(struct unit *u){
 	u->unused=0;
 	memcpy(u->moves,u->base.moves,8*sizeof(struct move));
 	memcpy(u->pmoves,u->base.pmoves,2*sizeof(struct move));
+	u->move_cur=NULL;
 }
 void player_fillattr(struct player *p){
 	for(int i=0;i<6;++i){
@@ -33,30 +109,115 @@ void player_fillattr(struct player *p){
 		p->units[i].owner=p;
 	}
 }
-int player_action(struct player *p,int act){
+void player_action(struct player *p){
+	switch(p->action){
+		case ACT_MOVE0 ... ACT_MOVE7:
+			p->front->move_cur=p->front->moves+p->action;
+			printf("%s uses %s (%s)\n",p->front->base.name,p->front->move_cur->name,type2str(p->front->move_cur->type));
+			p->front->move_cur->action(p->front,0);
+			return;
+		case ACT_NORMALATTACK:
+			p->front->move_cur=NULL;
+			printf("%s uses Normal attack (%s)\n",p->front->base.name,type2str(p->front->type0));
+			normal_attack(gettarget(p->front),p->front);
+			return;
+		default:
+			p->front->move_cur=NULL;
+			return;
+	}
+}
+int getprior(struct player *p){
+	switch(p->action){
+		case ACT_MOVE0 ... ACT_MOVE7:
+			return p->front->moves[p->action].prior;
+		case ACT_NORMALATTACK:
+		default:
+			return 0;
+	}
+}
+int canaction2(struct player *p,int act){
+	struct move *m;
 	switch(act){
 		case ACT_MOVE0 ... ACT_MOVE7:
-			p->front->current_move=p->front->moves+act;
-			printf("%s uses %s\n",p->front->base.name,p->front->current_move->name);
-			p->front->current_move->action(p->front,0);
-			break;
+			m=p->front->moves+act;
+			if(m->cooldown)
+				return 0;
+			switch(p->front->state){
+				case UNIT_CONTROLLED:
+					if(m->flag&MF_NOCONTROL)
+						return 1;
+				case UNIT_SUPPRESSED:
+					return 0;
+				default:
+					return 1;
+			}
 		case ACT_NORMALATTACK:
-			printf("%s uses normal attack\n",p->front->base.name);
-			normal_attack(gettarget(p->front),p->front);
-			break;
+			switch(p->front->state){
+				case UNIT_CONTROLLED:
+				case UNIT_SUPPRESSED:
+					return 0;
+				default:
+					return 1;
+			}
+		case ACT_UNIT0 ... ACT_UNIT5:
+			switch(p->front->state){
+				case UNIT_CONTROLLED:
+				case UNIT_SUPPRESSED:
+					return 0;
+				default:
+					return 1;
+			}
 		default:
 		case ACT_GIVEUP:
+		case ACT_ABORT:
 			return 1;
 	}
-	return 0;
+}
+
+int canaction(struct player *p){
+	return canaction2(p,p->action);
+}
+void unit_state_correct(struct unit *u){
+	int r;
+	if(!isalive(u->state))
+		return;
+	r=UNIT_NORMAL;
+	if(
+		u->abnormals.asleep||
+		u->abnormals.frozen||
+		u->abnormals.paralysed||
+		u->abnormals.stunned||
+		u->abnormals.petrified
+	)
+		r=UNIT_CONTROLLED;
+	u->state=r;
+}
+void state_correct(struct player *p){
+	int r;
+	for(r=0;r<6;++r){
+		if(!p->units[r].base.name)
+			break;
+		unit_state_correct(p->units+r);
+	}
+}
+void cooldown_decrease(struct player *p){
+	int r;
+	for(r=0;r<6;++r){
+		if(!p->units[r].base.name)
+			break;
+		unit_cooldown_decrease(p->units+r,1);
+	}
 }
 #define deadcheck do {\
 	r0=!isalive(p->front->state);\
 	r1=!isalive(e->front->state);\
 	if(r0||r1){\
-		if(r0&&r1)\
+		if(r0&&r1){\
+			if(p->front->speed==e->front->speed)\
+				return test(0.5);\
 			return p->front->speed<e->front->speed?\
 				1:0;\
+		}\
 		if(r0)\
 			return 1;\
 		else\
@@ -65,7 +226,7 @@ int player_action(struct player *p,int act){
 }while(0)
 int battle(struct player *p){
 	struct player *e=p->enemy,*prior,*latter;
-	int round,r0,r1,a0,a1;
+	int round,r0,r1;
 	if(e->enemy!=p)
 		return -1;
 	if(!p->units->base.name||!e->units->base.name)
@@ -83,15 +244,45 @@ int battle(struct player *p){
 		else
 			prior=test(0.5)?p:e;
 		latter=prior->enemy;
-		a0=prior->selector(prior);
-		a1=latter->selector(latter);
-		printf("%s actions\n",prior->front->base.name);
-		if(player_action(prior,a0))
+		state_correct(prior);
+		state_correct(latter);
+		prior->action=prior->selector(prior);
+		if((unsigned int)prior->action>=ACT_GIVEUP){
 			return prior==p?1:0;
-		deadcheck;
-		printf("%s actions\n",latter->front->base.name);
-		if(player_action(latter,a1))
+		}
+		latter->action=latter->selector(latter);
+		if((unsigned int)latter->action>=ACT_GIVEUP){
 			return latter==p?1:0;
-		deadcheck;
+		}
+		r0=getprior(prior);
+		r1=getprior(latter);
+		if(r0<r1){
+			prior=prior->enemy;
+			latter=latter->enemy;
+		}
+		if(canaction(prior)){
+			if(prior->action==ACT_ABORT)
+				printf("%s aborted the action\n",prior->front->base.name);
+			else {
+				printf("%s actions\n",prior->front->base.name);
+				player_action(prior);
+				deadcheck;
+			}
+		}
+		state_correct(latter);
+		if(canaction(latter)){
+			if(latter->action==ACT_ABORT)
+				printf("%s aborted the action\n",latter->front->base.name);
+			else {
+				printf("%s actions\n",latter->front->base.name);
+				player_action(latter);
+				deadcheck;
+			}
+		}
+		//round end
+		unit_effect_round_decrease(prior->front,1);
+		unit_effect_round_decrease(latter->front,1);
+		cooldown_decrease(prior);
+		cooldown_decrease(latter);
 	}
 }

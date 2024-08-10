@@ -16,7 +16,7 @@ int main(){
 		bt.moves[r].id=NULL;
 		bb.moves[r].id=NULL;
 	}
-	memcpy(bb.moves,builtin_moves,4*sizeof(struct move));
+	memcpy(bb.moves,builtin_moves,7*sizeof(struct move));
 	memcpy(&p1.units->base,&bt,sizeof(bt));
 	memcpy(&p2.units->base,&bb,sizeof(bb));
 	r=battle(&p1);

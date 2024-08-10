@@ -12,13 +12,8 @@ const char *type2str(int type){
 }
 int unit_kill(struct unit *up){
 	if(up->hp)return -1;
-	switch(up->state){
-		case UNIT_FAILED:
-		case UNIT_FREEZING_ROARINGED:
+	if(!isalive(up->state))
 			return -1;
-		default:
-			break;
-	}
 	up->state=UNIT_FAILED;
 	printf("%s failed\n",up->base.name);
 	return 0;
@@ -33,6 +28,8 @@ unsigned long damage(struct unit *dest,struct unit *src,unsigned long value,int 
 		default:
 			return 0;
 	}
+	if(!isalive(dest->state))
+			return 0;
 	if(dest->hp>value){
 		dest->hp-=value;
 	}else {
@@ -130,8 +127,10 @@ unsigned long normal_attack(struct unit *dest,struct unit *src){
 		return 0;
 	return attack(dest,src,src->atk,DAMAGE_PHYSICAL,AF_NORMAL,src->type0);
 }
-unsigned long heal(struct unit *dest,struct unit *src,unsigned long value){
+unsigned long heal(struct unit *dest,unsigned long value){
 	unsigned long hp;
+	if(!isalive(dest->state))
+			return -1;
 	hp=dest->hp+value;
 	if(hp>dest->base.max_hp)
 		hp=dest->base.max_hp;
@@ -140,8 +139,11 @@ unsigned long heal(struct unit *dest,struct unit *src,unsigned long value){
 	return value;
 }
 unsigned long sethp(struct unit *dest,unsigned long hp){
-	unsigned long ohp=dest->hp;
+	unsigned long ohp;
 	int c;
+	if(!isalive(dest->state))
+			return -1;
+	ohp=dest->hp;
 	if(hp>dest->base.max_hp)
 		hp=dest->base.max_hp;
 	if(hp==ohp)
@@ -154,54 +156,82 @@ unsigned long sethp(struct unit *dest,unsigned long hp){
 	return hp;
 }
 
-unsigned long addhp(struct unit *dest,long hp){
+/*unsigned long addhp(struct unit *dest,long hp){
 	long x=(long)dest->hp+hp;
 	if(hp<0&&x<0)
 		x=0;
 	return sethp(dest,x);
+}*/
+unsigned long addhp(struct unit *dest,long hp){
+	long ohp,rhp;
+	int c;
+	if(!hp)
+		return 0;
+	if(!isalive(dest->state))
+			return -1;
+	ohp=(long)dest->hp;
+	rhp=hp+ohp;
+	if(hp<0&&rhp<0)
+		rhp=0;
+	if((unsigned long)rhp>dest->base.max_hp)
+		rhp=dest->base.max_hp;
+	dest->hp=rhp;
+	c=rhp>ohp?'+':'-';
+	printf("%s %c%lu hp,current hp:%lu\n",dest->base.name,c,(unsigned long)(hp>0?hp:-hp),rhp);
+	if(!rhp)
+		unit_kill(dest);
+	return rhp;
 }
 struct unit *gettarget(struct unit *u){
 	return u->owner->enemy->front;
 }
-int rand_selector(struct player *p){
-	int x;
-redo:
-	x=lrand48()%9;
-	if(x==8)
-		return 8;
-	if(p->front->moves[x].id==NULL)
-		goto redo;
-	return x;
+int setcooldown(struct move *m,int round){
+	m->cooldown=round;
+	return round;
 }
-int manual_selector(struct player *p){
-	char buf[32],*endp;
-	int r,n=0;
-reselect:
-	printf("Select the action of %s\n",p->front->base.name);
-	printf("a: Normal attack (%s)\n",type2str(p->front->type0));
+void unit_cooldown_decrease(struct unit *u,int round){
+	int r,r1;
 	for(r=0;r<8;++r){
-		if(!p->front->moves[r].id)
+		if(!u->moves[r].id)
 			break;
-		printf("%d: %s (%s)\n",r,p->front->moves[r].name,type2str(p->front->moves[r].type));
-		++n;
-	}
-	printf(">");
-	fgets(buf,32,stdin);
-	endp=strchr(buf,'\n');
-	if(endp)*endp=0;
-	switch(*buf){
-		case 'A':
-		case 'a':
-			if(buf[1]!=0)
-				goto unknown;
-			return ACT_NORMALATTACK;
-		case '0' ... '9':
-			r=strtol(buf,&endp,10);
-			if(r>=n||*endp)goto unknown;
-			return r;
-		default:
-unknown:
-			printf("Unkonwn action: %s\n",buf);
-			goto reselect;
+		r1=u->moves[r].cooldown;
+		if(!r1||r1<0)
+			continue;
+		r1-=round;
+		if(r1<0)
+			r1=0;
+		u->moves[r].cooldown=r1;
 	}
 }
+#define ab_rounddec(x)\
+	if((x)>0){\
+		if((x)<round)\
+			(x)=0;\
+		else\
+			(x)-=round;\
+	}
+void unit_abnormal(struct unit *u,int abnormals,int round){
+	if(abnormals&ABNORMAL_BURNT)u->abnormals.burnt=round;
+	if(abnormals&ABNORMAL_POISONED)u->abnormals.poisoned=round;
+	if(abnormals&ABNORMAL_PARASITIZED)u->abnormals.parasitized=round;
+	if(abnormals&ABNORMAL_CURSED)u->abnormals.cursed=round;
+	if(abnormals&ABNORMAL_RADIATED)u->abnormals.radiated=round;
+	if(abnormals&ABNORMAL_ASLEEP)u->abnormals.asleep=round;
+	if(abnormals&ABNORMAL_FROZEN)u->abnormals.frozen=round;
+	if(abnormals&ABNORMAL_PARALYSED)u->abnormals.paralysed=round;
+	if(abnormals&ABNORMAL_STUNNED)u->abnormals.stunned=round;
+	if(abnormals&ABNORMAL_PETRIFIED)u->abnormals.petrified=round;
+}
+void unit_effect_round_decrease(struct unit *u,int round){
+	ab_rounddec(u->abnormals.burnt)
+	ab_rounddec(u->abnormals.poisoned)
+	ab_rounddec(u->abnormals.parasitized)
+	ab_rounddec(u->abnormals.cursed)
+	ab_rounddec(u->abnormals.radiated)
+	ab_rounddec(u->abnormals.asleep)
+	ab_rounddec(u->abnormals.frozen)
+	ab_rounddec(u->abnormals.paralysed)
+	ab_rounddec(u->abnormals.stunned)
+	ab_rounddec(u->abnormals.petrified)
+}
+

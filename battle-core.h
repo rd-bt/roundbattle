@@ -343,7 +343,7 @@ struct player {
 
 int unit_kill(struct unit *up);
 
-unsigned long damage(struct unit *dest,struct unit *src,unsigned long value,int damage_type,int aflag);
+unsigned long damage(struct unit *dest,struct unit *src,unsigned long value,int damage_type,int aflag,int type);
 
 unsigned long attack(struct unit *dest,struct unit *src,unsigned long value,int damage_type,int aflag,int type);
 
@@ -363,7 +363,13 @@ struct unit *gettarget(struct unit *u);
 
 void unit_abnormal(struct unit *u,int abnormals,int round);
 
+void unit_abnormal_purify(struct unit *u,int abnormals);
+
+void unit_state_correct(struct unit *u);
+
 void unit_cooldown_decrease(struct unit *u,int round);
+
+void unit_effect_in_roundend(struct unit *u);
 
 void unit_effect_round_decrease(struct unit *u,int round);
 

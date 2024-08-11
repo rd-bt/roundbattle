@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+const char *moves[]={"steel_flywheel","holylight_heavycannon","double_slash","health_exchange","leech_seed","spoony_spell","self_explode","petrifying_ray",NULL};
 int main(){
 	struct player p1,p2;
 	struct unit_base bt={"tiger",6600,300,224,666,123,10,128,2,0,0,0,0,TYPE_ICE,TYPE_VOID,13,0};
@@ -16,7 +17,8 @@ int main(){
 		bt.moves[r].id=NULL;
 		bb.moves[r].id=NULL;
 	}
-	memcpy(bb.moves,builtin_moves,7*sizeof(struct move));
+	for(r=0;moves[r];++r)
+		memcpy(bb.moves+r,get_builtin_move_by_id(moves[r]),sizeof(struct move));
 	memcpy(&p1.units->base,&bt,sizeof(bt));
 	memcpy(&p2.units->base,&bb,sizeof(bb));
 	r=battle(&p1);

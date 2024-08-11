@@ -1,5 +1,21 @@
 #include "battle-core.h"
 #include <stddef.h>
+void steel_flywheel(struct unit *s,int arg){
+	struct unit *t=gettarget(s);
+	if(hittest(t,s,1.2)){
+		attack(t,s,1.25*s->atk,DAMAGE_PHYSICAL,0,TYPE_STEEL);
+		unit_abnormal(t,ABNORMAL_CURSED,3);
+	}
+	setcooldown(s->move_cur,3);
+}
+void holylight_heavycannon(struct unit *s,int arg){
+	struct unit *t=gettarget(s);
+	if(hittest(t,s,1.2)){
+		attack(t,s,1.25*s->atk,DAMAGE_PHYSICAL,0,TYPE_LIGHT);
+		unit_abnormal(t,ABNORMAL_RADIATED,3);
+	}
+	setcooldown(s->move_cur,3);
+}
 void ground_force(struct unit *s,int arg){
 	struct unit *t=gettarget(s);
 	if(hittest(t,s,1.0))
@@ -41,7 +57,31 @@ void petrifying_ray(struct unit *s,int arg){
 		unit_abnormal(t,ABNORMAL_PETRIFIED,3);
 	setcooldown(s->move_cur,4);
 }
+void leech_seed(struct unit *s,int arg){
+	struct unit *t=gettarget(s);
+	if(hittest(t,s,1.3))
+		unit_abnormal(t,ABNORMAL_PARASITIZED,5);
+	setcooldown(s->move_cur,4);
+}
 const struct move builtin_moves[]={
+	{
+		.id="steel_flywheel",
+		.name="Steel flywheel",
+		.action=steel_flywheel,
+		.type=TYPE_STEEL,
+		.prior=0,
+		.flag=0,
+		.mlevel=MLEVEL_REGULAR,
+	},
+	{
+		.id="holylight_heavycannon",
+		.name="Holylight Heavycannon",
+		.action=holylight_heavycannon,
+		.type=TYPE_LIGHT,
+		.prior=0,
+		.flag=0,
+		.mlevel=MLEVEL_REGULAR,
+	},
 	{
 		.id="ground_force",
 		.name="Ground force",
@@ -101,6 +141,15 @@ const struct move builtin_moves[]={
 		.name="Petrifying ray",
 		.action=petrifying_ray,
 		.type=TYPE_ROCK,
+		.prior=0,
+		.flag=0,
+		.mlevel=MLEVEL_REGULAR
+	},
+	{
+		.id="leech_seed",
+		.name="Leech_seed",
+		.action=leech_seed,
+		.type=TYPE_GRASS,
 		.prior=0,
 		.flag=0,
 		.mlevel=MLEVEL_REGULAR

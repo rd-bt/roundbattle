@@ -3,6 +3,14 @@
 #include <stdlib.h>
 #include <string.h>
 int canaction2(struct player *p,int act);
+const struct move *get_builtin_move_by_id(const char *id){
+	unsigned long i;
+	for(i=0;builtin_moves[i].id;++i){
+		if(!strcmp(id,builtin_moves[i].id))
+			return builtin_moves+i;
+	}
+	return NULL;
+}
 int rand_selector(struct player *p){
 	int x;
 redo:
@@ -177,21 +185,7 @@ int canaction2(struct player *p,int act){
 int canaction(struct player *p){
 	return canaction2(p,p->action);
 }
-void unit_state_correct(struct unit *u){
-	int r;
-	if(!isalive(u->state))
-		return;
-	r=UNIT_NORMAL;
-	if(
-		u->abnormals.asleep||
-		u->abnormals.frozen||
-		u->abnormals.paralysed||
-		u->abnormals.stunned||
-		u->abnormals.petrified
-	)
-		r=UNIT_CONTROLLED;
-	u->state=r;
-}
+
 void state_correct(struct player *p){
 	int r;
 	for(r=0;r<6;++r){
@@ -236,7 +230,16 @@ int battle(struct player *p){
 	p->front=p->units;
 	e->front=e->units;
 	for(round=0;;++round){
-		printf("\nROUND %d %s:%lu/%lu %s:%lu/%lu\n",round,p->front->base.name,p->front->hp,p->front->base.max_hp,e->front->base.name,e->front->hp,e->front->base.max_hp);
+		printf("\nROUND %d %s:%lu/%lu(%.2lf%%) %s:%lu/%lu(%.2lf%%)\n",round,
+			p->front->base.name,
+			p->front->hp,
+			p->front->base.max_hp,
+			100.0*p->front->hp/p->front->base.max_hp,
+			e->front->base.name,
+			e->front->hp,
+			e->front->base.max_hp,
+			100.0*e->front->hp/e->front->base.max_hp
+			);
 		if(p->front->speed>e->front->speed)
 			prior=p;
 		else if(p->front->speed<e->front->speed)
@@ -279,7 +282,10 @@ int battle(struct player *p){
 				deadcheck;
 			}
 		}
-		//round end
+		printf("ROUND END\n");
+		unit_effect_in_roundend(prior->front);
+		unit_effect_in_roundend(latter->front);
+		deadcheck;
 		unit_effect_round_decrease(prior->front,1);
 		unit_effect_round_decrease(latter->front,1);
 		cooldown_decrease(prior);

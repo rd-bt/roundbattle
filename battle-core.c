@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <math.h>
 static const char *damage_type_string[3]={"real","physical","magical"};
 static const char *types_string[21]={"Void","Grass","Fire","Water","Steel","Light","Fighting","Wind","Poison","Rock","Electric","Ghost","Ice","Bug","Machine","Soil","Dragon","Normal","Devine grass","Alkali fire","Devine water"};
 const char *type2str(int type){
@@ -68,8 +69,15 @@ unsigned long attack(struct unit *dest,struct unit *src,unsigned long value,int 
 		default:
 			return 0;
 	}
-	if(aflag&AF_CIRT)
-		value=value*(src?src->cirt_effect:2.0);
+	if(aflag&AF_CIRT){
+		if(src){
+			if(src->cirt_effect>=0.5)
+				value*=src->cirt_effect;
+			else
+				value/=3-2*src->cirt_effect;
+		}else
+			value*=2;
+	}
 
 	if(damage_type!=DAMAGE_REAL&&!(aflag&(AF_EFFECT|AF_WEAK))){
 		dest_type=dest->type0|dest->type1;
@@ -318,6 +326,62 @@ void unit_abnormal_purify(struct unit *u,int abnormals){
 			printf("%s relieves the petrified effect\n",u->base.name);
 		}
 	}
+}
+
+#define setattr(a,A)\
+	if((attrs&A)&&u->attrs.a!=level){\
+		printf("%s %+d levels at " #a "\n",u->base.name,level-u->attrs.a);\
+		u->attrs.a=level;\
+	}
+void unit_attr_set_force(struct unit *u,int attrs,int level){
+	setattr(atk,ATTR_ATK)
+	setattr(def,ATTR_DEF)
+	setattr(speed,ATTR_SPEED)
+	setattr(hit,ATTR_HIT)
+	setattr(avoid,ATTR_AVOID)
+	setattr(cirt_effect,ATTR_CIRTEFFECT)
+	setattr(physical_bonus,ATTR_PBONUS)
+	setattr(magical_bonus,ATTR_MBONUS)
+	setattr(physical_derate,ATTR_PDERATE)
+	setattr(magical_derate,ATTR_MDERATE)
+	unit_update_attr(u);
+}
+
+void unit_attr_set(struct unit *u,int attrs,int level){
+	if(level>8)
+		level=8;
+	else if(level<-8)
+		level=-8;
+	unit_attr_set_force(u,attrs,level);
+}
+#define update(a)\
+	r=u->base.a;\
+	if(u->attrs.a){\
+		if(u->attrs.a>0)\
+			r+=r*u->attrs.a/4;\
+		else\
+			r*=pow(0.75,-u->attrs.a);\
+	}\
+	u->a=r
+#define update_d(a,step)\
+	d=u->base.a;\
+	if(u->attrs.a){\
+		d+=u->attrs.a*(step);\
+	}\
+	u->a=d
+void unit_update_attr(struct unit *u){
+	unsigned long r;
+	double d;
+	update(atk);
+	update(def);
+	update(speed);
+	update(hit);
+	update(avoid);
+	update_d(cirt_effect,0.75);
+	update_d(physical_bonus,0.25);
+	update_d(magical_bonus,0.25);
+	update_d(physical_derate,0.25);
+	update_d(magical_derate,0.25);
 }
 void unit_state_correct(struct unit *u){
 	int r;

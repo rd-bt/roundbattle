@@ -98,7 +98,7 @@ void unit_fillattr(struct unit *u){
 	u->magical_bonus=u->base.magical_bonus;
 	u->physical_derate=u->base.physical_derate;
 	u->magical_derate=u->base.magical_derate;
-	memset(&u->strengths,0,sizeof(struct strength));
+	memset(&u->attrs,0,sizeof(struct attr));
 	memset(&u->abnormals,0,sizeof(struct abnormal));
 	//u->effects=NULL;
 	u->type0=u->base.type0;

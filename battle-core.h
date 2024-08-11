@@ -252,8 +252,7 @@
 }\
 )
 
-#define STRENGTH_MAX (+8)
-#define STRENGTH_MIN (-8)
+
 
 #define ACT_MOVE0 0
 #define ACT_MOVE1 1
@@ -285,6 +284,19 @@
 #define ABNORMAL_PETRIFIED 1024
 #define ABNORMAL_CONTROL (ABNORMAL_ASLEEP|ABNORMAL_FROZEN|ABNORMAL_PARALYSED|ABNORMAL_STUNNED|ABNORMAL_PETRIFIED)
 #define ABNORMAL_ALL 2047
+
+#define ATTR_ATK 1
+#define ATTR_DEF 2
+#define ATTR_SPEED 4
+#define ATTR_HIT 8
+#define ATTR_AVOID 16
+#define ATTR_CIRTEFFECT 32
+#define ATTR_PBONUS 64
+#define ATTR_MBONUS 128
+#define ATTR_PDERATE 256
+#define ATTR_MDERATE 512
+#define ATTR_MAX (+8)
+#define ATTR_MIN (-8)
 struct unit;
 struct player;
 struct move {
@@ -304,7 +316,7 @@ struct unit_base {
 	struct move moves[8];
 	struct move pmoves[2];
 };
-struct strength {
+struct attr {
 	int atk,def,speed,hit,avoid,
 	    cirt_effect,
 	    physical_bonus,magical_bonus,
@@ -328,7 +340,7 @@ struct unit {
 	int type0,type1,state,unused;
 	struct move moves[8];
 	struct move pmoves[2];
-	struct strength strengths;
+	struct attr attrs;
 	struct abnormal abnormals;
 	struct player *owner;
 	struct move *move_cur;
@@ -364,6 +376,11 @@ struct unit *gettarget(struct unit *u);
 void unit_abnormal(struct unit *u,int abnormals,int round);
 
 void unit_abnormal_purify(struct unit *u,int abnormals);
+void unit_attr_set_force(struct unit *u,int attrs,int level);
+
+void unit_attr_set(struct unit *u,int attrs,int level);
+
+void unit_update_attr(struct unit *u);
 
 void unit_state_correct(struct unit *u);
 

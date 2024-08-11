@@ -2,7 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
-const char *moves[]={"steel_flywheel","holylight_heavycannon","double_slash","health_exchange","leech_seed","spoony_spell","self_explode","petrifying_ray",NULL};
+const char *moves[]={"steel_flywheel","holylight_heavycannon","double_slash","iron_wall","leech_seed","spoony_spell","soften","petrifying_ray",NULL};
 int main(){
 	struct player p1,p2;
 	struct unit_base bt={"tiger",6600,300,224,666,123,10,128,2,0,0,0,0,TYPE_ICE,TYPE_VOID,13,0};

@@ -63,6 +63,15 @@ void leech_seed(struct unit *s,int arg){
 		unit_abnormal(t,ABNORMAL_PARASITIZED,5);
 	setcooldown(s->move_cur,4);
 }
+void soften(struct unit *s,int arg){
+	struct unit *t=gettarget(s);
+	if(hittest(t,s,1.0))
+		unit_attr_set(t,ATTR_ATK,t->attrs.atk-1);
+}
+void iron_wall(struct unit *s,int arg){
+	unit_attr_set(s,ATTR_PDERATE,s->attrs.physical_derate+1);
+	unit_attr_set(s,ATTR_MDERATE,s->attrs.magical_derate+1);
+}
 const struct move builtin_moves[]={
 	{
 		.id="steel_flywheel",
@@ -75,7 +84,7 @@ const struct move builtin_moves[]={
 	},
 	{
 		.id="holylight_heavycannon",
-		.name="Holylight Heavycannon",
+		.name="Holylight heavycannon",
 		.action=holylight_heavycannon,
 		.type=TYPE_LIGHT,
 		.prior=0,
@@ -153,6 +162,24 @@ const struct move builtin_moves[]={
 		.prior=0,
 		.flag=0,
 		.mlevel=MLEVEL_REGULAR
+	},
+	{
+		.id="soften",
+		.name="Soften",
+		.action=soften,
+		.type=TYPE_NORMAL,
+		.prior=0,
+		.flag=0,
+		.mlevel=MLEVEL_REGULAR
+	},
+	{
+		.id="iron_wall",
+		.name="Iron wall",
+		.action=iron_wall,
+		.type=TYPE_STEEL,
+		.prior=0,
+		.flag=0,
+		.mlevel=MLEVEL_REGULAR,
 	},
 	{NULL}
 };

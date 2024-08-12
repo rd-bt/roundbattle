@@ -6,9 +6,9 @@ Suppressed(UNIT_SUPPRESSED) 受到压制
 Failed(UNIT_FAILED) 战败
 Freezing roaringed(UNIT_FREEZING_ROARINGED) 战败且无法复活
 
-move level(MLEVAL_*) 技能级别
+Move level(MLEVAL_*) 技能级别
 Regular(MLEVEL_REGULAR) 常规
-Conecptual(MLEVEL_CONCEPTUAL) 概念
+Conceptual(MLEVEL_CONCEPTUAL) 概念
 Freezing roaring(MLEVEL_FREEZING_ROARING)
 
 Damage type 伤害类型

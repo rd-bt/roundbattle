@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
+#define POWEM4 0.01831563888873417866864912184610147960484027862548828125
 static const char *damage_type_string[3]={"real","physical","magical"};
 static const char *types_string[21]={"Void","Grass","Fire","Water","Steel","Light","Fighting","Wind","Poison","Rock","Electric","Ghost","Ice","Bug","Machine","Soil","Dragon","Normal","Devine grass","Alkali fire","Devine water"};
 const char *type2str(int type){
@@ -155,7 +156,6 @@ unsigned long heal(struct unit *dest,unsigned long value){
 }
 unsigned long sethp(struct unit *dest,unsigned long hp){
 	unsigned long ohp;
-	int c;
 	if(!isalive(dest->state))
 			return -1;
 	ohp=dest->hp;
@@ -164,22 +164,14 @@ unsigned long sethp(struct unit *dest,unsigned long hp){
 	if(hp==ohp)
 		return hp;
 	dest->hp=hp;
-	c=hp>ohp?'+':'-';
-	printf("%s %c%lu hp,current hp:%lu\n",dest->base.name,c,hp>ohp?hp-ohp:ohp-hp,hp);
+	printf("%s %+ld hp,current hp:%lu\n",dest->base.name,(long)hp-(long)ohp,hp);
 	if(!hp)
 		unit_kill(dest);
 	return hp;
 }
 
-/*unsigned long addhp(struct unit *dest,long hp){
-	long x=(long)dest->hp+hp;
-	if(hp<0&&x<0)
-		x=0;
-	return sethp(dest,x);
-}*/
 unsigned long addhp(struct unit *dest,long hp){
 	long ohp,rhp;
-	int c;
 	if(!hp)
 		return 0;
 	if(!isalive(dest->state))
@@ -191,11 +183,26 @@ unsigned long addhp(struct unit *dest,long hp){
 	if((unsigned long)rhp>dest->base.max_hp)
 		rhp=dest->base.max_hp;
 	dest->hp=rhp;
-	c=rhp>ohp?'+':'-';
-	printf("%s %c%lu hp,current hp:%lu\n",dest->base.name,c,(unsigned long)(hp>0?hp:-hp),rhp);
+	printf("%s %+ld hp,current hp:%lu\n",dest->base.name,hp,(unsigned long)rhp);
 	if(!rhp)
 		unit_kill(dest);
 	return rhp;
+}
+long setspi(struct unit *dest,long spi){
+	long ospi;
+	if(!isalive(dest->state))
+			return -1;
+	ospi=dest->spi;
+	if(spi>(long)dest->base.max_spi)
+		spi=(long)dest->base.max_spi;
+	if(spi<-(long)dest->base.max_spi)
+		spi=-(long)dest->base.max_spi;
+	if(spi==ospi)
+		return spi;
+	dest->spi=spi;
+	printf("%s %+ld spi,current spi:%ld\n",dest->base.name,spi-ospi,spi);
+	addhp(dest,-POWEM4*dest->base.max_hp*labs(spi-ospi));
+	return spi;
 }
 struct unit *gettarget(struct unit *u){
 	return u->owner->enemy->front;
@@ -330,7 +337,7 @@ void unit_abnormal_purify(struct unit *u,int abnormals){
 
 #define setattr(a,A)\
 	if((attrs&A)&&u->attrs.a!=level){\
-		printf("%s %+d levels at " #a "\n",u->base.name,level-u->attrs.a);\
+		printf("%s %+d levels at " #a " current %+d\n",u->base.name,level-u->attrs.a,level);\
 		u->attrs.a=level;\
 	}
 void unit_attr_set_force(struct unit *u,int attrs,int level){
@@ -438,3 +445,10 @@ void unit_effect_round_decrease(struct unit *u,int round){
 	ab_rounddec(petrified)
 }
 
+void unit_move(struct unit *u,struct move *m,int arg){
+	struct move *backup=u->move_cur;
+	u->move_cur=m;
+	printf("%s uses %s (%s)\n",u->base.name,m->name,type2str(m->type));
+	m->action(u,arg);
+	u->move_cur=backup;
+}

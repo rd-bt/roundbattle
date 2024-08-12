@@ -120,17 +120,13 @@ void player_fillattr(struct player *p){
 void player_action(struct player *p){
 	switch(p->action){
 		case ACT_MOVE0 ... ACT_MOVE7:
-			p->front->move_cur=p->front->moves+p->action;
-			printf("%s uses %s (%s)\n",p->front->base.name,p->front->move_cur->name,type2str(p->front->move_cur->type));
-			p->front->move_cur->action(p->front,0);
+			unit_move(p->front,p->front->moves+p->action,0);
 			return;
 		case ACT_NORMALATTACK:
-			p->front->move_cur=NULL;
 			printf("%s uses Normal attack (%s)\n",p->front->base.name,type2str(p->front->type0));
 			normal_attack(gettarget(p->front),p->front);
 			return;
 		default:
-			p->front->move_cur=NULL;
 			return;
 	}
 }
@@ -288,6 +284,7 @@ int battle(struct player *p){
 		deadcheck;
 		unit_effect_round_decrease(prior->front,1);
 		unit_effect_round_decrease(latter->front,1);
+		deadcheck;
 		cooldown_decrease(prior);
 		cooldown_decrease(latter);
 	}

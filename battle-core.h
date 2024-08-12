@@ -371,6 +371,8 @@ unsigned long sethp(struct unit *dest,unsigned long hp);
 
 unsigned long addhp(struct unit *dest,long hp);
 
+long setspi(struct unit *dest,long spi);
+
 struct unit *gettarget(struct unit *u);
 
 void unit_abnormal(struct unit *u,int abnormals,int round);
@@ -394,5 +396,6 @@ int setcooldown(struct move *m,int round);
 
 const char *type2str(int type);
 
+void unit_move(struct unit *u,struct move *m,int arg);
 
 #endif

@@ -72,6 +72,13 @@ void iron_wall(struct unit *s,int arg){
 	unit_attr_set(s,ATTR_PDERATE,s->attrs.physical_derate+1);
 	unit_attr_set(s,ATTR_MDERATE,s->attrs.magical_derate+1);
 }
+void spi_blow(struct unit *s,int arg){
+	struct unit *t=gettarget(s);
+	if(hittest(t,s,1.0)){
+		attack(t,s,0.75*s->atk,DAMAGE_PHYSICAL,0,TYPE_MACHINE);
+		setspi(t,t->spi+0.02*t->atk);
+	}
+}
 const struct move builtin_moves[]={
 	{
 		.id="steel_flywheel",
@@ -180,6 +187,15 @@ const struct move builtin_moves[]={
 		.prior=0,
 		.flag=0,
 		.mlevel=MLEVEL_REGULAR,
+	},
+	{
+		.id="spi_blow",
+		.name="Spi blow",
+		.action=spi_blow,
+		.type=TYPE_MACHINE,
+		.prior=0,
+		.flag=0,
+		.mlevel=MLEVEL_REGULAR
 	},
 	{NULL}
 };

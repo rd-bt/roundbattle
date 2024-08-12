@@ -3,7 +3,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
-#define POWEM4 0.01831563888873417866864912184610147960484027862548828125
+#define SHEAR_COEF (M_SQRT2/128)
 static const char *damage_type_string[3]={"real","physical","magical"};
 static const char *types_string[21]={"Void","Grass","Fire","Water","Steel","Light","Fighting","Wind","Poison","Rock","Electric","Ghost","Ice","Bug","Machine","Soil","Dragon","Normal","Devine grass","Alkali fire","Devine water"};
 const char *type2str(int type){
@@ -201,7 +201,7 @@ long setspi(struct unit *dest,long spi){
 		return spi;
 	dest->spi=spi;
 	printf("%s %+ld spi,current spi:%ld\n",dest->base.name,spi-ospi,spi);
-	addhp(dest,-POWEM4*dest->base.max_hp*labs(spi-ospi));
+	addhp(dest,-SHEAR_COEF*dest->base.max_hp*labs(spi-ospi));
 	return spi;
 }
 struct unit *gettarget(struct unit *u){

@@ -1,5 +1,6 @@
 #include "battle-core.h"
 #include <stddef.h>
+#include <limits.h>
 void steel_flywheel(struct unit *s,int arg){
 	struct unit *t=gettarget(s);
 	if(hittest(t,s,1.2)){
@@ -77,6 +78,21 @@ void spi_blow(struct unit *s,int arg){
 	if(hittest(t,s,1.0)){
 		attack(t,s,0.75*s->atk,DAMAGE_PHYSICAL,0,TYPE_MACHINE);
 		setspi(t,t->spi+0.02*t->atk);
+	}
+}
+void spi_shattering_slash(struct unit *s,int arg){
+	struct unit *t;
+	if(s->spi){
+		setspi(s,0);
+		attack(s->owner->enemy->front,s,ULONG_MAX,DAMAGE_REAL,0,TYPE_MACHINE);
+		unit_cooldown_decrease(s,3);
+		return;
+
+	}
+	t=gettarget(s);
+	if(hittest(t,s,1.0)){
+		attack(t,s,0.5*s->atk,DAMAGE_PHYSICAL,0,TYPE_MACHINE);
+		unit_abnormal(t,ABNORMAL_PARALYSED,3);
 	}
 }
 const struct move builtin_moves[]={
@@ -192,6 +208,15 @@ const struct move builtin_moves[]={
 		.id="spi_blow",
 		.name="Spi blow",
 		.action=spi_blow,
+		.type=TYPE_MACHINE,
+		.prior=0,
+		.flag=0,
+		.mlevel=MLEVEL_REGULAR
+	},
+	{
+		.id="spi_shattering_slash",
+		.name="Spi shattering slash",
+		.action=spi_shattering_slash,
 		.type=TYPE_MACHINE,
 		.prior=0,
 		.flag=0,

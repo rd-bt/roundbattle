@@ -7,7 +7,7 @@
 static const char *damage_type_string[3]={"real","physical","magical"};
 static const char *types_string[21]={"Void","Grass","Fire","Water","Steel","Light","Fighting","Wind","Poison","Rock","Electric","Ghost","Ice","Bug","Machine","Soil","Dragon","Normal","Devine grass","Alkali fire","Devine water"};
 const char *type2str(int type){
-	int index=type?__builtin_ctz(type)+1:0;
+	unsigned int index=type?__builtin_ctz(type)+1:0;
 	if(index>=21)
 		return "Unknown";
 	return types_string[index];

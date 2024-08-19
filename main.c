@@ -2,11 +2,11 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
-const char *moves[]={"steel_flywheel","spi_blow","double_slash","iron_wall","leech_seed","spoony_spell","soften","spi_shattering_slash",NULL};
+const char *moves[]={"steel_flywheel","spi_blow","double_slash","iron_wall","angry","spi_fcrack","soften","spi_shattering_slash",NULL};
 int main(){
 	struct player p1,p2;
 	struct unit_base bt={"tiger",6600,300,224,666,123,10,128,2,0,0,0,0,TYPE_ICE,TYPE_VOID,13,0};
-	struct unit_base bb={"bear",7500,203,356,332,100,220,128,2,0,0,0,0,TYPE_GRASS,TYPE_VOID,13,0};
+	struct unit_base bb={"bear",7500,203,356,332,100,150,128,2,0,0,0,0,TYPE_GRASS,TYPE_VOID,13,0};
 	int r;
 	srand48(time(NULL));
 	p1.enemy=&p2;

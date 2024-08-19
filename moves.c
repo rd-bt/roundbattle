@@ -1,6 +1,21 @@
 #include "battle-core.h"
 #include <stddef.h>
 #include <limits.h>
+unsigned long gcdul(unsigned long x,unsigned long y){
+	unsigned long r;
+	int r1;
+	r=__builtin_ctzl(x);
+	r1=__builtin_ctzl(y);
+	r=r<r1?r:r1;
+	x>>=r;
+	y>>=r;
+	r1=(x<y);
+	while(x&&y){
+		if(r1^=1)x%=y;
+		else y%=x;
+	}
+	return (x|y)<<r;
+}
 void steel_flywheel(struct unit *s,int arg){
 	struct unit *t=gettarget(s);
 	if(hittest(t,s,1.2)){
@@ -48,7 +63,7 @@ void urgently_repair(struct unit *s,int arg){
 void double_slash(struct unit *s,int arg){
 	struct unit *t=gettarget(s);
 	if(hittest(t,s,1.0))
-		attack(t,s,0.8*s->atk,DAMAGE_PHYSICAL,t->hp==t->base.max_hp?AF_CIRT:0,TYPE_WIND);
+		attack(t,s,0.8*s->atk,DAMAGE_PHYSICAL,t->hp==t->base.max_hp?AF_CRIT:0,TYPE_WIND);
 	if(s->move_cur&&(s->move_cur->mlevel&MLEVEL_CONCEPTUAL))
 		addhp(s->owner->enemy->front,-0.8*s->def);
 }
@@ -77,14 +92,14 @@ void spi_blow(struct unit *s,int arg){
 	struct unit *t=gettarget(s);
 	if(hittest(t,s,1.0)){
 		attack(t,s,0.75*s->atk,DAMAGE_PHYSICAL,0,TYPE_MACHINE);
-		setspi(t,t->spi+0.02*t->atk);
 	}
+	setspi(t,t->spi+0.02*t->atk);
 }
 void spi_shattering_slash(struct unit *s,int arg){
 	struct unit *t;
 	if(s->spi){
 		setspi(s,0);
-		attack(s->owner->enemy->front,s,ULONG_MAX,DAMAGE_REAL,0,TYPE_MACHINE);
+		instant_death(s->owner->enemy->front);
 		unit_cooldown_decrease(s,3);
 		return;
 
@@ -94,6 +109,28 @@ void spi_shattering_slash(struct unit *s,int arg){
 		attack(t,s,0.5*s->atk,DAMAGE_PHYSICAL,0,TYPE_MACHINE);
 		unit_abnormal(t,ABNORMAL_PARALYSED,3);
 	}
+}
+void angry(struct unit *s,int arg){
+	unit_attr_set(s,ATTR_CRITEFFECT,s->attrs.crit_effect+2);
+}
+void spi_fcrack(struct unit *s,int arg){
+	struct unit *t=gettarget(s);
+	unsigned long x=1,y=1,v;
+	long ds;
+	if(hittest(t,s,1.0)){
+		v=attack(t,s,0.75*s->atk,DAMAGE_PHYSICAL,0,TYPE_MACHINE);
+		if(v>20)
+			x=v;
+	}
+	if(hittest(t,s,1.0)){
+		v=attack(t,s,0.75*s->atk,DAMAGE_PHYSICAL,0,TYPE_MACHINE);
+		if(v>20)
+			y=v;
+	}
+	ds=0.015*t->atk;
+	if(gcdul(x,y)==1)
+		ds*=2;
+	setspi(t,t->spi-ds);
 }
 const struct move builtin_moves[]={
 	{
@@ -217,6 +254,24 @@ const struct move builtin_moves[]={
 		.id="spi_shattering_slash",
 		.name="Spi shattering slash",
 		.action=spi_shattering_slash,
+		.type=TYPE_MACHINE,
+		.prior=0,
+		.flag=0,
+		.mlevel=MLEVEL_REGULAR
+	},
+	{
+		.id="angry",
+		.name="Angry",
+		.action=angry,
+		.type=TYPE_NORMAL,
+		.prior=1,
+		.flag=0,
+		.mlevel=MLEVEL_REGULAR
+	},
+	{
+		.id="spi_fcrack",
+		.name="Spi fcrack",
+		.action=spi_fcrack,
 		.type=TYPE_MACHINE,
 		.prior=0,
 		.flag=0,

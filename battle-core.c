@@ -37,14 +37,14 @@ unsigned long damage(struct unit *dest,struct unit *src,unsigned long value,int 
 	}else {
 		dest->hp=0;
 	}
-	if((aflag&(AF_CIRT|AF_EFFECT|AF_WEAK))||type){
+	if((aflag&(AF_CRIT|AF_EFFECT|AF_WEAK))||type){
 		strcpy(buf," (");
 		if(type){
 			strcat(buf,type2str(type));
 			strcat(buf,",");
 		}
-		if(aflag&AF_CIRT)
-			strcat(buf,"cirt,");
+		if(aflag&AF_CRIT)
+			strcat(buf,"crit,");
 		if(aflag&AF_EFFECT)
 			strcat(buf,"effect,");
 		if(aflag&AF_WEAK)
@@ -70,12 +70,12 @@ unsigned long attack(struct unit *dest,struct unit *src,unsigned long value,int 
 		default:
 			return 0;
 	}
-	if(aflag&AF_CIRT){
+	if(aflag&AF_CRIT){
 		if(src){
-			if(src->cirt_effect>=0.5)
-				value*=src->cirt_effect;
+			if(src->crit_effect>=0.5)
+				value*=src->crit_effect;
 			else
-				value/=3-2*src->cirt_effect;
+				value/=3-2*src->crit_effect;
 		}else
 			value*=2;
 	}
@@ -97,8 +97,10 @@ unsigned long attack(struct unit *dest,struct unit *src,unsigned long value,int 
 	if(!(aflag&AF_NODEF)&&damage_type!=DAMAGE_REAL){
 		x=512+dest->def;
 		if(src)x+=dest->base.level-src->base.level;
-		if(x<=0)x=1;
-		value=value*512/x;
+		if(x<=0)
+			value*=1-dest->def;
+		else
+			value=value*512/x;
 	}
 	switch(damage_type){
 		case DAMAGE_PHYSICAL:
@@ -110,13 +112,14 @@ unsigned long attack(struct unit *dest,struct unit *src,unsigned long value,int 
 			if(src)derate-=src->magical_bonus;
 			break;
 		case DAMAGE_REAL:
-			derate=0;
+			goto no_derate;
 			break;
 	}
 	if(derate>0.8)
 		value/=5*derate+1;
 	else
 		value*=1-derate;
+no_derate:
 	if(!(aflag&AF_NOFLOAT)&&damage_type!=DAMAGE_REAL)
 		value+=(0.1*drand48()-0.05)*value;
 	return damage(dest,src,value,damage_type,aflag,type);
@@ -153,6 +156,9 @@ unsigned long heal(struct unit *dest,unsigned long value){
 	dest->hp=hp;
 	printf("%s heals %lu hp,current hp:%lu\n",dest->base.name,value,hp);
 	return value;
+}
+void instant_death(struct unit *dest){
+	attack(dest,NULL,dest->hp*64,DAMAGE_REAL,0,TYPE_VOID);
 }
 unsigned long sethp(struct unit *dest,unsigned long hp){
 	unsigned long ohp;
@@ -201,7 +207,7 @@ long setspi(struct unit *dest,long spi){
 		return spi;
 	dest->spi=spi;
 	printf("%s %+ld spi,current spi:%ld\n",dest->base.name,spi-ospi,spi);
-	addhp(dest,-SHEAR_COEF*dest->base.max_hp*labs(spi-ospi));
+	addhp(dest,-(SHEAR_COEF*dest->base.max_hp+1)*labs(spi-ospi));
 	return spi;
 }
 struct unit *gettarget(struct unit *u){
@@ -337,7 +343,7 @@ void unit_abnormal_purify(struct unit *u,int abnormals){
 
 #define setattr(a,A)\
 	if((attrs&A)&&u->attrs.a!=level){\
-		printf("%s %+d levels at " #a " current %+d\n",u->base.name,level-u->attrs.a,level);\
+		printf("%s %+d levels at " #a ",current %+d\n",u->base.name,level-u->attrs.a,level);\
 		u->attrs.a=level;\
 	}
 void unit_attr_set_force(struct unit *u,int attrs,int level){
@@ -346,7 +352,7 @@ void unit_attr_set_force(struct unit *u,int attrs,int level){
 	setattr(speed,ATTR_SPEED)
 	setattr(hit,ATTR_HIT)
 	setattr(avoid,ATTR_AVOID)
-	setattr(cirt_effect,ATTR_CIRTEFFECT)
+	setattr(crit_effect,ATTR_CRITEFFECT)
 	setattr(physical_bonus,ATTR_PBONUS)
 	setattr(magical_bonus,ATTR_MBONUS)
 	setattr(physical_derate,ATTR_PDERATE)
@@ -384,13 +390,13 @@ void unit_update_attr(struct unit *u){
 	update(speed);
 	update(hit);
 	update(avoid);
-	update_d(cirt_effect,0.75);
+	update_d(crit_effect,0.5);
 	update_d(physical_bonus,0.25);
 	update_d(magical_bonus,0.25);
 	update_d(physical_derate,0.25);
 	update_d(magical_derate,0.25);
 }
-void unit_state_correct(struct unit *u){
+void unit_update_state(struct unit *u){
 	int r;
 	if(!isalive(u->state))
 		return;

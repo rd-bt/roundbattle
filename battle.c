@@ -93,7 +93,7 @@ void unit_fillattr(struct unit *u){
 	u->hit=u->base.hit;
 	u->avoid=u->base.avoid;
 	u->spi=0;
-	u->cirt_effect=u->base.cirt_effect;
+	u->crit_effect=u->base.crit_effect;
 	u->physical_bonus=u->base.physical_bonus;
 	u->magical_bonus=u->base.magical_bonus;
 	u->physical_derate=u->base.physical_derate;
@@ -182,12 +182,12 @@ int canaction(struct player *p){
 	return canaction2(p,p->action);
 }
 
-void state_correct(struct player *p){
+void update_state(struct player *p){
 	int r;
 	for(r=0;r<6;++r){
 		if(!p->units[r].base.name)
 			break;
-		unit_state_correct(p->units+r);
+		unit_update_state(p->units+r);
 	}
 }
 void cooldown_decrease(struct player *p){
@@ -243,8 +243,8 @@ int battle(struct player *p){
 		else
 			prior=test(0.5)?p:e;
 		latter=prior->enemy;
-		state_correct(prior);
-		state_correct(latter);
+		update_state(prior);
+		update_state(latter);
 		prior->action=prior->selector(prior);
 		if((unsigned int)prior->action>=ACT_GIVEUP){
 			return prior==p?1:0;
@@ -268,7 +268,7 @@ int battle(struct player *p){
 				deadcheck;
 			}
 		}
-		state_correct(latter);
+		update_state(latter);
 		if(canaction(latter)){
 			if(latter->action==ACT_ABORT)
 				printf("%s aborted the action\n",latter->front->base.name);

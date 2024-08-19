@@ -30,7 +30,7 @@
 #define DAMAGE_PHYSICAL 1
 #define DAMAGE_MAGICAL 2
 
-#define AF_CIRT 1
+#define AF_CRIT 1
 #define AF_NODEF 2
 #define AF_NOSHIELD 4
 #define AF_EFFECT 8
@@ -290,7 +290,7 @@
 #define ATTR_SPEED 4
 #define ATTR_HIT 8
 #define ATTR_AVOID 16
-#define ATTR_CIRTEFFECT 32
+#define ATTR_CRITEFFECT 32
 #define ATTR_PBONUS 64
 #define ATTR_MBONUS 128
 #define ATTR_PDERATE 256
@@ -309,7 +309,7 @@ struct unit_base {
 	unsigned long max_hp,atk;
 	long def;
 	unsigned long speed,hit,avoid,max_spi;
-	double cirt_effect,
+	double crit_effect,
 		physical_bonus,magical_bonus,
 		physical_derate,magical_derate;
 	int type0,type1,level,unused;
@@ -318,7 +318,7 @@ struct unit_base {
 };
 struct attr {
 	int atk,def,speed,hit,avoid,
-	    cirt_effect,
+	    crit_effect,
 	    physical_bonus,magical_bonus,
 	    physical_derate,magical_derate;
 };
@@ -333,7 +333,7 @@ struct unit {
 	long def;
 	unsigned long speed,hit,avoid;
 	long spi;
-	double cirt_effect,
+	double crit_effect,
 		physical_bonus,magical_bonus,
 		physical_derate,magical_derate;
 	//struct effect *effects;
@@ -367,6 +367,8 @@ unsigned long normal_attack(struct unit *dest,struct unit *src);
 
 unsigned long heal(struct unit *dest,unsigned long value);
 
+void instant_death(struct unit *dest);
+
 unsigned long sethp(struct unit *dest,unsigned long hp);
 
 unsigned long addhp(struct unit *dest,long hp);
@@ -378,13 +380,14 @@ struct unit *gettarget(struct unit *u);
 void unit_abnormal(struct unit *u,int abnormals,int round);
 
 void unit_abnormal_purify(struct unit *u,int abnormals);
+
 void unit_attr_set_force(struct unit *u,int attrs,int level);
 
 void unit_attr_set(struct unit *u,int attrs,int level);
 
 void unit_update_attr(struct unit *u);
 
-void unit_state_correct(struct unit *u);
+void unit_update_state(struct unit *u);
 
 void unit_cooldown_decrease(struct unit *u,int round);
 

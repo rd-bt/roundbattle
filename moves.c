@@ -1,6 +1,7 @@
 #include "battle-core.h"
 #include <stddef.h>
 #include <limits.h>
+#include <math.h>
 unsigned long gcdul(unsigned long x,unsigned long y){
 	unsigned long r;
 	int r1;
@@ -11,91 +12,158 @@ unsigned long gcdul(unsigned long x,unsigned long y){
 	y>>=r;
 	r1=(x<y);
 	while(x&&y){
-		if(r1^=1)x%=y;
-		else y%=x;
+		if(r1^=1)
+			x%=y;
+		else
+			y%=x;
 	}
-	return (x|y)<<r;
+	if(x&&y){
+		__builtin_unreachable();
+	}else {
+		return (x|y)<<r;
+	}
 }
-void steel_flywheel(struct unit *s,int arg){
+
+#define abnormal_damage(name,frac,type)\
+void name##_roundend(struct effect *e){\
+	attack(e->dest,NULL,e->dest->base->max_hp/frac,DAMAGE_REAL,0,type);\
+}\
+int name##_init(struct effect *e,int level,int round){\
+	if(!e->round)\
+		e->round=round;\
+	return 0;\
+}\
+const struct effect_base name={\
+	.id=#name,\
+	.flag=EFFECT_ABNORMAL|EFFECT_NEGATIVE,\
+	.init=name##_init,\
+	.roundend=name##_roundend\
+};
+#define abnormal_control(name)\
+void name##_update_state(struct effect *e,int *state){\
+	if(*state==UNIT_NORMAL)\
+		*state=UNIT_CONTROLLED;\
+}\
+int name##_init(struct effect *e,int level,int round){\
+	if(!e->round)\
+		e->round=round;\
+	return 0;\
+}\
+const struct effect_base name={\
+	.id=#name,\
+	.flag=EFFECT_ABNORMAL|EFFECT_CONTROL|EFFECT_NEGATIVE,\
+	.init=name##_init,\
+	.update_state=name##_update_state\
+};
+abnormal_damage(cursed,5,TYPE_STEEL)
+abnormal_damage(radiated,5,TYPE_LIGHT)
+abnormal_damage(poisoned,10,TYPE_POISON)
+abnormal_damage(burnt,10,TYPE_FIRE)
+void parasitized_roundend(struct effect *e){
+	heal(e->dest->owner->enemy->front,
+		attack(e->dest,NULL,e->dest->base->max_hp/12,DAMAGE_REAL,0,TYPE_GRASS)
+	);
+}
+int parasitized_init(struct effect *e,int level,int round){
+	if(!e->round)
+		e->round=round;
+	return 0;
+}
+const struct effect_base parasitized={
+	.id="parasitized",
+	.flag=EFFECT_ABNORMAL|EFFECT_NEGATIVE,
+	.init=parasitized_init,
+	.roundend=parasitized_roundend
+};
+abnormal_control(frozen)
+abnormal_control(asleep)
+abnormal_control(paralysed)
+abnormal_control(stunned)
+abnormal_control(petrified)
+void steel_flywheel(struct unit *s){
 	struct unit *t=gettarget(s);
 	if(hittest(t,s,1.2)){
 		attack(t,s,1.25*s->atk,DAMAGE_PHYSICAL,0,TYPE_STEEL);
-		unit_abnormal(t,ABNORMAL_CURSED,3);
+		effect(&cursed,t,s,0,3);
 	}
 	setcooldown(s->move_cur,3);
 }
-void holylight_heavycannon(struct unit *s,int arg){
+void holylight_heavycannon(struct unit *s){
 	struct unit *t=gettarget(s);
 	if(hittest(t,s,1.2)){
 		attack(t,s,1.25*s->atk,DAMAGE_PHYSICAL,0,TYPE_LIGHT);
-		unit_abnormal(t,ABNORMAL_RADIATED,3);
+		effect(&radiated,t,s,0,3);
 	}
 	setcooldown(s->move_cur,3);
 }
-void ground_force(struct unit *s,int arg){
+void ground_force(struct unit *s){
 	struct unit *t=gettarget(s);
 	if(hittest(t,s,1.0))
 		attack(t,s,40,DAMAGE_REAL,0,TYPE_SOIL);
 }
-void spoony_spell(struct unit *s,int arg){
+void spoony_spell(struct unit *s){
 	struct unit *t=s->owner->enemy->front;
-	unsigned long dmg=2.1*s->atk+0.3*s->base.max_hp;
+	unsigned long dmg=2.1*s->atk+0.3*s->base->max_hp;
 	attack(t,s,dmg,DAMAGE_REAL,0,TYPE_SOIL);
 	attack(s,s,dmg,DAMAGE_REAL,0,TYPE_SOIL);
 }
-void self_explode(struct unit *s,int arg){
+void self_explode(struct unit *s){
 	struct unit *t=s->owner->enemy->front;
-	unsigned long dmg=1.8*s->atk+0.25*s->base.max_hp;
+	unsigned long dmg=1.8*s->atk+0.25*s->base->max_hp;
 	attack(t,s,dmg,DAMAGE_PHYSICAL,0,TYPE_NORMAL);
 	attack(t,s,dmg,DAMAGE_MAGICAL,0,TYPE_NORMAL);
 	sethp(s,0);
 }
-void health_exchange(struct unit *s,int arg){
+void health_exchange(struct unit *s){
 	struct unit *t=s->owner->enemy->front;
 	unsigned long a=s->hp,b=t->hp;
 	sethp(t,a);
 	sethp(s,b);
 }
-void urgently_repair(struct unit *s,int arg){
-	heal(s,s->base.max_hp/2);
+void urgently_repair(struct unit *s){
+	heal(s,s->base->max_hp/2);
 	setcooldown(s->move_cur,4);
 }
-void double_slash(struct unit *s,int arg){
+void double_slash(struct unit *s){
 	struct unit *t=gettarget(s);
 	if(hittest(t,s,1.0))
-		attack(t,s,0.8*s->atk,DAMAGE_PHYSICAL,t->hp==t->base.max_hp?AF_CRIT:0,TYPE_WIND);
+		attack(t,s,0.8*s->atk,DAMAGE_PHYSICAL,t->hp==t->base->max_hp?AF_CRIT:0,TYPE_WIND);
 	if(s->move_cur&&(s->move_cur->mlevel&MLEVEL_CONCEPTUAL))
 		addhp(s->owner->enemy->front,-0.8*s->def);
 }
-void petrifying_ray(struct unit *s,int arg){
+void petrifying_ray(struct unit *s){
 	struct unit *t=gettarget(s);
-	if(hittest(t,s,1.3))
-		unit_abnormal(t,ABNORMAL_PETRIFIED,3);
+	if(hittest(t,s,1.3)){
+		//unit_abnormal(t,ABNORMAL_PETRIFIED,3);
+		effect(&parasitized,t,s,0,3);
+	}
 	setcooldown(s->move_cur,4);
 }
-void leech_seed(struct unit *s,int arg){
+void leech_seed(struct unit *s){
 	struct unit *t=gettarget(s);
-	if(hittest(t,s,1.3))
-		unit_abnormal(t,ABNORMAL_PARASITIZED,5);
+	if(hittest(t,s,1.3)){
+		//unit_abnormal(t,ABNORMAL_PARASITIZED,5);
+		effect(&parasitized,t,s,0,5);
+	}
 	setcooldown(s->move_cur,4);
 }
-void soften(struct unit *s,int arg){
+void soften(struct unit *s){
 	struct unit *t=gettarget(s);
 	if(hittest(t,s,1.0))
 		unit_attr_set(t,ATTR_ATK,t->attrs.atk-1);
 }
-void iron_wall(struct unit *s,int arg){
+void iron_wall(struct unit *s){
 	unit_attr_set(s,ATTR_PDERATE,s->attrs.physical_derate+1);
 	unit_attr_set(s,ATTR_MDERATE,s->attrs.magical_derate+1);
 }
-void spi_blow(struct unit *s,int arg){
+void spi_blow(struct unit *s){
 	struct unit *t=gettarget(s);
 	if(hittest(t,s,1.0)){
 		attack(t,s,0.75*s->atk,DAMAGE_PHYSICAL,0,TYPE_MACHINE);
 	}
 	setspi(t,t->spi+0.02*t->atk);
 }
-void spi_shattering_slash(struct unit *s,int arg){
+void spi_shattering_slash(struct unit *s){
 	struct unit *t;
 	if(s->spi){
 		setspi(s,0);
@@ -107,13 +175,14 @@ void spi_shattering_slash(struct unit *s,int arg){
 	t=gettarget(s);
 	if(hittest(t,s,1.0)){
 		attack(t,s,0.5*s->atk,DAMAGE_PHYSICAL,0,TYPE_MACHINE);
-		unit_abnormal(t,ABNORMAL_PARALYSED,3);
+		//unit_abnormal(t,ABNORMAL_PARALYSED,3);
+		effect(&paralysed,t,s,0,3);
 	}
 }
-void angry(struct unit *s,int arg){
+void angry(struct unit *s){
 	unit_attr_set(s,ATTR_CRITEFFECT,s->attrs.crit_effect+2);
 }
-void spi_fcrack(struct unit *s,int arg){
+void spi_fcrack(struct unit *s){
 	struct unit *t=gettarget(s);
 	unsigned long x=1,y=1,v;
 	long ds;
@@ -132,10 +201,27 @@ void spi_fcrack(struct unit *s,int arg){
 		ds*=2;
 	setspi(t,t->spi-ds);
 }
+int natural_shield_damage(struct effect *e,struct unit **dest,struct unit **src,unsigned long *value,int *damage_type,int *aflag,int *type){
+	if(*dest!=e->dest)
+		return 0;
+	if(*value<=2)
+		*value=1;
+	else
+		*value=log(*value);
+	return 0;
+}
+const struct effect_base natural_shield_effect={
+	.id="natural_shield",
+	.flag=EFFECT_ABNORMAL|EFFECT_NEGATIVE,
+	.damage=natural_shield_damage
+};
+void natural_shield(struct unit *s){
+	effect(&natural_shield_effect,s,s,0,5);
+	setcooldown(s->move_cur,13);
+}
 const struct move builtin_moves[]={
 	{
 		.id="steel_flywheel",
-		.name="Steel flywheel",
 		.action=steel_flywheel,
 		.type=TYPE_STEEL,
 		.prior=0,
@@ -144,7 +230,6 @@ const struct move builtin_moves[]={
 	},
 	{
 		.id="holylight_heavycannon",
-		.name="Holylight heavycannon",
 		.action=holylight_heavycannon,
 		.type=TYPE_LIGHT,
 		.prior=0,
@@ -153,7 +238,6 @@ const struct move builtin_moves[]={
 	},
 	{
 		.id="ground_force",
-		.name="Ground force",
 		.action=ground_force,
 		.type=TYPE_SOIL,
 		.prior=0,
@@ -162,7 +246,6 @@ const struct move builtin_moves[]={
 	},
 	{
 		.id="spoony_spell",
-		.name="Spoony spell",
 		.action=spoony_spell,
 		.type=TYPE_SOIL,
 		.prior=0,
@@ -171,7 +254,6 @@ const struct move builtin_moves[]={
 	},
 	{
 		.id="self_explode",
-		.name="Self explode",
 		.action=self_explode,
 		.type=TYPE_NORMAL,
 		.prior=0,
@@ -180,7 +262,6 @@ const struct move builtin_moves[]={
 	},
 	{
 		.id="health_exchange",
-		.name="Health exchange",
 		.action=health_exchange,
 		.type=TYPE_GHOST,
 		.prior=0,
@@ -189,7 +270,6 @@ const struct move builtin_moves[]={
 	},
 	{
 		.id="urgently_repair",
-		.name="Urgently repair",
 		.action=urgently_repair,
 		.type=TYPE_MACHINE,
 		.prior=0,
@@ -198,7 +278,6 @@ const struct move builtin_moves[]={
 	},
 	{
 		.id="double_slash",
-		.name="Double slash",
 		.action=double_slash,
 		.type=TYPE_WIND,
 		.prior=0,
@@ -207,7 +286,6 @@ const struct move builtin_moves[]={
 	},
 	{
 		.id="petrifying_ray",
-		.name="Petrifying ray",
 		.action=petrifying_ray,
 		.type=TYPE_ROCK,
 		.prior=0,
@@ -216,7 +294,6 @@ const struct move builtin_moves[]={
 	},
 	{
 		.id="leech_seed",
-		.name="Leech_seed",
 		.action=leech_seed,
 		.type=TYPE_GRASS,
 		.prior=0,
@@ -225,7 +302,6 @@ const struct move builtin_moves[]={
 	},
 	{
 		.id="soften",
-		.name="Soften",
 		.action=soften,
 		.type=TYPE_NORMAL,
 		.prior=0,
@@ -234,7 +310,6 @@ const struct move builtin_moves[]={
 	},
 	{
 		.id="iron_wall",
-		.name="Iron wall",
 		.action=iron_wall,
 		.type=TYPE_STEEL,
 		.prior=0,
@@ -243,7 +318,6 @@ const struct move builtin_moves[]={
 	},
 	{
 		.id="spi_blow",
-		.name="Spi blow",
 		.action=spi_blow,
 		.type=TYPE_MACHINE,
 		.prior=0,
@@ -252,7 +326,6 @@ const struct move builtin_moves[]={
 	},
 	{
 		.id="spi_shattering_slash",
-		.name="Spi shattering slash",
 		.action=spi_shattering_slash,
 		.type=TYPE_MACHINE,
 		.prior=0,
@@ -261,7 +334,6 @@ const struct move builtin_moves[]={
 	},
 	{
 		.id="angry",
-		.name="Angry",
 		.action=angry,
 		.type=TYPE_NORMAL,
 		.prior=1,
@@ -270,12 +342,19 @@ const struct move builtin_moves[]={
 	},
 	{
 		.id="spi_fcrack",
-		.name="Spi fcrack",
 		.action=spi_fcrack,
 		.type=TYPE_MACHINE,
 		.prior=0,
 		.flag=0,
 		.mlevel=MLEVEL_REGULAR
+	},
+	{
+		.id="natural_shield",
+		.action=natural_shield,
+		.type=TYPE_DEVINEGRASS,
+		.prior=0,
+		.flag=0,
+		.mlevel=MLEVEL_REGULAR|MLEVEL_CONCEPTUAL
 	},
 	{NULL}
 };

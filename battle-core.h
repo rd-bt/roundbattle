@@ -1,6 +1,6 @@
 #ifndef _BATTLE_CORE_H_
 #define _BATTLE_CORE_H_
-
+#include <stddef.h>
 #define UNIT_NORMAL 0
 #define UNIT_CONTROLLED 1
 #define UNIT_INDUCED 2
@@ -272,19 +272,6 @@
 #define ACT_UNIT5 15
 #define ACT_GIVEUP 16
 
-#define ABNORMAL_BURNT 1
-#define ABNORMAL_POISONED 2
-#define ABNORMAL_PARASITIZED 4
-#define ABNORMAL_CURSED 8
-#define ABNORMAL_RADIATED 16
-#define ABNORMAL_ASLEEP 32
-#define ABNORMAL_FROZEN 64
-#define ABNORMAL_PARALYSED 256
-#define ABNORMAL_STUNNED 512
-#define ABNORMAL_PETRIFIED 1024
-#define ABNORMAL_CONTROL (ABNORMAL_ASLEEP|ABNORMAL_FROZEN|ABNORMAL_PARALYSED|ABNORMAL_STUNNED|ABNORMAL_PETRIFIED)
-#define ABNORMAL_ALL 2047
-
 #define ATTR_ATK 1
 #define ATTR_DEF 2
 #define ATTR_SPEED 4
@@ -297,15 +284,25 @@
 #define ATTR_MDERATE 512
 #define ATTR_MAX (+8)
 #define ATTR_MIN (-8)
+
+#define EFFECT_ATTR 1
+#define EFFECT_ABNORMAL 2
+#define EFFECT_CONTROL 4
+#define EFFECT_POSITIVE 8
+#define EFFECT_NEGATIVE 16
+#define EFFECT_UNPURIFIABLE 32
+#define for_each_effect(_var,_ehead) for(struct effect *_var=(_ehead),*_p=_var?_var->next:NULL;_p=_var?_var->next:NULL,_var;_var=_p)
 struct unit;
 struct player;
+struct battle_field;
+struct effect;
 struct move {
-	const char *id,*name;
-	void (*action)(struct unit *subject,int arg);
+	const char *id;
+	void (*action)(struct unit *subject);
 	int type,mlevel,prior,cooldown,flag,unused;
 };
 struct unit_base {
-	const char *name;
+	const char *id;
 	unsigned long max_hp,atk;
 	long def;
 	unsigned long speed,hit,avoid,max_spi;
@@ -322,13 +319,28 @@ struct attr {
 	    physical_bonus,magical_bonus,
 	    physical_derate,magical_derate;
 };
-struct abnormal {
-	int burnt,poisoned,parasitized,cursed,radiated;//controlled
-	int asleep,frozen,paralysed,stunned,petrified;
+struct effect_base {
+	const char *id;
+	int (*init)(struct effect *,int level,int round);
+	void (*end)(struct effect *);
+	int (*attack)(struct effect *e,struct unit **dest,struct unit **src,unsigned long *value,int *damage_type,int *aflag,int *type);
+	void (*attack_end)(struct effect *e,struct unit *dest,struct unit *src,unsigned long value,int damage_type,int aflag,int type);
+	int (*damage)(struct effect *e,struct unit **dest,struct unit **src,unsigned long *value,int *damage_type,int *aflag,int *type);
+	void (*damage_end)(struct effect *e,struct unit *dest,struct unit *src,unsigned long value,int damage_type,int aflag,int type);
+	void (*roundend)(struct effect *);
+	void (*update_state)(struct effect *,int *state);
+	int flag,unused;
 };
-
+struct effect {
+	const struct effect_base *base;
+	struct unit *dest;
+	struct unit *src;
+	struct effect *next,*prev;
+	int level,round;
+	char data[64];
+};
 struct unit {
-	struct unit_base base;
+	const struct unit_base *base;
 	unsigned long hp,atk;
 	long def;
 	unsigned long speed,hit,avoid;
@@ -336,23 +348,26 @@ struct unit {
 	double crit_effect,
 		physical_bonus,magical_bonus,
 		physical_derate,magical_derate;
-	//struct effect *effects;
 	int type0,type1,state,unused;
 	struct move moves[8];
 	struct move pmoves[2];
 	struct attr attrs;
-	struct abnormal abnormals;
 	struct player *owner;
 	struct move *move_cur;
 };
+
 struct player {
 	struct unit units[6];
+	int (*selector)(struct player *);
 	struct unit *front;
 	struct player *enemy;
-	int (*selector)(struct player *);
+	struct battle_field *field;
 	int action,unused;
 };
-
+struct battle_field {
+	struct player *p,*e;
+	struct effect *effects;
+};
 int unit_kill(struct unit *up);
 
 unsigned long damage(struct unit *dest,struct unit *src,unsigned long value,int damage_type,int aflag,int type);
@@ -375,11 +390,11 @@ unsigned long addhp(struct unit *dest,long hp);
 
 long setspi(struct unit *dest,long spi);
 
+struct effect *effect(const struct effect_base *base,struct unit *dest,struct unit *src,int level,int round);
+
+int effect_end(struct effect *e);
+
 struct unit *gettarget(struct unit *u);
-
-void unit_abnormal(struct unit *u,int abnormals,int round);
-
-void unit_abnormal_purify(struct unit *u,int abnormals);
 
 void unit_attr_set_force(struct unit *u,int attrs,int level);
 
@@ -387,18 +402,23 @@ void unit_attr_set(struct unit *u,int attrs,int level);
 
 void unit_update_attr(struct unit *u);
 
+
 void unit_update_state(struct unit *u);
 
 void unit_cooldown_decrease(struct unit *u,int round);
 
 void unit_effect_in_roundend(struct unit *u);
 
+void effect_in_roundend(struct effect *effects);
+
 void unit_effect_round_decrease(struct unit *u,int round);
+
+void effect_round_decrease(struct effect *effects,int round);
 
 int setcooldown(struct move *m,int round);
 
 const char *type2str(int type);
 
-void unit_move(struct unit *u,struct move *m,int arg);
+void unit_move(struct unit *u,struct move *m);
 
 #endif

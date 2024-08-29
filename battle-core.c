@@ -17,7 +17,7 @@ int unit_kill(struct unit *up){
 	if(!isalive(up->state))
 			return -1;
 	up->state=UNIT_FAILED;
-	printf("%s failed\n",up->base.name);
+	printf("%s failed\n",up->base->id);
 	return 0;
 }
 unsigned long damage(struct unit *dest,struct unit *src,unsigned long value,int damage_type,int aflag,int type){
@@ -32,6 +32,10 @@ unsigned long damage(struct unit *dest,struct unit *src,unsigned long value,int 
 	}
 	if(!isalive(dest->state))
 			return 0;
+	for_each_effect(e,dest->owner->field->effects){
+		if(e->base->damage&&e->base->damage(e,&dest,&src,&value,&damage_type,&aflag,&type))
+			return 0;
+	}
 	if(dest->hp>value){
 		dest->hp-=value;
 	}else {
@@ -52,22 +56,31 @@ unsigned long damage(struct unit *dest,struct unit *src,unsigned long value,int 
 		p=buf+strlen(buf);
 		strcpy(p-1,") ");
 	}else strcpy(buf," ");
-	if(src)printf("%s get %lu %s damage%sfrom %s,current hp:%lu\n",dest->base.name,value,damage_type_string[damage_type],buf,src->base.name,dest->hp);
-	else printf("%s get %lu %s damage%s,current hp:%lu\n",dest->base.name,value,damage_type_string[damage_type],buf,dest->hp);
+	if(src)printf("%s get %lu %s damage%sfrom %s,current hp:%lu\n",dest->base->id,value,damage_type_string[damage_type],buf,src->base->id,dest->hp);
+	else printf("%s get %lu %s damage%s,current hp:%lu\n",dest->base->id,value,damage_type_string[damage_type],buf,dest->hp);
 	if(!dest->hp)
 		unit_kill(dest);
+	for_each_effect(e,dest->owner->field->effects){
+		if(e->base->damage_end)
+			e->base->damage_end(e,dest,src,value,damage_type,aflag,type);
+	}
 	return value;
 }
 unsigned long attack(struct unit *dest,struct unit *src,unsigned long value,int damage_type,int aflag,int type){
 	long x;
-	int dest_type;
+	unsigned long ret;
 	double derate;
+	int dest_type;
 	switch(damage_type){
 		case DAMAGE_REAL:
 		case DAMAGE_PHYSICAL:
 		case DAMAGE_MAGICAL:
 			break;
 		default:
+			return 0;
+	}
+	for_each_effect(e,dest->owner->field->effects){
+		if(e->base->attack&&e->base->attack(e,&dest,&src,&value,&damage_type,&aflag,&type))
 			return 0;
 	}
 	if(aflag&AF_CRIT){
@@ -96,7 +109,7 @@ unsigned long attack(struct unit *dest,struct unit *src,unsigned long value,int 
 	}
 	if(!(aflag&AF_NODEF)&&damage_type!=DAMAGE_REAL){
 		x=512+dest->def;
-		if(src)x+=dest->base.level-src->base.level;
+		if(src)x+=dest->base->level-src->base->level;
 		if(x<=0)
 			value*=1-dest->def;
 		else
@@ -122,7 +135,12 @@ unsigned long attack(struct unit *dest,struct unit *src,unsigned long value,int 
 no_derate:
 	if(!(aflag&AF_NOFLOAT)&&damage_type!=DAMAGE_REAL)
 		value+=(0.1*drand48()-0.05)*value;
-	return damage(dest,src,value,damage_type,aflag,type);
+	ret=damage(dest,src,value,damage_type,aflag,type);
+	for_each_effect(e,dest->owner->field->effects){
+		if(e->base->attack_end)
+			e->base->attack_end(e,dest,src,value,damage_type,aflag,type);
+	}
+	return ret;
 }
 
 int hittest(struct unit *dest,struct unit *src,double hit_rate){
@@ -133,8 +151,8 @@ int hittest(struct unit *dest,struct unit *src,double hit_rate){
 	//printf("rate:%lf real:%lf\n",hit_rate,real_rate);
 	x=drand48()<real_rate;
 	if(!x){
-		if(src)printf("%s missed (target: %s)\n",src->base.name,dest->base.name);
-		else printf("missed (target: %s)\n",dest->base.name);
+		if(src)printf("%s missed (target: %s)\n",src->base->id,dest->base->id);
+		else printf("missed (target: %s)\n",dest->base->id);
 	}
 	return x;
 }
@@ -151,10 +169,10 @@ unsigned long heal(struct unit *dest,unsigned long value){
 	if(!isalive(dest->state))
 			return -1;
 	hp=dest->hp+value;
-	if(hp>dest->base.max_hp)
-		hp=dest->base.max_hp;
+	if(hp>dest->base->max_hp)
+		hp=dest->base->max_hp;
 	dest->hp=hp;
-	printf("%s heals %lu hp,current hp:%lu\n",dest->base.name,value,hp);
+	printf("%s heals %lu hp,current hp:%lu\n",dest->base->id,value,hp);
 	return value;
 }
 void instant_death(struct unit *dest){
@@ -165,12 +183,12 @@ unsigned long sethp(struct unit *dest,unsigned long hp){
 	if(!isalive(dest->state))
 			return -1;
 	ohp=dest->hp;
-	if(hp>dest->base.max_hp)
-		hp=dest->base.max_hp;
+	if(hp>dest->base->max_hp)
+		hp=dest->base->max_hp;
 	if(hp==ohp)
 		return hp;
 	dest->hp=hp;
-	printf("%s %+ld hp,current hp:%lu\n",dest->base.name,(long)hp-(long)ohp,hp);
+	printf("%s %+ld hp,current hp:%lu\n",dest->base->id,(long)hp-(long)ohp,hp);
 	if(!hp)
 		unit_kill(dest);
 	return hp;
@@ -186,10 +204,10 @@ unsigned long addhp(struct unit *dest,long hp){
 	rhp=hp+ohp;
 	if(hp<0&&rhp<0)
 		rhp=0;
-	if((unsigned long)rhp>dest->base.max_hp)
-		rhp=dest->base.max_hp;
+	if((unsigned long)rhp>dest->base->max_hp)
+		rhp=dest->base->max_hp;
 	dest->hp=rhp;
-	printf("%s %+ld hp,current hp:%lu\n",dest->base.name,hp,(unsigned long)rhp);
+	printf("%s %+ld hp,current hp:%lu\n",dest->base->id,hp,(unsigned long)rhp);
 	if(!rhp)
 		unit_kill(dest);
 	return rhp;
@@ -199,15 +217,15 @@ long setspi(struct unit *dest,long spi){
 	if(!isalive(dest->state))
 			return -1;
 	ospi=dest->spi;
-	if(spi>(long)dest->base.max_spi)
-		spi=(long)dest->base.max_spi;
-	if(spi<-(long)dest->base.max_spi)
-		spi=-(long)dest->base.max_spi;
+	if(spi>(long)dest->base->max_spi)
+		spi=(long)dest->base->max_spi;
+	if(spi<-(long)dest->base->max_spi)
+		spi=-(long)dest->base->max_spi;
 	if(spi==ospi)
 		return spi;
 	dest->spi=spi;
-	printf("%s %+ld spi,current spi:%ld\n",dest->base.name,spi-ospi,spi);
-	addhp(dest,-(SHEAR_COEF*dest->base.max_hp+1)*labs(spi-ospi));
+	printf("%s %+ld spi,current spi:%ld\n",dest->base->id,spi-ospi,spi);
+	addhp(dest,-(SHEAR_COEF*dest->base->max_hp+1)*labs(spi-ospi));
 	return spi;
 }
 struct unit *gettarget(struct unit *u){
@@ -216,6 +234,71 @@ struct unit *gettarget(struct unit *u){
 int setcooldown(struct move *m,int round){
 	m->cooldown=round;
 	return round;
+}
+struct effect *effect(const struct effect_base *base,struct unit *dest,struct unit *src,int level,int round){
+	struct effect *ep=NULL,*ep1;
+	struct battle_field *f=NULL;
+	int new;
+	if(dest)
+		f=dest->owner->field;
+	else if(src)
+		f=src->owner->field;
+	if(!f)
+		return NULL;
+	for_each_effect(e,f->effects){
+		if(e->dest==dest&&e->base==base){
+			ep=e;
+			break;
+		}
+	}
+	if(!ep){
+		ep=malloc(sizeof(struct effect));
+		if(!ep)
+			return NULL;
+		memset(ep,0,sizeof(struct effect));
+		new=1;
+		ep->base=base;
+		ep->dest=dest;
+		ep->src=src;
+	}else
+		new=0;
+	if(base->init){
+		if(base->init(ep,level,round)){
+			effect_end(ep);
+			return NULL;
+		}
+	}else {
+		ep->level=level;
+		ep->round=round;
+	}
+	if(src)printf("%s get effect %s from %s in %d rounds\n",dest->base->id,ep->base->id,src->base->id,ep->round);
+	else printf("%s get effect %s in %d rounds\n",dest->base->id,ep->base->id,ep->round);
+	if(new){
+		ep1=f->effects;
+		f->effects=ep;
+		ep->next=ep1;
+	}
+	return ep;
+}
+int effect_end(struct effect *e){
+	struct battle_field *f=NULL;
+	if(e->dest)
+		f=e->dest->owner->field;
+	else if(e->src)
+		f=e->src->owner->field;
+	if(!f)
+		return -1;
+	if(e->base->end)
+		e->base->end(e);
+	if(e->prev){
+		e->prev->next=e->next;
+	}else {
+		f->effects=e->next;
+	}
+	if(e->next)
+		e->next->prev=e->prev;
+	free(e);
+	return 0;
 }
 void unit_cooldown_decrease(struct unit *u,int round){
 	int r,r1;
@@ -232,118 +315,9 @@ void unit_cooldown_decrease(struct unit *u,int round){
 	}
 }
 
-void unit_abnormal(struct unit *u,int abnormals,int round){
-	if(!(abnormals&ABNORMAL_ALL))
-		return;
-	if(abnormals&ABNORMAL_BURNT){
-		u->abnormals.burnt=round;
-		printf("%s is burnt in %d rounds\n",u->base.name,round);
-	}
-	if(abnormals&ABNORMAL_POISONED){
-		u->abnormals.poisoned=round;
-		printf("%s is poisoned in %d rounds\n",u->base.name,round);
-	}
-	if(abnormals&ABNORMAL_PARASITIZED){
-		u->abnormals.parasitized=round;
-		printf("%s is parasitized in %d rounds\n",u->base.name,round);
-	}
-	if(abnormals&ABNORMAL_CURSED){
-		u->abnormals.cursed=round;
-		printf("%s is cursed in %d rounds\n",u->base.name,round);
-	}
-	if(abnormals&ABNORMAL_RADIATED){
-		u->abnormals.radiated=round;
-		printf("%s is radiated in %d rounds\n",u->base.name,round);
-	}
-	if(abnormals&ABNORMAL_ASLEEP){
-		u->abnormals.asleep=round;
-		printf("%s is asleep in %d rounds\n",u->base.name,round);
-	}
-	if(abnormals&ABNORMAL_FROZEN){
-		u->abnormals.frozen=round;
-		printf("%s is frozen in %d rounds\n",u->base.name,round);
-	}
-	if(abnormals&ABNORMAL_PARALYSED){
-		u->abnormals.paralysed=round;
-		printf("%s is paralysed in %d rounds\n",u->base.name,round);
-	}
-	if(abnormals&ABNORMAL_STUNNED){
-		u->abnormals.stunned=round;
-		printf("%s is stunned in %d rounds\n",u->base.name,round);
-	}
-	if(abnormals&ABNORMAL_PETRIFIED){
-		u->abnormals.petrified=round;
-		printf("%s is petrified in %d rounds\n",u->base.name,round);
-	}
-}
-void unit_abnormal_purify(struct unit *u,int abnormals){
-	if(!(abnormals&ABNORMAL_ALL))
-		return;
-	if(abnormals&ABNORMAL_BURNT){
-		if(u->abnormals.burnt){
-			u->abnormals.burnt=0;
-			printf("%s relieves the burnt effect\n",u->base.name);
-		}
-	}
-	if(abnormals&ABNORMAL_POISONED){
-		if(u->abnormals.poisoned){
-			u->abnormals.poisoned=0;
-			printf("%s relieves the poisoned effect\n",u->base.name);
-		}
-	}
-	if(abnormals&ABNORMAL_PARASITIZED){
-		if(u->abnormals.parasitized){
-			u->abnormals.parasitized=0;
-			printf("%s relieves the parasitized effect\n",u->base.name);
-		}
-	}
-	if(abnormals&ABNORMAL_CURSED){
-		if(u->abnormals.cursed){
-			u->abnormals.cursed=0;
-			printf("%s relieves the cursed effect\n",u->base.name);
-		}
-	}
-	if(abnormals&ABNORMAL_RADIATED){
-		if(u->abnormals.radiated){
-			u->abnormals.radiated=0;
-			printf("%s relieves the radiate effect\n",u->base.name);
-		}
-	}
-	if(abnormals&ABNORMAL_ASLEEP){
-		if(u->abnormals.asleep){
-			u->abnormals.asleep=0;
-			printf("%s relieves the asleep effect\n",u->base.name);
-		}
-	}
-	if(abnormals&ABNORMAL_FROZEN){
-		if(u->abnormals.frozen){
-			u->abnormals.frozen=0;
-			printf("%s relieves the frozen effect\n",u->base.name);
-		}
-	}
-	if(abnormals&ABNORMAL_PARALYSED){
-		if(u->abnormals.paralysed){
-			u->abnormals.paralysed=0;
-			printf("%s relieves the paralysed effect\n",u->base.name);
-		}
-	}
-	if(abnormals&ABNORMAL_STUNNED){
-		if(u->abnormals.stunned){
-			u->abnormals.stunned=0;
-			printf("%s relieves the stunned effect\n",u->base.name);
-		}
-	}
-	if(abnormals&ABNORMAL_PETRIFIED){
-		if(u->abnormals.petrified){
-			u->abnormals.petrified=0;
-			printf("%s relieves the petrified effect\n",u->base.name);
-		}
-	}
-}
-
 #define setattr(a,A)\
 	if((attrs&A)&&u->attrs.a!=level){\
-		printf("%s %+d levels at " #a ",current %+d\n",u->base.name,level-u->attrs.a,level);\
+		printf("%s %+d levels at " #a ",current %+d\n",u->base->id,level-u->attrs.a,level);\
 		u->attrs.a=level;\
 	}
 void unit_attr_set_force(struct unit *u,int attrs,int level){
@@ -368,7 +342,7 @@ void unit_attr_set(struct unit *u,int attrs,int level){
 	unit_attr_set_force(u,attrs,level);
 }
 #define update(a)\
-	r=u->base.a;\
+	r=u->base->a;\
 	if(u->attrs.a){\
 		if(u->attrs.a>0)\
 			r+=r*u->attrs.a/4;\
@@ -377,7 +351,7 @@ void unit_attr_set(struct unit *u,int attrs,int level){
 	}\
 	u->a=r
 #define update_d(a,step)\
-	d=u->base.a;\
+	d=u->base->a;\
 	if(u->attrs.a){\
 		d+=u->attrs.a*(step);\
 	}\
@@ -396,65 +370,62 @@ void unit_update_attr(struct unit *u){
 	update_d(physical_derate,0.25);
 	update_d(magical_derate,0.25);
 }
+
 void unit_update_state(struct unit *u){
 	int r;
 	if(!isalive(u->state))
 		return;
 	r=UNIT_NORMAL;
-	if(
-		u->abnormals.asleep||
-		u->abnormals.frozen||
-		u->abnormals.paralysed||
-		u->abnormals.stunned||
-		u->abnormals.petrified
-	)
-		r=UNIT_CONTROLLED;
+	for_each_effect(e,u->owner->field->effects){
+		if(e->dest==u&&e->base->update_state)
+			e->base->update_state(e,&r);
+	}
 	u->state=r;
 }
-void unit_effect_in_roundend(struct unit *u){
-	if(u->abnormals.burnt){
-		attack(u,NULL,u->base.max_hp/10,DAMAGE_REAL,0,TYPE_FIRE);
-	}
-	if(u->abnormals.poisoned){
-		attack(u,NULL,u->base.max_hp/10,DAMAGE_REAL,0,TYPE_POISON);
-	}
-	if(u->abnormals.parasitized){
-		heal(u->owner->enemy->front,
-			attack(u,NULL,u->base.max_hp/10,DAMAGE_REAL,0,TYPE_GRASS)/2
-		);
-	}
-	if(u->abnormals.cursed){
-		attack(u,NULL,u->base.max_hp/5,DAMAGE_REAL,0,TYPE_STEEL);
-	}
-	if(u->abnormals.radiated){
-		attack(u,NULL,u->base.max_hp/5,DAMAGE_REAL,0,TYPE_LIGHT);
+void effect_in_roundend(struct effect *effects){
+	for_each_effect(e,effects){
+		if(e->base->roundend)
+			e->base->roundend(e);
 	}
 }
-#define ab_rounddec(x)\
-	if(u->abnormals.x>0){\
-		if(u->abnormals.x<=round){\
-			u->abnormals.x=0;\
-			printf("%s relieves the " #x " effect\n",u->base.name);\
-		}else\
-			u->abnormals.x-=round;\
+void unit_effect_in_roundend(struct unit *u){
+	for_each_effect(e,u->owner->field->effects){
+		if(e->dest==u&&e->base->roundend)
+			e->base->roundend(e);
 	}
-void unit_effect_round_decrease(struct unit *u,int round){
-	ab_rounddec(burnt)
-	ab_rounddec(poisoned)
-	ab_rounddec(parasitized)
-	ab_rounddec(cursed)
-	ab_rounddec(radiated)
-	ab_rounddec(asleep)
-	ab_rounddec(frozen)
-	ab_rounddec(paralysed)
-	ab_rounddec(stunned)
-	ab_rounddec(petrified)
 }
 
-void unit_move(struct unit *u,struct move *m,int arg){
+void unit_effect_round_decrease(struct unit *u,int round){
+	struct battle_field *f=u->owner->field;
+	for_each_effect(v,f->effects){
+		if(v->dest!=u)
+			continue;
+		if(v->round>0){
+			if(v->round>round)
+				v->round-=round;
+			else
+				v->round=0;
+		}
+		if(!v->round)
+			effect_end(v);
+	}
+}
+void effect_round_decrease(struct effect *effects,int round){
+	for_each_effect(v,effects){
+		if(v->round>0){
+			if(v->round>round)
+				v->round-=round;
+			else
+				v->round=0;
+		}
+		if(!v->round)
+			effect_end(v);
+	}
+}
+void unit_move(struct unit *u,struct move *m){
 	struct move *backup=u->move_cur;
 	u->move_cur=m;
-	printf("%s uses %s (%s)\n",u->base.name,m->name,type2str(m->type));
-	m->action(u,arg);
+	printf("%s uses %s (%s)\n",u->base->id,m->id,type2str(m->type));
+	m->action(u);
 	u->move_cur=backup;
 }

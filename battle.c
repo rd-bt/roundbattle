@@ -25,7 +25,7 @@ int manual_selector(struct player *p){
 	char buf[32],*endp;
 	int r,n=0,cool;
 reselect:
-	printf("Select the action of %s\n",p->front->base.name);
+	printf("Select the action of %s\n",p->front->base->id);
 	if(!canaction2(p,ACT_NORMALATTACK))
 		printf("[x]");
 	else
@@ -38,7 +38,7 @@ reselect:
 			printf("[x]");
 		else
 			printf("[ ]");
-		printf("%d: %s (%s)",r,p->front->moves[r].name,type2str(p->front->moves[r].type));
+		printf("%d: %s (%s)",r,p->front->moves[r].id,type2str(p->front->moves[r].type));
 		cool=p->front->moves[r].cooldown;
 		if(cool)
 			printf(" cooldown rounds:%d\n",cool);
@@ -86,32 +86,32 @@ unknown:
 	return r;
 }
 void unit_fillattr(struct unit *u){
-	u->hp=u->base.max_hp;
-	u->atk=u->base.atk;
-	u->def=u->base.def;
-	u->speed=u->base.speed;
-	u->hit=u->base.hit;
-	u->avoid=u->base.avoid;
+	u->hp=u->base->max_hp;
+	u->atk=u->base->atk;
+	u->def=u->base->def;
+	u->speed=u->base->speed;
+	u->hit=u->base->hit;
+	u->avoid=u->base->avoid;
 	u->spi=0;
-	u->crit_effect=u->base.crit_effect;
-	u->physical_bonus=u->base.physical_bonus;
-	u->magical_bonus=u->base.magical_bonus;
-	u->physical_derate=u->base.physical_derate;
-	u->magical_derate=u->base.magical_derate;
+	u->crit_effect=u->base->crit_effect;
+	u->physical_bonus=u->base->physical_bonus;
+	u->magical_bonus=u->base->magical_bonus;
+	u->physical_derate=u->base->physical_derate;
+	u->magical_derate=u->base->magical_derate;
 	memset(&u->attrs,0,sizeof(struct attr));
-	memset(&u->abnormals,0,sizeof(struct abnormal));
+	//memset(&u->abnormals,0,sizeof(struct abnormal));
 	//u->effects=NULL;
-	u->type0=u->base.type0;
-	u->type1=u->base.type1;
+	u->type0=u->base->type0;
+	u->type1=u->base->type1;
 	u->state=UNIT_NORMAL;
 	u->unused=0;
-	memcpy(u->moves,u->base.moves,8*sizeof(struct move));
-	memcpy(u->pmoves,u->base.pmoves,2*sizeof(struct move));
+	memcpy(u->moves,u->base->moves,8*sizeof(struct move));
+	memcpy(u->pmoves,u->base->pmoves,2*sizeof(struct move));
 	u->move_cur=NULL;
 }
 void player_fillattr(struct player *p){
 	for(int i=0;i<6;++i){
-		if(!p->units[i].base.name)
+		if(!p->units[i].base)
 			break;
 		unit_fillattr(p->units+i);
 		p->units[i].owner=p;
@@ -120,10 +120,10 @@ void player_fillattr(struct player *p){
 void player_action(struct player *p){
 	switch(p->action){
 		case ACT_MOVE0 ... ACT_MOVE7:
-			unit_move(p->front,p->front->moves+p->action,0);
+			unit_move(p->front,p->front->moves+p->action);
 			return;
 		case ACT_NORMALATTACK:
-			printf("%s uses Normal attack (%s)\n",p->front->base.name,type2str(p->front->type0));
+			printf("%s uses Normal attack (%s)\n",p->front->base->id,type2str(p->front->type0));
 			normal_attack(gettarget(p->front),p->front);
 			return;
 		default:
@@ -185,7 +185,7 @@ int canaction(struct player *p){
 void update_state(struct player *p){
 	int r;
 	for(r=0;r<6;++r){
-		if(!p->units[r].base.name)
+		if(!p->units[r].base)
 			break;
 		unit_update_state(p->units+r);
 	}
@@ -193,7 +193,7 @@ void update_state(struct player *p){
 void cooldown_decrease(struct player *p){
 	int r;
 	for(r=0;r<6;++r){
-		if(!p->units[r].base.name)
+		if(!p->units[r].base)
 			break;
 		unit_cooldown_decrease(p->units+r,1);
 	}
@@ -204,37 +204,49 @@ void cooldown_decrease(struct player *p){
 	if(r0||r1){\
 		if(r0&&r1){\
 			if(p->front->speed==e->front->speed)\
-				return test(0.5);\
-			return p->front->speed<e->front->speed?\
+				ret=test(0.5);\
+			else\
+				ret=p->front->speed<e->front->speed?\
 				1:0;\
+			goto out;\
 		}\
-		if(r0)\
-			return 1;\
-		else\
-			return 0;\
-	}\
+		if(r0){\
+			ret=1;\
+			goto out;\
+		}\
+		else{\
+			ret=0;\
+			goto out;\
+		}	}\
 }while(0)
 int battle(struct player *p){
-	struct player *e=p->enemy,*prior,*latter;
-	int round,r0,r1;
+	struct player *prior,*latter,*e;
+	struct battle_field field;
+	int round,r0,r1,ret;
+	e=p->enemy;
 	if(e->enemy!=p)
 		return -1;
-	if(!p->units->base.name||!e->units->base.name)
+	if(!p->units->base||!e->units->base){
 		return -2;
+	}
+	field.p=p;
+	field.e=e;
+	p->field=&field;
+	e->field=&field;
 	player_fillattr(p);
 	player_fillattr(e);
 	p->front=p->units;
 	e->front=e->units;
 	for(round=0;;++round){
 		printf("\nROUND %d %s:%lu/%lu(%.2lf%%) %s:%lu/%lu(%.2lf%%)\n",round,
-			p->front->base.name,
+			p->front->base->id,
 			p->front->hp,
-			p->front->base.max_hp,
-			100.0*p->front->hp/p->front->base.max_hp,
-			e->front->base.name,
+			p->front->base->max_hp,
+			100.0*p->front->hp/p->front->base->max_hp,
+			e->front->base->id,
 			e->front->hp,
-			e->front->base.max_hp,
-			100.0*e->front->hp/e->front->base.max_hp
+			e->front->base->max_hp,
+			100.0*e->front->hp/e->front->base->max_hp
 			);
 		if(p->front->speed>e->front->speed)
 			prior=p;
@@ -247,11 +259,13 @@ int battle(struct player *p){
 		update_state(latter);
 		prior->action=prior->selector(prior);
 		if((unsigned int)prior->action>=ACT_GIVEUP){
-			return prior==p?1:0;
+			ret=prior==p?1:0;
+			goto out;
 		}
 		latter->action=latter->selector(latter);
 		if((unsigned int)latter->action>=ACT_GIVEUP){
-			return latter==p?1:0;
+			ret=latter==p?1:0;
+			goto out;
 		}
 		r0=getprior(prior);
 		r1=getprior(latter);
@@ -261,9 +275,9 @@ int battle(struct player *p){
 		}
 		if(canaction(prior)){
 			if(prior->action==ACT_ABORT)
-				printf("%s aborted the action\n",prior->front->base.name);
+				printf("%s aborted the action\n",prior->front->base->id);
 			else {
-				printf("%s actions\n",prior->front->base.name);
+				printf("%s actions\n",prior->front->base->id);
 				player_action(prior);
 				deadcheck;
 			}
@@ -271,21 +285,28 @@ int battle(struct player *p){
 		update_state(latter);
 		if(canaction(latter)){
 			if(latter->action==ACT_ABORT)
-				printf("%s aborted the action\n",latter->front->base.name);
+				printf("%s aborted the action\n",latter->front->base->id);
 			else {
-				printf("%s actions\n",latter->front->base.name);
+				printf("%s actions\n",latter->front->base->id);
 				player_action(latter);
 				deadcheck;
 			}
 		}
 		printf("ROUND END\n");
-		unit_effect_in_roundend(prior->front);
-		unit_effect_in_roundend(latter->front);
+		//unit_effect_in_roundend(prior->front);
+		//unit_effect_in_roundend(latter->front);
+		effect_in_roundend(field.effects);
 		deadcheck;
-		unit_effect_round_decrease(prior->front,1);
-		unit_effect_round_decrease(latter->front,1);
+		//unit_effect_round_decrease(prior->front,1);
+		//unit_effect_round_decrease(latter->front,1);
+		effect_round_decrease(field.effects,1);
 		deadcheck;
 		cooldown_decrease(prior);
 		cooldown_decrease(latter);
 	}
+out:
+	for_each_effect(ep,field.effects){
+		effect_end(ep);
+	}
+	return ret;
 }

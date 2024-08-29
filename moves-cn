@@ -13,3 +13,6 @@ Soften 软化 降对面1攻击
 Iron wall 铁壁 加自己1物抗1法抗
 Spi blow 灵能爆破 0.75*ATK物伤 增加对面灵力
 Spi shattering slash 碎灵斩击 自己没有灵力0.5*ATK物伤+麻醉，自己有灵力清空自己灵力秒杀对面减少所有技能3回合冷却
+Angry 愤怒 自己+1攻击
+Spi-focus crack 减少对面灵力
+Natural shield  自然之盾 受到的伤害变成自然对数

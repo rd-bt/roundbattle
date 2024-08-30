@@ -272,16 +272,6 @@
 #define ACT_UNIT5 15
 #define ACT_GIVEUP 16
 
-#define ATTR_ATK 1
-#define ATTR_DEF 2
-#define ATTR_SPEED 4
-#define ATTR_HIT 8
-#define ATTR_AVOID 16
-#define ATTR_CRITEFFECT 32
-#define ATTR_PBONUS 64
-#define ATTR_MBONUS 128
-#define ATTR_PDERATE 256
-#define ATTR_MDERATE 512
 #define ATTR_MAX (+8)
 #define ATTR_MIN (-8)
 
@@ -313,22 +303,20 @@ struct unit_base {
 	struct move moves[8];
 	struct move pmoves[2];
 };
-struct attr {
-	int atk,def,speed,hit,avoid,
-	    crit_effect,
-	    physical_bonus,magical_bonus,
-	    physical_derate,magical_derate;
-};
 struct effect_base {
 	const char *id;
-	int (*init)(struct effect *,int level,int round);
+	int (*init)(struct effect *,long level,int round);
+	void (*inited)(struct effect *);
 	void (*end)(struct effect *);
-	int (*attack)(struct effect *e,struct unit **dest,struct unit **src,unsigned long *value,int *damage_type,int *aflag,int *type);
+	int (*attack)(struct effect *e,struct unit *dest,struct unit *src,unsigned long *value,int *damage_type,int *aflag,int *type);
 	void (*attack_end)(struct effect *e,struct unit *dest,struct unit *src,unsigned long value,int damage_type,int aflag,int type);
-	int (*damage)(struct effect *e,struct unit **dest,struct unit **src,unsigned long *value,int *damage_type,int *aflag,int *type);
+	int (*damage)(struct effect *e,struct unit *dest,struct unit *src,unsigned long *value,int *damage_type,int *aflag,int *type);
 	void (*damage_end)(struct effect *e,struct unit *dest,struct unit *src,unsigned long value,int damage_type,int aflag,int type);
-	void (*roundend)(struct effect *);
-	void (*update_state)(struct effect *,int *state);
+	void (*kill)(struct effect *e,struct unit *u);
+	void (*kill_end)(struct effect *e,struct unit *u);
+	void (*roundend)(struct effect *e);
+	void (*update_attr)(struct effect *e,struct unit *u);
+	void (*update_state)(struct effect *e,struct unit *u,int *state);
 	int flag,unused;
 };
 struct effect {
@@ -336,7 +324,8 @@ struct effect {
 	struct unit *dest;
 	struct unit *src;
 	struct effect *next,*prev;
-	int level,round;
+	int round,active;
+	long level;
 	char data[64];
 };
 struct unit {
@@ -351,7 +340,6 @@ struct unit {
 	int type0,type1,state,unused;
 	struct move moves[8];
 	struct move pmoves[2];
-	struct attr attrs;
 	struct player *owner;
 	struct move *move_cur;
 };
@@ -390,20 +378,15 @@ unsigned long addhp(struct unit *dest,long hp);
 
 long setspi(struct unit *dest,long spi);
 
-struct effect *effect(const struct effect_base *base,struct unit *dest,struct unit *src,int level,int round);
+struct effect *effect(const struct effect_base *base,struct unit *dest,struct unit *src,long level,int round);
 
 int effect_end(struct effect *e);
 
 struct unit *gettarget(struct unit *u);
 
-void unit_attr_set_force(struct unit *u,int attrs,int level);
+void update_attr(struct unit *u);
 
-void unit_attr_set(struct unit *u,int attrs,int level);
-
-void unit_update_attr(struct unit *u);
-
-
-void unit_update_state(struct unit *u);
+void update_state(struct unit *u);
 
 void unit_cooldown_decrease(struct unit *u,int round);
 

@@ -12,12 +12,20 @@ const char *type2str(int type){
 		return "Unknown";
 	return types_string[index];
 }
-int unit_kill(struct unit *up){
-	if(up->hp)return -1;
-	if(!isalive(up->state))
+int unit_kill(struct unit *u){
+	if(!isalive(u->state))
 			return -1;
-	up->state=UNIT_FAILED;
-	printf("%s failed\n",up->base->id);
+	for_each_effect(e,u->owner->field->effects){
+		if(e->base->kill)
+			e->base->kill(e,u);
+	}
+	if(u->hp)return -1;
+	u->state=UNIT_FAILED;
+	printf("%s failed\n",u->base->id);
+	for_each_effect(e,u->owner->field->effects){
+		if(e->base->kill_end)
+			e->base->kill_end(e,u);
+	}
 	return 0;
 }
 unsigned long damage(struct unit *dest,struct unit *src,unsigned long value,int damage_type,int aflag,int type){
@@ -33,7 +41,7 @@ unsigned long damage(struct unit *dest,struct unit *src,unsigned long value,int 
 	if(!isalive(dest->state))
 			return 0;
 	for_each_effect(e,dest->owner->field->effects){
-		if(e->base->damage&&e->base->damage(e,&dest,&src,&value,&damage_type,&aflag,&type))
+		if(e->base->damage&&e->base->damage(e,dest,src,&value,&damage_type,&aflag,&type))
 			return 0;
 	}
 	if(dest->hp>value){
@@ -80,7 +88,7 @@ unsigned long attack(struct unit *dest,struct unit *src,unsigned long value,int 
 			return 0;
 	}
 	for_each_effect(e,dest->owner->field->effects){
-		if(e->base->attack&&e->base->attack(e,&dest,&src,&value,&damage_type,&aflag,&type))
+		if(e->base->attack&&e->base->attack(e,dest,src,&value,&damage_type,&aflag,&type))
 			return 0;
 	}
 	if(aflag&AF_CRIT){
@@ -235,7 +243,7 @@ int setcooldown(struct move *m,int round){
 	m->cooldown=round;
 	return round;
 }
-struct effect *effect(const struct effect_base *base,struct unit *dest,struct unit *src,int level,int round){
+struct effect *effect(const struct effect_base *base,struct unit *dest,struct unit *src,long level,int round){
 	struct effect *ep=NULL,*ep1;
 	struct battle_field *f=NULL;
 	int new;
@@ -271,13 +279,18 @@ struct effect *effect(const struct effect_base *base,struct unit *dest,struct un
 		ep->level=level;
 		ep->round=round;
 	}
-	if(src)printf("%s get effect %s from %s in %d rounds\n",dest->base->id,ep->base->id,src->base->id,ep->round);
-	else printf("%s get effect %s in %d rounds\n",dest->base->id,ep->base->id,ep->round);
+	if(src)printf("%s get effect %s(%+ld) from %s in %d rounds\n",dest->base->id,ep->base->id,ep->level,src->base->id,ep->round);
+	else printf("%s get effect %s(%+ld) in %d rounds\n",dest->base->id,ep->base->id,ep->level,ep->round);
 	if(new){
 		ep1=f->effects;
 		f->effects=ep;
 		ep->next=ep1;
+		if(ep1)
+			ep1->prev=ep;
 	}
+
+	if(base->inited)
+		base->inited(ep);
 	return ep;
 }
 int effect_end(struct effect *e){
@@ -288,8 +301,6 @@ int effect_end(struct effect *e){
 		f=e->src->owner->field;
 	if(!f)
 		return -1;
-	if(e->base->end)
-		e->base->end(e);
 	if(e->prev){
 		e->prev->next=e->next;
 	}else {
@@ -297,6 +308,8 @@ int effect_end(struct effect *e){
 	}
 	if(e->next)
 		e->next->prev=e->prev;
+	if(e->base->end)
+		e->base->end(e);
 	free(e);
 	return 0;
 }
@@ -315,70 +328,32 @@ void unit_cooldown_decrease(struct unit *u,int round){
 	}
 }
 
-#define setattr(a,A)\
-	if((attrs&A)&&u->attrs.a!=level){\
-		printf("%s %+d levels at " #a ",current %+d\n",u->base->id,level-u->attrs.a,level);\
-		u->attrs.a=level;\
+void update_attr(struct unit *u){
+	u->atk=u->base->atk;
+	u->def=u->base->def;
+	u->speed=u->base->speed;
+	u->hit=u->base->hit;
+	u->avoid=u->base->avoid;
+	u->crit_effect=u->base->crit_effect;
+	u->physical_bonus=u->base->physical_bonus;
+	u->magical_bonus=u->base->magical_bonus;
+	u->physical_derate=u->base->physical_derate;
+	u->magical_derate=u->base->magical_derate;
+	for_each_effect(e,u->owner->field->effects){
+		if(e->base->update_attr)
+			e->base->update_attr(e,u);
 	}
-void unit_attr_set_force(struct unit *u,int attrs,int level){
-	setattr(atk,ATTR_ATK)
-	setattr(def,ATTR_DEF)
-	setattr(speed,ATTR_SPEED)
-	setattr(hit,ATTR_HIT)
-	setattr(avoid,ATTR_AVOID)
-	setattr(crit_effect,ATTR_CRITEFFECT)
-	setattr(physical_bonus,ATTR_PBONUS)
-	setattr(magical_bonus,ATTR_MBONUS)
-	setattr(physical_derate,ATTR_PDERATE)
-	setattr(magical_derate,ATTR_MDERATE)
-	unit_update_attr(u);
 }
 
-void unit_attr_set(struct unit *u,int attrs,int level){
-	if(level>8)
-		level=8;
-	else if(level<-8)
-		level=-8;
-	unit_attr_set_force(u,attrs,level);
-}
-#define update(a)\
-	r=u->base->a;\
-	if(u->attrs.a){\
-		if(u->attrs.a>0)\
-			r+=r*u->attrs.a/4;\
-		else\
-			r*=pow(0.75,-u->attrs.a);\
-	}\
-	u->a=r
-#define update_d(a,step)\
-	d=u->base->a;\
-	if(u->attrs.a){\
-		d+=u->attrs.a*(step);\
-	}\
-	u->a=d
-void unit_update_attr(struct unit *u){
-	unsigned long r;
-	double d;
-	update(atk);
-	update(def);
-	update(speed);
-	update(hit);
-	update(avoid);
-	update_d(crit_effect,0.5);
-	update_d(physical_bonus,0.25);
-	update_d(magical_bonus,0.25);
-	update_d(physical_derate,0.25);
-	update_d(magical_derate,0.25);
-}
-
-void unit_update_state(struct unit *u){
+void update_state(struct unit *u){
 	int r;
 	if(!isalive(u->state))
 		return;
 	r=UNIT_NORMAL;
 	for_each_effect(e,u->owner->field->effects){
-		if(e->dest==u&&e->base->update_state)
-			e->base->update_state(e,&r);
+		if(e->base->update_state){
+			e->base->update_state(e,u,&r);
+		}
 	}
 	u->state=r;
 }

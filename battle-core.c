@@ -87,6 +87,8 @@ unsigned long attack(struct unit *dest,struct unit *src,unsigned long value,int 
 		default:
 			return 0;
 	}
+	if(!isalive(dest->state))
+			return -1;
 	for_each_effect(e,dest->owner->field->effects){
 		if(e->base->attack&&e->base->attack(e,dest,src,&value,&damage_type,&aflag,&type))
 			return 0;
@@ -153,7 +155,10 @@ no_derate:
 
 int hittest(struct unit *dest,struct unit *src,double hit_rate){
 	double real_rate;
-	int x=dest->avoid;
+	int x;
+	if(!isalive(dest->state))
+			return 0;
+	x=dest->avoid;
 	if(x<=0)x=1;
 	real_rate=hit_rate*src->hit/x;
 	//printf("rate:%lf real:%lf\n",hit_rate,real_rate);
@@ -167,6 +172,12 @@ int hittest(struct unit *dest,struct unit *src,double hit_rate){
 int test(double prob){
 	return drand48()<prob;
 }
+double rand01(void){
+	return drand48();
+}
+long randi(void){
+	return lrand48();
+}
 unsigned long normal_attack(struct unit *dest,struct unit *src){
 	if(!hittest(dest,src,1.0))
 		return 0;
@@ -175,21 +186,29 @@ unsigned long normal_attack(struct unit *dest,struct unit *src){
 unsigned long heal(struct unit *dest,unsigned long value){
 	unsigned long hp;
 	if(!isalive(dest->state))
-			return -1;
+			return 0;
+	for_each_effect(e,dest->owner->field->effects){
+		if(e->base->heal&&e->base->heal(e,dest,&value))
+			return 0;
+	}
 	hp=dest->hp+value;
 	if(hp>dest->base->max_hp)
 		hp=dest->base->max_hp;
 	dest->hp=hp;
 	printf("%s heals %lu hp,current hp:%lu\n",dest->base->id,value,hp);
+	for_each_effect(e,dest->owner->field->effects){
+		if(e->base->heal_end)
+			e->base->heal_end(e,dest,value);
+	}
 	return value;
 }
 void instant_death(struct unit *dest){
-	attack(dest,NULL,dest->hp*64,DAMAGE_REAL,0,TYPE_VOID);
+	damage(dest,NULL,dest->base->max_hp*64,DAMAGE_REAL,0,TYPE_VOID);
 }
 unsigned long sethp(struct unit *dest,unsigned long hp){
 	unsigned long ohp;
 	if(!isalive(dest->state))
-			return -1;
+			return 0;
 	ohp=dest->hp;
 	if(hp>dest->base->max_hp)
 		hp=dest->base->max_hp;
@@ -207,7 +226,7 @@ unsigned long addhp(struct unit *dest,long hp){
 	if(!hp)
 		return 0;
 	if(!isalive(dest->state))
-			return -1;
+			return 0;
 	ohp=(long)dest->hp;
 	rhp=hp+ohp;
 	if(hp<0&&rhp<0)
@@ -223,7 +242,7 @@ unsigned long addhp(struct unit *dest,long hp){
 long setspi(struct unit *dest,long spi){
 	long ospi;
 	if(!isalive(dest->state))
-			return -1;
+			return 0;
 	ospi=dest->spi;
 	if(spi>(long)dest->base->max_spi)
 		spi=(long)dest->base->max_spi;
@@ -254,7 +273,11 @@ struct effect *effect(const struct effect_base *base,struct unit *dest,struct un
 	if(!f)
 		return NULL;
 	for_each_effect(e,f->effects){
-		if(e->dest==dest&&e->base==base){
+		if(e->base->effect&&e->base->effect(e,base,dest,src,&level,&round))
+			return NULL;
+	}
+	for_each_effect(e,f->effects){
+		if(dest&&e->dest==dest&&e->base==base){
 			ep=e;
 			break;
 		}
@@ -279,8 +302,10 @@ struct effect *effect(const struct effect_base *base,struct unit *dest,struct un
 		ep->level=level;
 		ep->round=round;
 	}
-	if(src)printf("%s get effect %s(%+ld) from %s in %d rounds\n",dest->base->id,ep->base->id,ep->level,src->base->id,ep->round);
-	else printf("%s get effect %s(%+ld) in %d rounds\n",dest->base->id,ep->base->id,ep->level,ep->round);
+	if(dest){
+		if(src)printf("%s get effect %s(%+ld) from %s in %d rounds\n",dest->base->id,ep->base->id,ep->level,src->base->id,ep->round);
+		else printf("%s get effect %s(%+ld) in %d rounds\n",dest->base->id,ep->base->id,ep->level,ep->round);
+	}
 	if(new){
 		ep1=f->effects;
 		f->effects=ep;
@@ -291,6 +316,10 @@ struct effect *effect(const struct effect_base *base,struct unit *dest,struct un
 
 	if(base->inited)
 		base->inited(ep);
+	for_each_effect(e,f->effects){
+		if(e->base->effect_end)
+			e->base->effect_end(e,base,dest,src,level,round);
+	}
 	return ep;
 }
 int effect_end(struct effect *e){
@@ -310,7 +339,41 @@ int effect_end(struct effect *e){
 		e->next->prev=e->prev;
 	if(e->base->end)
 		e->base->end(e);
+	if(e->dest)
+		printf("the effect %s(%+ld) of %s was removed\n",e->base->id,e->level,e->dest->base->id);
 	free(e);
+	return 0;
+}
+
+int purify(struct effect *e){
+	if(e->base->flag&EFFECT_UNPURIFIABLE)
+		return -1;
+	return effect_end(e);
+}
+
+void effect_event(struct effect *e){
+	printf("effect event %s\n",e->base->id);
+}
+void effect_event_end(struct effect *e){
+	printf("effect event %s end\n",e->base->id);
+}
+int revive(struct unit *u,unsigned long hp){
+	if(u->state!=UNIT_FAILED||!hp)
+		return -1;
+	u->state=UNIT_NORMAL;
+	sethp(u,hp);
+	update_state(u);
+	return 0;
+}
+int event(const struct event *ev,struct unit *src){
+	printf("event %s",ev->id);
+	if(src)
+		printf(" caused by %s\n",src->base->id);
+	else
+		printf("\n");
+	if(ev->action)
+		ev->action(ev,src);
+	printf("event %s end\n",ev->id);
 	return 0;
 }
 void unit_cooldown_decrease(struct unit *u,int round){
@@ -357,6 +420,12 @@ void update_state(struct unit *u){
 	}
 	u->state=r;
 }
+void effect_in_roundstart(struct effect *effects){
+	for_each_effect(e,effects){
+		if(e->base->roundstart)
+			e->base->roundstart(e);
+	}
+}
 void effect_in_roundend(struct effect *effects){
 	for_each_effect(e,effects){
 		if(e->base->roundend)
@@ -397,10 +466,115 @@ void effect_round_decrease(struct effect *effects,int round){
 			effect_end(v);
 	}
 }
-void unit_move(struct unit *u,struct move *m){
+struct effect *unit_findeffect(struct unit *u,const struct effect_base *base){
+	for_each_effect(e,u->owner->field->effects){
+		if(e->base==base&&e->dest==u)
+			return e;
+	}
+	return NULL;
+}
+int effect_isnegative(const struct effect *e){
+	if(e->base->flag&(EFFECT_NEGATIVE|EFFECT_ABNORMAL|EFFECT_CONTROL))
+		return 1;
+	else if(e->base->flag&EFFECT_POSITIVE)
+		return 0;
+	else if(e->base->flag&EFFECT_ATTR)
+		return e->level<0;
+	else
+		return e->src&&e->dest&&e->src->owner!=e->dest->owner;
+}
+int unit_hasnegative(struct unit *u){
+	for_each_effect(e,u->owner->field->effects){
+		if(e->dest==u&&effect_isnegative(e))
+			return 1;
+	}
+	return 0;
+}
+int unit_move(struct unit *u,struct move *m){
 	struct move *backup=u->move_cur;
+	if(!isalive(u->state))
+			return 0;
 	u->move_cur=m;
 	printf("%s uses %s (%s)\n",u->base->id,m->id,type2str(m->type));
 	m->action(u);
 	u->move_cur=backup;
+	return 0;
+}
+int canaction2(struct player *p,int act){
+	struct move *m;
+	switch(act){
+		case ACT_MOVE0 ... ACT_MOVE7:
+			m=p->front->moves+act;
+			if(!m->id||(m->cooldown&&!(m->mlevel&MLEVEL_FREEZING_ROARING)))
+				return 0;
+			switch(p->front->state){
+				case UNIT_CONTROLLED:
+					if(m->flag&MF_NOCONTROL)
+						return 1;
+				case UNIT_SUPPRESSED:
+					if(m->mlevel&MLEVEL_FREEZING_ROARING)
+						return 1;
+				case UNIT_FAILED:
+				case UNIT_FREEZING_ROARINGED:
+					return 0;
+				default:
+					return 1;
+			}
+		case ACT_NORMALATTACK:
+			switch(p->front->state){
+				case UNIT_CONTROLLED:
+				case UNIT_SUPPRESSED:
+				case UNIT_FAILED:
+				case UNIT_FREEZING_ROARINGED:
+					return 0;
+				default:
+					return 1;
+			}
+		case ACT_UNIT0 ... ACT_UNIT5:
+			if(!p->units[act-ACT_UNIT0].base)
+				return 0;
+			switch(p->front->state){
+				case UNIT_CONTROLLED:
+				case UNIT_SUPPRESSED:
+					return 0;
+				default:
+					return 1;
+			}
+		default:
+		case ACT_GIVEUP:
+		case ACT_ABORT:
+			return 1;
+	}
+}
+struct player *getprior(struct player *p,struct player *e){
+	int pp,pe,frp=0,fre=0;
+	switch(p->action){
+		case ACT_MOVE0 ... ACT_MOVE7:
+			pp=p->front->moves[p->action].prior;
+			if((p->front->moves[p->action].mlevel&MLEVEL_FREEZING_ROARING)&&unit_hasnegative(p->front))
+				frp=1;
+			break;
+		default:
+			pp=0;
+			break;
+	}
+	switch(e->action){
+		case ACT_MOVE0 ... ACT_MOVE7:
+			pe=e->front->moves[e->action].prior;
+			if((e->front->moves[e->action].mlevel&MLEVEL_FREEZING_ROARING)&&unit_hasnegative(e->front))
+				fre=1;
+			break;
+		default:
+			pe=0;
+			break;
+	}
+	if(frp!=fre){
+		return frp?p:e;
+	}
+	if(pp!=pe){
+		return pp>pe?p:e;
+	}
+	if(p->front->speed!=e->front->speed)
+		return p->front->speed>e->front->speed?p:e;
+	return test(0.5)?p:e;
 }

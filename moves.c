@@ -26,7 +26,9 @@ unsigned long gcdul(unsigned long x,unsigned long y){
 
 #define abnormal_damage(name,frac,type)\
 void name##_roundend(struct effect *e){\
+	effect_event(e);\
 	attack(e->dest,NULL,e->dest->base->max_hp/frac,DAMAGE_REAL,0,type);\
+	effect_event_end(e);\
 }\
 int name##_init(struct effect *e,long level,int round){\
 	if(!e->round)\
@@ -61,9 +63,11 @@ abnormal_damage(poisoned,10,TYPE_POISON)
 abnormal_damage(burnt,10,TYPE_FIRE)
 
 void parasitized_roundend(struct effect *e){
+	effect_event(e);
 	heal(e->dest->owner->enemy->front,
 		attack(e->dest,NULL,e->dest->base->max_hp/12,DAMAGE_REAL,0,TYPE_GRASS)
 	);
+	effect_event_end(e);
 }
 int parasitized_init(struct effect *e,long level,int round){
 	if(!e->round)
@@ -84,27 +88,36 @@ abnormal_control(petrified)
 void effect_update_attr(struct effect *e){
 	update_attr(e->dest);
 }
+int attr_init(struct effect *e,long level,int round){
+	if(round)
+		level+=e->level;
+	else
+		round=-1;
+	if(!e->round)
+		e->round=round;
+	if(level>ATTR_MAX)
+		level=ATTR_MAX;
+	if(level<ATTR_MIN)
+		level=ATTR_MIN;
+	e->level=level;
+	if(!level)
+		return -1;
+	update_attr(e->dest);
+	return 0;
+}
 #define effect_attr(name,attr)\
 void name##_update_attr(struct effect *e,struct unit *u){\
-	if(e->dest==u)\
-		u->attr+=u->base->attr*e->level/2;\
-}\
-int name##_init(struct effect *e,long level,int round){\
-	if(!e->round)\
-		e->round=round;\
-	level+=e->level;\
-	if(level>ATTR_MAX)\
-		level=ATTR_MAX;\
-	if(level<ATTR_MIN)\
-		level=ATTR_MIN;\
-	e->level=level;\
-	update_attr(e->dest);\
-	return 0;\
+	if(e->dest==u){\
+		if(e->level<0)\
+			u->attr*=pow(0.75,-e->level);\
+		else\
+			u->attr*=1.0+0.5*e->level;\
+	}\
 }\
 const struct effect_base name[1]={{\
 	.id=#name,\
 	.flag=EFFECT_ATTR,\
-	.init=name##_init,\
+	.init=attr_init,\
 	.inited=effect_update_attr,\
 	.end=effect_update_attr,\
 	.update_attr=name##_update_attr\
@@ -114,11 +127,24 @@ effect_attr(DEF,atk)
 effect_attr(SPEED,speed)
 effect_attr(HIT,hit)
 effect_attr(AVOID,avoid)
-effect_attr(CE,crit_effect)
-effect_attr(PDB,physical_bonus)
-effect_attr(MDB,magical_bonus)
-effect_attr(PDD,physical_derate)
-effect_attr(MDD,magical_derate)
+#define effect_attr_d(name,attr,step)\
+void name##_update_attr(struct effect *e,struct unit *u){\
+	if(e->dest==u)\
+		u->attr+=e->level*step;\
+}\
+const struct effect_base name[1]={{\
+	.id=#name,\
+	.flag=EFFECT_ATTR,\
+	.init=attr_init,\
+	.inited=effect_update_attr,\
+	.end=effect_update_attr,\
+	.update_attr=name##_update_attr\
+}};
+effect_attr_d(CE,crit_effect,0.8)
+effect_attr_d(PDB,physical_bonus,0.75)
+effect_attr_d(MDB,magical_bonus,0.75)
+effect_attr_d(PDD,physical_derate,0.75)
+effect_attr_d(MDD,magical_derate,0.75)
 void steel_flywheel(struct unit *s){
 	struct unit *t=gettarget(s);
 	if(hittest(t,s,1.2)){
@@ -166,9 +192,9 @@ void urgently_repair(struct unit *s){
 void double_slash(struct unit *s){
 	struct unit *t=gettarget(s);
 	if(hittest(t,s,1.0))
-		attack(t,s,0.8*s->atk,DAMAGE_PHYSICAL,t->hp==t->base->max_hp?AF_CRIT:0,TYPE_WIND);
+		attack(t,s,0.6*s->atk,DAMAGE_PHYSICAL,t->hp==t->base->max_hp?AF_CRIT:0,TYPE_WIND);
 	if(s->move_cur&&(s->move_cur->mlevel&MLEVEL_CONCEPTUAL))
-		addhp(s->owner->enemy->front,-0.8*s->def);
+		addhp(s->owner->enemy->front,s->def>16?-s->def:-16);
 }
 void petrifying_ray(struct unit *s){
 	struct unit *t=gettarget(s);
@@ -222,7 +248,7 @@ void spi_shattering_slash(struct unit *s){
 	}
 }
 void angry(struct unit *s){
-	effect(ATK,s,s,2,-1);
+	effect(ATK,s,s,1,-1);
 	//unit_attr_set(s,ATTR_CRITEFFECT,s->attrs.crit_effect+2);
 }
 void spi_fcrack(struct unit *s){
@@ -247,20 +273,73 @@ void spi_fcrack(struct unit *s){
 int natural_shield_damage(struct effect *e,struct unit *dest,struct unit *src,unsigned long *value,int *damage_type,int *aflag,int *type){
 	if(dest!=e->dest)
 		return 0;
-	if(*value<=2)
+	effect_event(e);
+	if(*value<8)
 		*value=1;
 	else
 		*value=log(*value);
+	effect_event_end(e);
 	return 0;
 }
-const struct effect_base natural_shield_effect={
+const struct effect_base natural_shield_effect[1]={{
 	.id="natural_shield",
 	.flag=EFFECT_POSITIVE,
 	.damage=natural_shield_damage
-};
+}};
 void natural_shield(struct unit *s){
-	effect(&natural_shield_effect,s,s,0,5);
+	effect(natural_shield_effect,s,s,0,5);
 	setcooldown(s->move_cur,13);
+}
+
+int alkali_fire_seal_heal(struct effect *e,struct unit *dest,unsigned long *value){
+	if(dest!=e->dest)
+		return 0;
+	effect_event(e);
+	*value*=0.85;
+	effect_event_end(e);
+	return 0;
+}
+const struct effect_base alkali_fire_seal[1]={{
+	.id="alkali_fire_seal",
+	.flag=EFFECT_NEGATIVE|EFFECT_UNPURIFIABLE,
+	.heal=alkali_fire_seal_heal
+}};
+void rfdisillusionfr_action(const struct event *ev,struct unit *src){
+	unsigned long def=src->def>16?src->def:16;
+	struct player *p=src->owner->enemy;
+	for_each_unit(u,p){
+		if(u!=p->front&&!unit_findeffect(u,alkali_fire_seal))
+			continue;
+		attack(u,src,def*u->base->max_hp/2048,DAMAGE_REAL,0,TYPE_ALKALIFIRE);
+	}
+}
+const struct event rfdisillusionfr[1]={{
+	.id="rfdisillusionfr",
+	.action=rfdisillusionfr_action
+}};
+void metal_bomb_end(struct effect *e){
+	struct player *p=e->src->owner->enemy;
+	effect_event(e);
+	attack(p->front,e->src,1.35*e->src->atk,DAMAGE_PHYSICAL,0,TYPE_ALKALIFIRE);
+	if(unit_findeffect(p->front,alkali_fire_seal))
+		event(rfdisillusionfr,e->src);
+	else
+		effect(alkali_fire_seal,p->front,e->src,0,16);
+	effect_event_end(e);
+}
+const struct effect_base metal_bomb_effect[1]={{
+	.id="metal_bomb",
+	.end=metal_bomb_end
+}};
+void metal_bomb(struct unit *s){
+	effect(metal_bomb_effect,NULL,s,0,0);
+}
+void fate_destroying_slash(struct unit *s){
+	struct unit *t=gettarget(s);
+	if(hittest(t,s,1.0)){
+		attack(t,s,0.75*s->atk,DAMAGE_PHYSICAL,0,TYPE_FIGHTING);
+	}
+	attack(t,s,(t->base->max_hp-t->hp)*(0.12+0.00012*(s->atk+(s->def>0?s->def:0))),DAMAGE_REAL,0,TYPE_FIGHTING);
 }
 const struct move builtin_moves[]={
 	{
@@ -398,6 +477,22 @@ const struct move builtin_moves[]={
 		.prior=0,
 		.flag=0,
 		.mlevel=MLEVEL_REGULAR|MLEVEL_CONCEPTUAL
+	},
+	{
+		.id="metal_bomb",
+		.action=metal_bomb,
+		.type=TYPE_ALKALIFIRE,
+		.prior=0,
+		.flag=0,
+		.mlevel=MLEVEL_REGULAR
+	},
+	{
+		.id="fate_destroying_slash",
+		.action=fate_destroying_slash,
+		.type=TYPE_FIGHTING,
+		.prior=1,
+		.flag=0,
+		.mlevel=MLEVEL_REGULAR
 	},
 	{NULL}
 };

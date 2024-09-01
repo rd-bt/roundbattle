@@ -282,6 +282,7 @@
 #define EFFECT_NEGATIVE 16
 #define EFFECT_UNPURIFIABLE 32
 #define for_each_effect(_var,_ehead) for(struct effect *_var=(_ehead),*_p=_var?_var->next:NULL;_p=_var?_var->next:NULL,_var;_var=_p)
+#define for_each_unit(_var,_player) for(struct unit *_var=(_player)->units,*_p0=_var+6;_var<_p0&&_var->base;++_var)
 struct unit;
 struct player;
 struct battle_field;
@@ -312,9 +313,14 @@ struct effect_base {
 	void (*attack_end)(struct effect *e,struct unit *dest,struct unit *src,unsigned long value,int damage_type,int aflag,int type);
 	int (*damage)(struct effect *e,struct unit *dest,struct unit *src,unsigned long *value,int *damage_type,int *aflag,int *type);
 	void (*damage_end)(struct effect *e,struct unit *dest,struct unit *src,unsigned long value,int damage_type,int aflag,int type);
+	int (*effect)(struct effect *e,const struct effect_base *base,struct unit *dest,struct unit *src,long *level,int *round);
+	void (*effect_end)(struct effect *e,const struct effect_base *base,struct unit *dest,struct unit *src,long level,int round);
+	int (*heal)(struct effect *e,struct unit *dest,unsigned long *value);
+	void (*heal_end)(struct effect *e,struct unit *dest,unsigned long value);
 	void (*kill)(struct effect *e,struct unit *u);
 	void (*kill_end)(struct effect *e,struct unit *u);
 	void (*roundend)(struct effect *e);
+	void (*roundstart)(struct effect *e);
 	void (*update_attr)(struct effect *e,struct unit *u);
 	void (*update_state)(struct effect *e,struct unit *u,int *state);
 	int flag,unused;
@@ -327,6 +333,11 @@ struct effect {
 	int round,active;
 	long level;
 	char data[64];
+};
+
+struct event {
+	const char *id;
+	void (*action)(const struct event *ev,struct unit *src);
 };
 struct unit {
 	const struct unit_base *base;
@@ -366,6 +377,10 @@ int hittest(struct unit *dest,struct unit *src,double hit_rate);
 
 int test(double prob);
 
+double rand01(void);
+
+long randi(void);
+
 unsigned long normal_attack(struct unit *dest,struct unit *src);
 
 unsigned long heal(struct unit *dest,unsigned long value);
@@ -382,6 +397,16 @@ struct effect *effect(const struct effect_base *base,struct unit *dest,struct un
 
 int effect_end(struct effect *e);
 
+int purify(struct effect *e);
+
+int revive(struct unit *u,unsigned long hp);
+
+int event(const struct event *ev,struct unit *src);
+
+void effect_event(struct effect *e);
+
+void effect_event_end(struct effect *e);
+
 struct unit *gettarget(struct unit *u);
 
 void update_attr(struct unit *u);
@@ -394,6 +419,8 @@ void unit_effect_in_roundend(struct unit *u);
 
 void effect_in_roundend(struct effect *effects);
 
+void effect_in_roundstart(struct effect *effects);
+
 void unit_effect_round_decrease(struct unit *u,int round);
 
 void effect_round_decrease(struct effect *effects,int round);
@@ -402,6 +429,16 @@ int setcooldown(struct move *m,int round);
 
 const char *type2str(int type);
 
-void unit_move(struct unit *u,struct move *m);
+struct effect *unit_findeffect(struct unit *u,const struct effect_base *base);
+
+int effect_isnegative(const struct effect *e);
+
+int unit_hasnegative(struct unit *u);
+
+int unit_move(struct unit *u,struct move *m);
+
+int canaction2(struct player *p,int act);
+
+struct player *getprior(struct player *p,struct player *e);
 
 #endif

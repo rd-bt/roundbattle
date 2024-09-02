@@ -37,9 +37,10 @@ int name##_init(struct effect *e,long level,int round){\
 }\
 const struct effect_base name[1]={{\
 	.id=#name,\
-	.flag=EFFECT_ABNORMAL|EFFECT_NEGATIVE,\
 	.init=name##_init,\
-	.roundend=name##_roundend\
+	.roundend=name##_roundend,\
+	.flag=EFFECT_ABNORMAL|EFFECT_NEGATIVE,\
+	.prior=-64\
 }};
 #define abnormal_control(name)\
 void name##_update_state(struct effect *e,struct unit *u,int *state){\
@@ -53,9 +54,9 @@ int name##_init(struct effect *e,long level,int round){\
 }\
 const struct effect_base name[1]={{\
 	.id=#name,\
-	.flag=EFFECT_ABNORMAL|EFFECT_CONTROL|EFFECT_NEGATIVE,\
 	.init=name##_init,\
-	.update_state=name##_update_state\
+	.update_state=name##_update_state,\
+	.flag=EFFECT_ABNORMAL|EFFECT_CONTROL|EFFECT_NEGATIVE,\
 }};
 abnormal_damage(cursed,5,TYPE_STEEL)
 abnormal_damage(radiated,5,TYPE_LIGHT)
@@ -76,9 +77,10 @@ int parasitized_init(struct effect *e,long level,int round){
 }
 const struct effect_base parasitized[1]={{
 	.id="parasitized",
-	.flag=EFFECT_ABNORMAL|EFFECT_NEGATIVE,
 	.init=parasitized_init,
-	.roundend=parasitized_roundend
+	.roundend=parasitized_roundend,
+	.flag=EFFECT_ABNORMAL|EFFECT_NEGATIVE,
+	.prior=-64
 }};
 abnormal_control(frozen)
 abnormal_control(asleep)
@@ -116,11 +118,12 @@ void name##_update_attr(struct effect *e,struct unit *u){\
 }\
 const struct effect_base name[1]={{\
 	.id=#name,\
-	.flag=EFFECT_ATTR,\
 	.init=attr_init,\
 	.inited=effect_update_attr,\
 	.end=effect_update_attr,\
-	.update_attr=name##_update_attr\
+	.update_attr=name##_update_attr,\
+	.flag=EFFECT_ATTR,\
+	.prior=64\
 }};
 effect_attr(ATK,atk)
 effect_attr(DEF,atk)
@@ -151,7 +154,7 @@ void steel_flywheel(struct unit *s){
 		attack(t,s,1.25*s->atk,DAMAGE_PHYSICAL,0,TYPE_STEEL);
 		effect(cursed,t,s,0,3);
 	}
-	setcooldown(s->move_cur,3);
+	setcooldown(s,s->move_cur,3);
 }
 void holylight_heavycannon(struct unit *s){
 	struct unit *t=gettarget(s);
@@ -159,7 +162,7 @@ void holylight_heavycannon(struct unit *s){
 		attack(t,s,1.25*s->atk,DAMAGE_PHYSICAL,0,TYPE_LIGHT);
 		effect(radiated,t,s,0,3);
 	}
-	setcooldown(s->move_cur,3);
+	setcooldown(s,s->move_cur,3);
 }
 void ground_force(struct unit *s){
 	struct unit *t=gettarget(s);
@@ -187,7 +190,7 @@ void health_exchange(struct unit *s){
 }
 void urgently_repair(struct unit *s){
 	heal(s,s->base->max_hp/2);
-	setcooldown(s->move_cur,4);
+	setcooldown(s,s->move_cur,4);
 }
 void double_slash(struct unit *s){
 	struct unit *t=gettarget(s);
@@ -202,7 +205,7 @@ void petrifying_ray(struct unit *s){
 		//unit_abnormal(t,ABNORMAL_PETRIFIED,3);
 		effect(petrified,t,s,0,3);
 	}
-	setcooldown(s->move_cur,4);
+	setcooldown(s,s->move_cur,4);
 }
 void leech_seed(struct unit *s){
 	struct unit *t=gettarget(s);
@@ -210,7 +213,7 @@ void leech_seed(struct unit *s){
 		//unit_abnormal(t,ABNORMAL_PARASITIZED,5);
 		effect(parasitized,t,s,0,5);
 	}
-	setcooldown(s->move_cur,4);
+	setcooldown(s,s->move_cur,4);
 }
 void soften(struct unit *s){
 	struct unit *t=gettarget(s);
@@ -284,13 +287,16 @@ int natural_shield_damage(struct effect *e,struct unit *dest,struct unit *src,un
 const struct effect_base natural_shield_effect[1]={{
 	.id="natural_shield",
 	.flag=EFFECT_POSITIVE,
-	.damage=natural_shield_damage
+	.damage=natural_shield_damage,
+	.prior=-25
 }};
 void natural_shield(struct unit *s){
 	effect(natural_shield_effect,s,s,0,5);
-	setcooldown(s->move_cur,13);
+	setcooldown(s,s->move_cur,13);
 }
-
+void effect_destruct(struct effect *e){
+	effect_end(e);
+}
 int alkali_fire_seal_heal(struct effect *e,struct unit *dest,unsigned long *value){
 	if(dest!=e->dest)
 		return 0;
@@ -302,7 +308,8 @@ int alkali_fire_seal_heal(struct effect *e,struct unit *dest,unsigned long *valu
 const struct effect_base alkali_fire_seal[1]={{
 	.id="alkali_fire_seal",
 	.flag=EFFECT_NEGATIVE|EFFECT_UNPURIFIABLE,
-	.heal=alkali_fire_seal_heal
+	.heal=alkali_fire_seal_heal,
+	.prior=-5
 }};
 void rfdisillusionfr_action(const struct event *ev,struct unit *src){
 	unsigned long def=src->def>16?src->def:16;
@@ -315,7 +322,7 @@ void rfdisillusionfr_action(const struct event *ev,struct unit *src){
 }
 const struct event rfdisillusionfr[1]={{
 	.id="rfdisillusionfr",
-	.action=rfdisillusionfr_action
+	.un={rfdisillusionfr_action}
 }};
 void metal_bomb_end(struct effect *e){
 	struct player *p=e->src->owner->enemy;
@@ -329,17 +336,117 @@ void metal_bomb_end(struct effect *e){
 }
 const struct effect_base metal_bomb_effect[1]={{
 	.id="metal_bomb",
-	.end=metal_bomb_end
+	.flag=EFFECT_ISOLATED,
+	.end=metal_bomb_end,
+	.roundend=effect_destruct,
+	.prior=5
 }};
 void metal_bomb(struct unit *s){
 	effect(metal_bomb_effect,NULL,s,0,0);
 }
 void fate_destroying_slash(struct unit *s){
 	struct unit *t=gettarget(s);
+	double coef=(0.12+0.00012*(s->atk+(s->def>0?s->def:0)));
 	if(hittest(t,s,1.0)){
 		attack(t,s,0.75*s->atk,DAMAGE_PHYSICAL,0,TYPE_FIGHTING);
 	}
-	attack(t,s,(t->base->max_hp-t->hp)*(0.12+0.00012*(s->atk+(s->def>0?s->def:0))),DAMAGE_REAL,0,TYPE_FIGHTING);
+	attack(t,s,(t->base->max_hp-t->hp)*coef,DAMAGE_REAL,0,TYPE_FIGHTING);
+	if(!isalive(t->state))
+		heal(s,s->base->max_hp*coef);
+}
+int avoid_hittest(struct effect *e,struct unit *dest,struct unit *src,double *hit_rate){
+	if(e->dest!=dest)
+		return -1;
+	effect_event(e);
+	effect_event_end(e);
+	effect_end(e);
+	return 0;
+}
+const struct effect_base avoid[1]={{
+	.id="avoid",
+	.hittest=avoid_hittest,
+	.flag=EFFECT_ISOLATED,
+	.prior=0
+}};
+void mosquito_bump(struct unit *s){
+	struct unit *t=gettarget(s);
+	if(hittest(t,s,1.1))
+		attack(t,s,0.9*s->atk,DAMAGE_PHYSICAL,0,TYPE_GHOST);
+	effect(avoid,s,s,0,5);
+}
+int frost_destroying_init(struct effect *e,long level,int round){
+	if(!e->round)
+		e->round=round;
+	return 0;
+}
+void frost_destroying_cd(struct effect *e,struct unit *u,struct move *m,int *round){
+	if(e->dest!=u||round<=0)
+		return;
+	if(m->cooldown>0&&test(0.5)){
+		effect_event(e);
+		*round=0;
+		effect_event_end(e);
+	}
+}
+int frost_destroying_damage(struct effect *e,struct unit *dest,struct unit *src,unsigned long *value,int *damage_type,int *aflag,int *type){
+	if(e->dest==dest&&*damage_type==DAMAGE_PHYSICAL){
+		effect_event(e);
+		*value*=1.1;
+		effect_event_end(e);
+	}
+	return 0;
+}
+void frost_destroying_move_end(struct effect *e,struct unit *u,struct move *m){
+	if(e->dest==u){
+		effect_event(e);
+		++m->cooldown;
+		effect_event_end(e);
+	}
+}
+const struct effect_base frost_destroying[1]={{
+	.id="frost_destroying",
+	.init=frost_destroying_init,
+	.damage=frost_destroying_damage,
+	.cooldown_decrease=frost_destroying_cd,
+	.move_end=frost_destroying_move_end,
+	.flag=EFFECT_NEGATIVE,
+	.prior=-18
+}};
+
+void primordial_breath_damage_end(struct effect *e,struct unit *dest,struct unit *src,unsigned long value,int damage_type,int aflag,int type){
+	if(e->dest==src&&type==TYPE_ICE&&damage_type==DAMAGE_PHYSICAL&&!(aflag&AF_CRIT)&&value*2<=dest->base->max_hp){
+		effect_event(e);
+		if(unit_findeffect(dest,frost_destroying)){
+			++e->level;
+			update_attr(src);
+		}else
+			effect(frost_destroying,dest,src,0,3);
+		effect_event_end(e);
+	}
+}
+void primordial_breath_update_attr(struct effect *e,struct unit *u){
+	if(e->dest!=u||e->level<=0)
+		return;
+	u->atk*=1+e->level*0.015;
+	u->def*=1+e->level*0.015;
+	u->speed*=1+e->level*0.015;
+	u->hit*=1+e->level*0.015;
+	u->avoid*=1+e->level*0.015;
+	u->crit_effect+=e->level*0.015;
+	u->physical_bonus+=e->level*0.015;
+	u->magical_bonus+=e->level*0.015;
+	u->physical_derate+=e->level*0.015;
+	u->magical_derate+=e->level*0.015;
+}
+const struct effect_base primordial_breath[1]={{
+	.id="primordial_breath",
+	.damage_end=primordial_breath_damage_end,
+	.update_attr=primordial_breath_update_attr,
+	.flag=EFFECT_POSITIVE|EFFECT_UNPURIFIABLE,
+	.prior=32
+}};
+void primordial_breath_init(struct unit *u){
+	effect(primordial_breath,u,u,0,-1);
 }
 const struct move builtin_moves[]={
 	{
@@ -491,6 +598,21 @@ const struct move builtin_moves[]={
 		.action=fate_destroying_slash,
 		.type=TYPE_FIGHTING,
 		.prior=1,
+		.flag=0,
+		.mlevel=MLEVEL_REGULAR
+	},
+	{
+		.id="mosquito_bump",
+		.action=mosquito_bump,
+		.type=TYPE_GHOST,
+		.prior=1,
+		.flag=0,
+		.mlevel=MLEVEL_REGULAR
+	},
+	{
+		.id="primordial_breath",
+		.init=primordial_breath_init,
+		.type=TYPE_ICE,
 		.flag=0,
 		.mlevel=MLEVEL_REGULAR
 	},

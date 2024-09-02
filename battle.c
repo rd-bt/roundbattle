@@ -2,7 +2,134 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+static const char *damage_type_string[3]={"real","physical","magical"};
+static const char *types_string[21]={"Void type","Grass","Fire","Water","Steel","Light","Fighting","Wind","Poison","Rock","Electric","Ghost","Ice","Bug","Machine","Soil","Dragon","Normal","Devine grass","Alkali fire","Devine water"};
+const char *type2str(int type){
+	unsigned int index=type?__builtin_ctz(type)+1:0;
+	if(index>=21)
+		return "Unknown";
+	return types_string[index];
+}
 int canaction2(struct player *p,int act);
+void reporter_default(const struct message *msg){
+	const struct player *p,*e;
+	switch(msg->type){
+		case MSG_ACTION:
+			break;
+		case MSG_DAMAGE:
+			if(msg->un.damage.damage_type==DAMAGE_TOTAL){
+				printf("%s get %lu total damage",msg->un.damage.dest->base->id,msg->un.damage.value);
+				break;
+			}
+			printf("%s get %lu %s damage (%s",msg->un.damage.dest->base->id,msg->un.damage.value,damage_type_string[msg->un.damage.damage_type],type2str(msg->un.damage.type));
+			if(msg->un.damage.aflag&AF_CRIT)
+				printf(",crit");
+			if(msg->un.damage.aflag&AF_EFFECT)
+				printf(",effect");
+			if(msg->un.damage.aflag&AF_WEAK)
+				printf(",weak");
+			printf(")");
+			if(msg->un.damage.src)
+				printf(" from %s",msg->un.damage.src->base->id);
+			printf(",current hp:%lu\n",msg->un.damage.dest->hp);
+			break;
+		case MSG_EFFECT:
+			if(msg->un.e->dest)
+				printf("%s get ",msg->un.e->dest->base->id);
+			printf("effect %s",msg->un.e->base->id);
+			if(msg->un.e->level)
+				printf("(%+ld)",msg->un.e->level);
+			printf(" ");
+			if(msg->un.e->src)
+				printf("from %s ",msg->un.e->src->base->id);
+			printf("in ");
+			if(msg->un.e->round<0)
+				printf("inf ");
+			else
+				printf("%d ",msg->un.e->round);
+			printf("rounds\n");
+			break;
+		case MSG_EFFECT_END:
+			printf("effect %s ",msg->un.e->base->id);
+			if(msg->un.e->dest)
+				printf("of %s ",msg->un.e->dest->base->id);
+			if(msg->un.e->src)
+				printf("from %s ",msg->un.e->src->base->id);
+			printf("was removed\n");
+			break;
+		case MSG_EFFECT_EVENT:
+			printf("effect %s ",msg->un.e->base->id);
+			if(msg->un.e->dest)
+				printf("of %s ",msg->un.e->dest->base->id);
+			if(msg->un.e->src)
+				printf("from %s ",msg->un.e->src->base->id);
+			printf("is triggered\n");
+			break;
+		case MSG_EFFECT_EVENT_END:
+			printf("effect %s ",msg->un.e->base->id);
+			if(msg->un.e->dest)
+				printf("of %s ",msg->un.e->dest->base->id);
+			if(msg->un.e->src)
+				printf("from %s ",msg->un.e->src->base->id);
+			printf("was triggered completed\n");
+			break;
+		case MSG_EVENT:
+			printf("event %s ",msg->un.event.ev->id);
+			if(msg->un.event.src)
+				printf("is caused by %s\n",msg->un.event.src->base->id);
+			else
+				printf("happens\n");
+			break;
+		case MSG_EVENT_END:
+			printf("event %s end\n",msg->un.event.ev->id);
+			break;
+		case MSG_FAIL:
+			printf("%s fails\n",msg->un.u->base->id);
+			break;
+		case MSG_HEAL:
+			printf("%s heals %lu hp,current hp:%lu\n",msg->un.heal.dest->base->id,msg->un.heal.value,msg->un.heal.dest->hp);
+			break;
+		case MSG_HPMOD:
+			printf("%s %+ld hp,current hp:%lu\n",msg->un.hpmod.dest->base->id,msg->un.hpmod.value,msg->un.hpmod.dest->hp);
+			break;
+		case MSG_MISS:
+			printf("%s missed (target:%s)\n",msg->un.u2.src->base->id,msg->un.u2.dest->base->id);
+			break;
+		case MSG_MOVE:
+			printf("%s uses %s (%s)\n",msg->un.move.u->base->id,msg->un.move.m->id,type2str(msg->un.move.m->type));
+			break;
+		case MSG_NORMALATTACK:
+			printf("%s uses Nromal attack (%s)\n",msg->un.u2.src->base->id,type2str(msg->un.u2.src->type0));
+			break;
+		case MSG_ROUND:
+			p=msg->field->p;
+			e=msg->field->e;
+			printf("\nROUND %d %s:%lu/%lu(%.2lf%%) %s:%lu/%lu(%.2lf%%)\n",msg->round,
+			p->front->base->id,
+			p->front->hp,
+			p->front->base->max_hp,
+			100.0*p->front->hp/p->front->base->max_hp,
+			e->front->base->id,
+			e->front->hp,
+			e->front->base->max_hp,
+			100.0*e->front->hp/e->front->base->max_hp
+			);
+			break;
+		case MSG_ROUNDEND:
+			p=msg->field->p;
+			e=msg->field->e;
+			printf("ROUND %d END\n",msg->round);
+			break;
+		case MSG_SPIMOD:
+			printf("%s %+ld spi,current hp:%ld\n",msg->un.spimod.dest->base->id,msg->un.spimod.value,msg->un.spimod.dest->spi);
+			break;
+		case MSG_SWITCH:
+			printf("%s is on the front\n",msg->un.u2.dest->base->id);
+			break;
+		default:
+			break;
+	}
+}
 const struct move *get_builtin_move_by_id(const char *id){
 	unsigned long i;
 	for(i=0;builtin_moves[i].id;++i){
@@ -26,6 +153,8 @@ int manual_selector(struct player *p){
 	int r,cool;
 reselect:
 	printf("Select the action of %s\n",p->front->base->id);
+	if(!isalive(p->front->state))
+		goto failed;
 	if(!canaction2(p,ACT_NORMALATTACK))
 		printf("[x]");
 	else
@@ -43,6 +172,14 @@ reselect:
 		if(cool)
 			printf(" cooldown rounds:%d\n",cool);
 		else printf("\n");
+	}
+failed:
+	for(int i=0;i<6;++i){
+		if(!p->units[i].base)
+			break;
+		if(p->units+i==p->front)
+			continue;
+		printf("[%c]%d: %s\n",isalive(p->units[i].state)?' ':'x',ACT_UNIT0+i,p->units[i].base->id);
 	}
 	printf("q: Abort the action\n");
 	printf("g: Give up\n");
@@ -96,6 +233,8 @@ unknown:
 	}
 	return r;
 }
+
+#define printf (use report() instead.)
 void unit_fillattr(struct unit *u){
 	u->hp=u->base->max_hp;
 	u->atk=u->base->atk;
@@ -127,18 +266,22 @@ void player_fillattr(struct player *p){
 }
 void player_action(struct player *p){
 	int r;
+	struct unit *t;
 	switch(p->action){
 		case ACT_MOVE0 ... ACT_MOVE7:
 			unit_move(p->front,p->front->moves+p->action);
 			return;
 		case ACT_NORMALATTACK:
-			printf("%s uses Normal attack (%s)\n",p->front->base->id,type2str(p->front->type0));
-			normal_attack(gettarget(p->front),p->front);
+			t=gettarget(p->front);
+			//printf("%s uses Normal attack (%s)\n",p->front->base->id,type2str(p->front->type0));
+			report(p->field,MSG_NORMALATTACK,t,p->front);
+			normal_attack(t,p->front);
 			return;
 		case ACT_UNIT0 ... ACT_UNIT5:
 			r=p->action-ACT_UNIT0;
 			if(p->units[r].base&&isalive(p->units[r].state)){
 				p->front=p->units+r;
+				report(p->field,MSG_SWITCH,p->units+r,p->front);
 				return;
 			}
 		default:
@@ -174,8 +317,9 @@ int player_selectunit(struct player *p){
 		if(!p->units[i].base)
 			break;
 		if(isalive(p->units[i].state)){
-			printf("%d:%s\n",ACT_UNIT0+i,p->units[i].base->id);
+			//printf("%d:%s\n",ACT_UNIT0+i,p->units[i].base->id);
 			r=1;
+			break;
 		}
 	}
 	if(!r)
@@ -185,11 +329,28 @@ int player_selectunit(struct player *p){
 		case ACT_UNIT0 ... ACT_UNIT5:
 			r-=ACT_UNIT0;
 			if(p->units[r].base&&isalive(p->units[r].state)){
+				report(p->field,MSG_SWITCH,p->units+r,p->front);
 				p->front=p->units+r;
 				return 0;
 			}
 		default:
 			return -1;
+	}
+}
+void player_moveinit(struct player *p){
+	for_each_unit(u,p){
+		for(int i=0;i<2;++i){
+			if(!u->pmoves[i].id)
+				break;
+			if(u->pmoves[i].init)
+				u->pmoves[i].init(u);
+		}
+		for(int i=0;i<8;++i){
+			if(!u->moves[i].id)
+				break;
+			if(u->moves[i].init)
+				u->moves[i].init(u);
+		}
 	}
 }
 #define deadcheck do {\
@@ -220,38 +381,34 @@ int player_selectunit(struct player *p){
 		}\
 	}\
 }while(0)
-int battle(struct player *p){
-	struct player *prior,*latter,*e;
+int battle(struct player *p,struct player *e,void (*reporter)(const struct message *)){
+	struct player *prior,*latter;
 	struct battle_field field;
-	int round,r0,r1,ret;
+	int round=0,r0,r1,ret;
 	e=p->enemy;
 	if(p==e)
 		return -1;
 	if(!p->units->base||!e->units->base){
 		return -2;
 	}
-	p->enemy=e;
 	e->enemy=p;
+	p->enemy=e;
 	field.p=p;
 	field.e=e;
 	field.effects=NULL;
+	field.round=&round;
+	field.reporter=reporter;
 	p->field=&field;
 	e->field=&field;
 	player_fillattr(p);
 	player_fillattr(e);
 	p->front=p->units;
 	e->front=e->units;
-	for(round=0;;++round){
-		printf("\nROUND %d %s:%lu/%lu(%.2lf%%) %s:%lu/%lu(%.2lf%%)\n",round,
-			p->front->base->id,
-			p->front->hp,
-			p->front->base->max_hp,
-			100.0*p->front->hp/p->front->base->max_hp,
-			e->front->base->id,
-			e->front->hp,
-			e->front->base->max_hp,
-			100.0*e->front->hp/e->front->base->max_hp
-			);
+	prior=getprior(p,e);
+	player_moveinit(prior);
+	player_moveinit(prior->enemy);
+	for(;;++round){
+	report(&field,MSG_ROUND);
 		effect_in_roundstart(field.effects);
 		deadcheck;
 		if(p->front->speed>e->front->speed)
@@ -275,31 +432,23 @@ int battle(struct player *p){
 		}
 		latter=(prior=getprior(p,e))->enemy;
 		if(canaction(prior)){
-			if(prior->action==ACT_ABORT)
-				printf("%s aborted the action\n",prior->front->base->id);
-			else {
-				printf("%s actions\n",prior->front->base->id);
+			if(prior->action!=ACT_ABORT){
+				report(&field,MSG_ACTION,prior);
 				player_action(prior);
 				deadcheck;
 			}
 		}
 		player_update_state(latter);
 		if(canaction(latter)){
-			if(latter->action==ACT_ABORT)
-				printf("%s aborted the action\n",latter->front->base->id);
-			else {
-				printf("%s actions\n",latter->front->base->id);
+			if(latter->action!=ACT_ABORT){
+				report(&field,MSG_ACTION,latter);
 				player_action(latter);
 				deadcheck;
 			}
 		}
-		printf("ROUND END\n");
-		//unit_effect_in_roundend(prior->front);
-		//unit_effect_in_roundend(latter->front);
+		report(&field,MSG_ROUNDEND);
 		effect_in_roundend(field.effects);
 		deadcheck;
-		//unit_effect_round_decrease(prior->front,1);
-		//unit_effect_round_decrease(latter->front,1);
 		effect_round_decrease(field.effects,1);
 		deadcheck;
 		cooldown_decrease(prior);

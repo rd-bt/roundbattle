@@ -29,6 +29,7 @@
 #define DAMAGE_REAL 0
 #define DAMAGE_PHYSICAL 1
 #define DAMAGE_MAGICAL 2
+#define DAMAGE_TOTAL 3
 
 #define AF_CRIT 1
 #define AF_NODEF 2
@@ -178,7 +179,7 @@
 				_r=TYPES_ALL;\
 				break;\
 			default:\
-				_r=0;\
+				_r=TYPE_VOID;\
 				break;\
 		}\
 		_r;\
@@ -245,7 +246,7 @@
 				_r=TYPE_VOID;\
 				break;\
 			default:\
-				_r=0;\
+				_r=TYPE_VOID;\
 				break;\
 		}\
 		_r;\
@@ -281,15 +282,38 @@
 #define EFFECT_POSITIVE 8
 #define EFFECT_NEGATIVE 16
 #define EFFECT_UNPURIFIABLE 32
-#define for_each_effect(_var,_ehead) for(struct effect *_var=(_ehead),*_p=_var?_var->next:NULL;_p=_var?_var->next:NULL,_var;_var=_p)
+#define EFFECT_ISOLATED 64
+#define EFFECT_KEEP 128
+#define for_each_effect(_var,_ehead) for(struct effect *_var=(_ehead),*_next=_var?_var->next:NULL;_next=_var?_var->next:NULL,_var;_var=_next)
 #define for_each_unit(_var,_player) for(struct unit *_var=(_player)->units,*_p0=_var+6;_var<_p0&&_var->base;++_var)
+enum {
+	MSG_ACTION=0,
+	MSG_DAMAGE,
+	MSG_EFFECT,
+	MSG_EFFECT_END,
+	MSG_EFFECT_EVENT,
+	MSG_EFFECT_EVENT_END,
+	MSG_EVENT,
+	MSG_EVENT_END,
+	MSG_FAIL,
+	MSG_HEAL,
+	MSG_HPMOD,
+	MSG_MISS,
+	MSG_MOVE,
+	MSG_NORMALATTACK,
+	MSG_ROUND,
+	MSG_ROUNDEND,
+	MSG_SPIMOD,
+	MSG_SWITCH
+};
 struct unit;
 struct player;
 struct battle_field;
 struct effect;
 struct move {
 	const char *id;
-	void (*action)(struct unit *subject);
+	void (*action)(struct unit *);
+	void (*init)(struct unit *);
 	int type,mlevel,prior,cooldown,flag,unused;
 };
 struct unit_base {
@@ -311,24 +335,31 @@ struct effect_base {
 	void (*end)(struct effect *);
 	int (*attack)(struct effect *e,struct unit *dest,struct unit *src,unsigned long *value,int *damage_type,int *aflag,int *type);
 	void (*attack_end)(struct effect *e,struct unit *dest,struct unit *src,unsigned long value,int damage_type,int aflag,int type);
+	void (*cooldown_decrease)(struct effect *e,struct unit *u,struct move *m,int *round);
 	int (*damage)(struct effect *e,struct unit *dest,struct unit *src,unsigned long *value,int *damage_type,int *aflag,int *type);
 	void (*damage_end)(struct effect *e,struct unit *dest,struct unit *src,unsigned long value,int damage_type,int aflag,int type);
 	int (*effect)(struct effect *e,const struct effect_base *base,struct unit *dest,struct unit *src,long *level,int *round);
 	void (*effect_end)(struct effect *e,const struct effect_base *base,struct unit *dest,struct unit *src,long level,int round);
 	int (*heal)(struct effect *e,struct unit *dest,unsigned long *value);
+	int (*hittest)(struct effect *e,struct unit *dest,struct unit *src,double *hit_rate);
+	void (*hittest_end)(struct effect *e,struct unit *dest,struct unit *src,int hit);
 	void (*heal_end)(struct effect *e,struct unit *dest,unsigned long value);
 	void (*kill)(struct effect *e,struct unit *u);
 	void (*kill_end)(struct effect *e,struct unit *u);
+	int (*move)(struct effect *e,struct unit *u,struct move *m);
+	void (*move_end)(struct effect *e,struct unit *u,struct move *m);
 	void (*roundend)(struct effect *e);
+	void (*setcooldown)(struct unit *u,struct move *m,int *round);
+	void (*setcooldown_end)(struct unit *u,struct move *m,int round);
 	void (*roundstart)(struct effect *e);
 	void (*update_attr)(struct effect *e,struct unit *u);
 	void (*update_state)(struct effect *e,struct unit *u,int *state);
-	int flag,unused;
+	int flag,prior;
 };
 struct effect {
 	const struct effect_base *base;
 	struct unit *dest;
-	struct unit *src;
+	struct unit *src,*src1;
 	struct effect *next,*prev;
 	int round,active;
 	long level;
@@ -337,7 +368,10 @@ struct effect {
 
 struct event {
 	const char *id;
-	void (*action)(const struct event *ev,struct unit *src);
+	union {
+		void (*action)(const struct event *ev,struct unit *src);
+		void (*action_field)(const struct event *ev,struct battle_field *f);
+	} un;
 };
 struct unit {
 	const struct unit_base *base;
@@ -363,9 +397,51 @@ struct player {
 	struct battle_field *field;
 	int action,unused;
 };
+
+struct message {
+	int type,round;
+	unsigned long index;
+	struct battle_field *field;
+	union {
+		struct {
+			const struct unit *dest,*src;
+			unsigned long value;
+			int damage_type,aflag,type,unused;
+		} damage;
+		const struct effect *e;
+		struct {
+			const struct event *ev;
+			const struct unit *src;
+		} event;
+		struct {
+			const struct unit *dest;
+			unsigned long value;
+		} heal;
+		struct {
+			const struct unit *dest;
+			long value;
+		} hpmod;
+		struct {
+			const struct unit *u;
+			const struct move *m;
+		} move;
+		const struct player *p;
+		struct {
+			const struct unit *dest;
+			long value;
+		} spimod;
+		const struct unit *u;
+		struct {
+			const struct unit *dest,*src;
+		} u2;
+	} un;
+};
+
 struct battle_field {
 	struct player *p,*e;
 	struct effect *effects;
+	void (*reporter)(const struct message *msg);
+	const volatile int *round;
 };
 int unit_kill(struct unit *up);
 
@@ -399,6 +475,8 @@ int effect_end(struct effect *e);
 
 int purify(struct effect *e);
 
+int unit_wipeeffect(struct unit *u,int mask);
+
 int revive(struct unit *u,unsigned long hp);
 
 int event(const struct event *ev,struct unit *src);
@@ -425,9 +503,7 @@ void unit_effect_round_decrease(struct unit *u,int round);
 
 void effect_round_decrease(struct effect *effects,int round);
 
-int setcooldown(struct move *m,int round);
-
-const char *type2str(int type);
+int setcooldown(struct unit *u,struct move *m,int round);
 
 struct effect *unit_findeffect(struct unit *u,const struct effect_base *base);
 
@@ -440,5 +516,7 @@ int unit_move(struct unit *u,struct move *m);
 int canaction2(struct player *p,int act);
 
 struct player *getprior(struct player *p,struct player *e);
+
+void report(struct battle_field *f,int type,...);
 
 #endif

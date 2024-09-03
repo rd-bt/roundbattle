@@ -473,6 +473,8 @@ struct effect *effect(const struct effect_base *base,struct unit *dest,struct un
 
 int effect_end(struct effect *e);
 
+int effect_end_in_roundend(struct effect *e);
+
 int purify(struct effect *e);
 
 int unit_wipeeffect(struct unit *u,int mask);

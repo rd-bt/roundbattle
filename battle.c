@@ -58,30 +58,30 @@ void reporter_default(const struct message *msg){
 			printf("was removed\n");
 			break;
 		case MSG_EFFECT_EVENT:
-			printf("effect %s ",msg->un.e->base->id);
+			/*printf("effect %s ",msg->un.e->base->id);
 			if(msg->un.e->dest)
 				printf("of %s ",msg->un.e->dest->base->id);
 			if(msg->un.e->src)
 				printf("from %s ",msg->un.e->src->base->id);
-			printf("is triggered\n");
+			printf("is triggered\n");*/
 			break;
 		case MSG_EFFECT_EVENT_END:
-			printf("effect %s ",msg->un.e->base->id);
+			/*printf("effect %s ",msg->un.e->base->id);
 			if(msg->un.e->dest)
 				printf("of %s ",msg->un.e->dest->base->id);
 			if(msg->un.e->src)
 				printf("from %s ",msg->un.e->src->base->id);
-			printf("was triggered completed\n");
+			printf("was triggered completed\n");*/
 			break;
 		case MSG_EVENT:
-			printf("event %s ",msg->un.event.ev->id);
+			/*printf("event %s ",msg->un.event.ev->id);
 			if(msg->un.event.src)
 				printf("is caused by %s\n",msg->un.event.src->base->id);
 			else
-				printf("happens\n");
+				printf("happens\n");*/
 			break;
 		case MSG_EVENT_END:
-			printf("event %s end\n",msg->un.event.ev->id);
+			//printf("event %s end\n",msg->un.event.ev->id);
 			break;
 		case MSG_FAIL:
 			printf("%s fails\n",msg->un.u->base->id);
@@ -99,7 +99,7 @@ void reporter_default(const struct message *msg){
 			printf("%s uses %s (%s)\n",msg->un.move.u->base->id,msg->un.move.m->id,type2str(msg->un.move.m->type));
 			break;
 		case MSG_NORMALATTACK:
-			printf("%s uses Nromal attack (%s)\n",msg->un.u2.src->base->id,type2str(msg->un.u2.src->type0));
+			printf("%s uses Normal attack (%s)\n",msg->un.u2.src->base->id,type2str(msg->un.u2.src->type0));
 			break;
 		case MSG_ROUND:
 			p=msg->field->p;

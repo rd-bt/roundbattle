@@ -106,6 +106,9 @@ unsigned long attack(struct unit *dest,struct unit *src,unsigned long value,int 
 			value=value*512/x;
 	}
 	switch(damage_type){
+		case DAMAGE_REAL:
+			goto no_derate;
+			break;
 		case DAMAGE_PHYSICAL:
 			derate=dest->physical_derate;
 			if(src)derate-=src->physical_bonus;
@@ -114,9 +117,6 @@ unsigned long attack(struct unit *dest,struct unit *src,unsigned long value,int 
 			derate=dest->magical_derate;
 			if(src)derate-=src->magical_bonus;
 			break;
-		case DAMAGE_REAL:
-			goto no_derate;
-			break;
 	}
 	if(derate>0.8)
 		value/=5*derate+1;
@@ -124,7 +124,7 @@ unsigned long attack(struct unit *dest,struct unit *src,unsigned long value,int 
 		value*=1-derate;
 no_derate:
 	if(!(aflag&AF_NOFLOAT)&&damage_type!=DAMAGE_REAL)
-		value+=(0.1*drand48()-0.05)*value;
+		value+=(0.1*rand01()-0.05)*value;
 	ret=damage(dest,src,value,damage_type,aflag,type);
 	for_each_effect(e,dest->owner->field->effects){
 		if(e->base->attack_end)
@@ -152,7 +152,7 @@ int hittest(struct unit *dest,struct unit *src,double hit_rate){
 	if(!src||dest->avoid<=0)
 		goto hit;
 	real_rate=hit_rate*src->hit/dest->avoid;
-	if(drand48()>=real_rate)
+	if(rand01()>=real_rate)
 		goto miss;
 hit:
 	for_each_effect(e,dest->owner->field->effects){
@@ -169,7 +169,7 @@ miss:
 	return 0;
 }
 int test(double prob){
-	return drand48()<prob;
+	return rand01()<prob;
 }
 double rand01(void){
 	return drand48();
@@ -337,10 +337,6 @@ struct effect *effect(const struct effect_base *base,struct unit *dest,struct un
 		ep->level=level;
 		ep->round=round;
 	}
-	/*if(dest){
-		if(src)printf("%s get effect %s(%+ld) from %s in %d rounds\n",dest->base->id,ep->base->id,ep->level,src->base->id,ep->round);
-		else printf("%s get effect %s(%+ld) in %d rounds\n",dest->base->id,ep->base->id,ep->level,ep->round);
-	}*/
 	report(f,MSG_EFFECT,ep);
 	if(new){
 		effect_insert(ep,f);
@@ -362,6 +358,10 @@ int effect_end(struct effect *e){
 		f=e->src->owner->field;
 	if(!f)
 		return -1;
+
+	if(e->base->end)
+		e->base->end(e);
+
 	if(e->prev){
 		e->prev->next=e->next;
 	}else {
@@ -369,15 +369,36 @@ int effect_end(struct effect *e){
 	}
 	if(e->next)
 		e->next->prev=e->prev;
-	if(e->base->end)
-		e->base->end(e);
 	report(f,MSG_EFFECT_END,e);
-	/*if(e->dest)
-		printf("the effect %s(%+ld) of %s was removed\n",e->base->id,e->level,e->dest->base->id);*/
 	free(e);
 	return 0;
 }
+int effect_end_in_roundend(struct effect *e){
+	struct battle_field *f=NULL;
+	if(e->dest)
+		f=e->dest->owner->field;
+	else if(e->src)
+		f=e->src->owner->field;
+	if(!f)
+		return -1;
 
+	e->round=0;
+	if(e->base->end)
+		e->base->end(e);
+	if(e->round)
+		return -1;
+
+	if(e->prev){
+		e->prev->next=e->next;
+	}else {
+		f->effects=e->next;
+	}
+	if(e->next)
+		e->next->prev=e->prev;
+	report(f,MSG_EFFECT_END,e);
+	free(e);
+	return 0;
+}
 int purify(struct effect *e){
 	if(e->base->flag&EFFECT_UNPURIFIABLE)
 		return -1;
@@ -521,7 +542,7 @@ void unit_effect_round_decrease(struct unit *u,int round){
 				v->round=0;
 		}
 		if(!v->round)
-			effect_end(v);
+			effect_end_in_roundend(v);
 	}
 }
 void effect_round_decrease(struct effect *effects,int round){

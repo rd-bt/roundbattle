@@ -307,8 +307,8 @@ int alkali_fire_seal_heal(struct effect *e,struct unit *dest,unsigned long *valu
 }
 const struct effect_base alkali_fire_seal[1]={{
 	.id="alkali_fire_seal",
-	.flag=EFFECT_NEGATIVE|EFFECT_UNPURIFIABLE,
 	.heal=alkali_fire_seal_heal,
+	.flag=EFFECT_NEGATIVE|EFFECT_UNPURIFIABLE,
 	.prior=-5
 }};
 void rfdisillusionfr_action(const struct event *ev,struct unit *src){
@@ -324,25 +324,32 @@ const struct event rfdisillusionfr[1]={{
 	.id="rfdisillusionfr",
 	.un={rfdisillusionfr_action}
 }};
+void metal_bomb_inited(struct effect *e){
+	if((e->dest->type0|
+	e->dest->type1|
+	e->src->type0|
+	e->src->type1)&TYPE_WATER)
+		effect_end(e);
+}
 void metal_bomb_end(struct effect *e){
-	struct player *p=e->src->owner->enemy;
 	effect_event(e);
-	attack(p->front,e->src,1.35*e->src->atk,DAMAGE_PHYSICAL,0,TYPE_ALKALIFIRE);
-	if(unit_findeffect(p->front,alkali_fire_seal))
+	attack(e->dest,e->src,1.35*e->src->atk,DAMAGE_PHYSICAL,0,TYPE_ALKALIFIRE);
+	if(unit_findeffect(e->dest,alkali_fire_seal))
 		event(rfdisillusionfr,e->src);
 	else
-		effect(alkali_fire_seal,p->front,e->src,0,16);
+		effect(alkali_fire_seal,e->dest,e->src,0,16);
 	effect_event_end(e);
 }
 const struct effect_base metal_bomb_effect[1]={{
 	.id="metal_bomb",
-	.flag=EFFECT_ISOLATED,
 	.end=metal_bomb_end,
+	.inited=metal_bomb_inited,
 	.roundend=effect_destruct,
+	.flag=EFFECT_NEGATIVE|EFFECT_ISOLATED,
 	.prior=5
 }};
 void metal_bomb(struct unit *s){
-	effect(metal_bomb_effect,NULL,s,0,0);
+	effect(metal_bomb_effect,s->owner->enemy->front,s,0,0);
 }
 void fate_destroying_slash(struct unit *s){
 	struct unit *t=gettarget(s);
@@ -414,34 +421,27 @@ const struct effect_base frost_destroying[1]={{
 }};
 
 void primordial_breath_damage_end(struct effect *e,struct unit *dest,struct unit *src,unsigned long value,int damage_type,int aflag,int type){
-	if(e->dest==src&&type==TYPE_ICE&&damage_type==DAMAGE_PHYSICAL&&!(aflag&AF_CRIT)&&value*2<=dest->base->max_hp){
+	if(e->dest==src&&type==TYPE_ICE&&damage_type==DAMAGE_PHYSICAL&&dest->owner==e->dest->owner->enemy&&!(aflag&AF_CRIT)&&value*2<=dest->base->max_hp){
 		effect_event(e);
 		if(unit_findeffect(dest,frost_destroying)){
-			++e->level;
-			update_attr(src);
+			effect(PDD,dest,src,-1,-1);
 		}else
 			effect(frost_destroying,dest,src,0,3);
 		effect_event_end(e);
 	}
 }
-void primordial_breath_update_attr(struct effect *e,struct unit *u){
-	if(e->dest!=u||e->level<=0)
-		return;
-	u->atk*=1+e->level*0.015;
-	u->def*=1+e->level*0.015;
-	u->speed*=1+e->level*0.015;
-	u->hit*=1+e->level*0.015;
-	u->avoid*=1+e->level*0.015;
-	u->crit_effect+=e->level*0.015;
-	u->physical_bonus+=e->level*0.015;
-	u->magical_bonus+=e->level*0.015;
-	u->physical_derate+=e->level*0.015;
-	u->magical_derate+=e->level*0.015;
+int primordial_breath_heal(struct effect *e,struct unit *dest,unsigned long *value){
+	if(dest!=e->dest||e->level<=0)
+		return 0;
+	effect_event(e);
+	*value*=pow(1.015,e->level);
+	effect_event_end(e);
+	return 0;
 }
 const struct effect_base primordial_breath[1]={{
 	.id="primordial_breath",
 	.damage_end=primordial_breath_damage_end,
-	.update_attr=primordial_breath_update_attr,
+	.heal=primordial_breath_heal,
 	.flag=EFFECT_POSITIVE|EFFECT_UNPURIFIABLE,
 	.prior=32
 }};

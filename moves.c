@@ -2,6 +2,7 @@
 #include <stddef.h>
 #include <limits.h>
 #include <math.h>
+#define printf (use report() instead.)
 unsigned long gcdul(unsigned long x,unsigned long y){
 	unsigned long r;
 	int r1;
@@ -389,7 +390,7 @@ int frost_destroying_init(struct effect *e,long level,int round){
 void frost_destroying_cd(struct effect *e,struct unit *u,struct move *m,int *round){
 	if(e->dest!=u||round<=0)
 		return;
-	if(m->cooldown>0&&test(0.5)){
+	if(m->cooldown>0&&test(0.9)){
 		effect_event(e);
 		*round=0;
 		effect_event_end(e);

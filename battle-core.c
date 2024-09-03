@@ -4,7 +4,7 @@
 #include <string.h>
 #include <math.h>
 #define SHEAR_COEF (M_SQRT2/128)
-//#define printf (use report() instead.)
+#define printf (use report() instead.)
 int unit_kill(struct unit *u){
 	if(!isalive(u->state))
 			return -1;
@@ -21,6 +21,7 @@ int unit_kill(struct unit *u){
 			e->base->kill_end(e,u);
 	}
 	unit_wipeeffect(u,EFFECT_KEEP);
+	//printf("WIPPED\n");
 	return 0;
 }
 unsigned long damage(struct unit *dest,struct unit *src,unsigned long value,int damage_type,int aflag,int type){
@@ -273,6 +274,19 @@ int setcooldown(struct unit *u,struct move *m,int round){
 	}
 	return round;
 }
+
+static void effect_free(struct effect *ep,struct battle_field *f){
+	if(ep->intrash){
+		return;
+	}
+	ep->intrash=1;
+	ep->prev=NULL;
+	ep->next=f->trash;
+	if(f->trash){
+		f->trash->prev=ep;
+	}
+	f->trash=ep;
+}
 static void effect_insert(struct effect *ep,struct battle_field *f){
 	if(!f->effects){
 		f->effects=ep;
@@ -304,7 +318,7 @@ struct effect *effect(const struct effect_base *base,struct unit *dest,struct un
 		f=dest->owner->field;
 	else if(src)
 		f=src->owner->field;
-	if(!f)
+	if(!f||!isalive(dest->state))
 		return NULL;
 	for_each_effect(e,f->effects){
 		if(e->base->effect&&e->base->effect(e,base,dest,src,&level,&round))
@@ -320,6 +334,7 @@ struct effect *effect(const struct effect_base *base,struct unit *dest,struct un
 		ep=malloc(sizeof(struct effect));
 		if(!ep)
 			return NULL;
+		//printf("MALLOC %p\n",ep);
 		memset(ep,0,sizeof(struct effect));
 		new=1;
 		ep->base=base;
@@ -330,7 +345,7 @@ struct effect *effect(const struct effect_base *base,struct unit *dest,struct un
 	ep->src1=src;
 	if(base->init){
 		if(base->init(ep,level,round)){
-			effect_end(ep);
+			effect_final(ep);
 			return NULL;
 		}
 	}else {
@@ -348,20 +363,20 @@ struct effect *effect(const struct effect_base *base,struct unit *dest,struct un
 		if(e->base->effect_end)
 			e->base->effect_end(e,base,dest,src,level,round);
 	}
+	//printf("EFFECT %p\n",ep);
 	return ep;
 }
 int effect_end(struct effect *e){
-	struct battle_field *f=NULL;
+	struct battle_field *f;
+	if(e->intrash)
+		return -1;
+	f=NULL;
 	if(e->dest)
 		f=e->dest->owner->field;
 	else if(e->src)
 		f=e->src->owner->field;
 	if(!f)
 		return -1;
-
-	if(e->base->end)
-		e->base->end(e);
-
 	if(e->prev){
 		e->prev->next=e->next;
 	}else {
@@ -369,22 +384,27 @@ int effect_end(struct effect *e){
 	}
 	if(e->next)
 		e->next->prev=e->prev;
+	if(!e->prev&&!e->next)
+		f->effects=NULL;
 	report(f,MSG_EFFECT_END,e);
-	free(e);
+	if(e->base->end)
+		e->base->end(e);
+	//printf("FREE1 %p\n",e);
+	effect_free(e,f);
 	return 0;
 }
 int effect_end_in_roundend(struct effect *e){
-	struct battle_field *f=NULL;
+	struct battle_field *f;
+	if(e->intrash)
+		return -1;
+	f=NULL;
 	if(e->dest)
 		f=e->dest->owner->field;
 	else if(e->src)
 		f=e->src->owner->field;
 	if(!f)
 		return -1;
-
 	e->round=0;
-	if(e->base->end)
-		e->base->end(e);
 	if(e->round)
 		return -1;
 
@@ -395,8 +415,38 @@ int effect_end_in_roundend(struct effect *e){
 	}
 	if(e->next)
 		e->next->prev=e->prev;
+	if(!e->prev&&!e->next)
+		f->effects=NULL;
 	report(f,MSG_EFFECT_END,e);
-	free(e);
+	if(e->base->end)
+		e->base->end(e);
+	//printf("FREE2 %p\n",e);
+	effect_free(e,f);
+	return 0;
+}
+int effect_final(struct effect *e){
+	struct battle_field *f;
+	if(e->intrash)
+		return -1;
+	f=NULL;
+	if(e->dest)
+		f=e->dest->owner->field;
+	else if(e->src)
+		f=e->src->owner->field;
+	if(!f)
+		return -1;
+	if(e->prev){
+		e->prev->next=e->next;
+	}else {
+		f->effects=e->next;
+	}
+	if(e->next)
+		e->next->prev=e->prev;
+	if(!e->prev&&!e->next)
+		f->effects=NULL;
+	report(f,MSG_EFFECT_END,e);
+	//printf("FREE3 %p\n",e);
+	effect_free(e,f);
 	return 0;
 }
 int purify(struct effect *e){
@@ -404,13 +454,26 @@ int purify(struct effect *e){
 		return -1;
 	return effect_end(e);
 }
-
+void wipetrash(struct battle_field *f){
+	struct effect *e,*p;
+	if(!(e=f->trash))
+		return;
+	for(e=f->trash;;e=p){
+		//printf("WIPE %s %p prev:%p next:%p intrash:%u\n",e->base->id,e,e->prev,e->next,e->intrash);
+		p=e->next;
+		free(e);
+		if(!p)
+			break;
+	}
+	f->trash=NULL;
+}
 int unit_wipeeffect(struct unit *u,int mask){
 	int r=0;
 	for_each_effect(e,u->owner->field->effects){
 		if(e->dest!=u||(e->base->flag&mask))
 			continue;
-		effect_end(e);
+		//printf("WIPE %p\n",e);
+		effect_final(e);
 		++r;
 	}
 	return r;
@@ -554,7 +617,7 @@ void effect_round_decrease(struct effect *effects,int round){
 				v->round=0;
 		}
 		if(!v->round)
-			effect_end(v);
+			effect_end_in_roundend(v);
 	}
 }
 struct effect *unit_findeffect(struct unit *u,const struct effect_base *base){
@@ -692,6 +755,7 @@ void report(struct battle_field *f,int type,...){
 	va_start(ap,type);
 	switch(type){
 		case MSG_ACTION:
+		case MSG_BATTLE_END:
 			msg.un.p=va_arg(ap,const struct player *);
 			break;
 		case MSG_DAMAGE:

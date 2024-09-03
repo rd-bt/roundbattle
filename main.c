@@ -8,6 +8,9 @@ int main(){
 	struct unit_base bt={"tiger",6600,300,224,666,123,10,128,2,0,0,0,0,TYPE_ICE,TYPE_VOID,13,0};
 	struct unit_base bb={"bear",7500,203,356,332,100,150,128,2,0,0,0,0,TYPE_GRASS,TYPE_VOID,13,0};
 	int r;
+//	for(r=0;r<20;++r)
+//		printf("%d\n",test(0.5));
+//	return 0;
 	srand48(time(NULL));
 	memset(&p1,0,sizeof(p1));
 	memset(&p2,0,sizeof(p2));
@@ -25,7 +28,7 @@ int main(){
 		memcpy(bt.moves+r,get_builtin_move_by_id(moves[r]),sizeof(struct move));
 	memcpy(bt.pmoves,get_builtin_move_by_id("primordial_breath"),sizeof(struct move));
 	p1.units->base=&bt;
-	p2.units->base=(p2.units+1)->base=&bb;
+	p2.units->base=&bb;
 	r=battle(&p1,&p2,reporter_default);
 	if(r<0)puts("cannot battle");
 	else if(r==0)puts("tiger wins");

@@ -284,10 +284,11 @@
 #define EFFECT_UNPURIFIABLE 32
 #define EFFECT_ISOLATED 64
 #define EFFECT_KEEP 128
-#define for_each_effect(_var,_ehead) for(struct effect *_var=(_ehead),*_next=_var?_var->next:NULL;_next=_var?_var->next:NULL,_var;_var=_next)
+#define for_each_effect(_var,_ehead) for(struct effect *_var=(_ehead),*_next=_var?_var->next:NULL;_next=_var?_var->next:NULL,_var;_var=_var->intrash?_next:_var->next)
 #define for_each_unit(_var,_player) for(struct unit *_var=(_player)->units,*_p0=_var+6;_var<_p0&&_var->base;++_var)
 enum {
 	MSG_ACTION=0,
+	MSG_BATTLE_END,
 	MSG_DAMAGE,
 	MSG_EFFECT,
 	MSG_EFFECT_END,
@@ -361,7 +362,8 @@ struct effect {
 	struct unit *dest;
 	struct unit *src,*src1;
 	struct effect *next,*prev;
-	int round,active;
+	int round;
+	unsigned int active:1,intrash:1,:0;
 	long level;
 	char data[64];
 };
@@ -439,7 +441,7 @@ struct message {
 
 struct battle_field {
 	struct player *p,*e;
-	struct effect *effects;
+	struct effect *effects,*trash;
 	void (*reporter)(const struct message *msg);
 	const volatile int *round;
 };
@@ -474,6 +476,10 @@ struct effect *effect(const struct effect_base *base,struct unit *dest,struct un
 int effect_end(struct effect *e);
 
 int effect_end_in_roundend(struct effect *e);
+
+int effect_final(struct effect *e);
+
+void wipetrash(struct battle_field *f);
 
 int purify(struct effect *e);
 

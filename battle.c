@@ -13,8 +13,16 @@ const char *type2str(int type){
 int canaction2(struct player *p,int act);
 void reporter_default(const struct message *msg){
 	const struct player *p,*e;
+	/*for_each_effect(ep,msg->field->effects){
+		printf("CURRENT %s\n",ep->base->id);
+	}
+
+		printf("CURRENT END\n");*/
 	switch(msg->type){
 		case MSG_ACTION:
+			break;
+		case MSG_BATTLE_END:
+			printf("battle end %s wins.\n",msg->un.p->front->base->id);
 			break;
 		case MSG_DAMAGE:
 			if(msg->un.damage.damage_type==DAMAGE_TOTAL){
@@ -396,6 +404,7 @@ int battle(struct player *p,struct player *e,void (*reporter)(const struct messa
 	field.p=p;
 	field.e=e;
 	field.effects=NULL;
+	field.trash=NULL;
 	field.round=&round;
 	field.reporter=reporter;
 	p->field=&field;
@@ -408,7 +417,7 @@ int battle(struct player *p,struct player *e,void (*reporter)(const struct messa
 	player_moveinit(prior);
 	player_moveinit(prior->enemy);
 	for(;;++round){
-	report(&field,MSG_ROUND);
+		report(&field,MSG_ROUND);
 		effect_in_roundstart(field.effects);
 		deadcheck;
 		if(p->front->speed>e->front->speed)
@@ -455,8 +464,10 @@ int battle(struct player *p,struct player *e,void (*reporter)(const struct messa
 		cooldown_decrease(latter);
 	}
 out:
+	report(&field,MSG_BATTLE_END,ret?e:p);
 	for_each_effect(ep,field.effects){
-		effect_end(ep);
+		effect_final(ep);
 	}
+	wipetrash(&field);
 	return ret;
 }

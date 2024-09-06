@@ -1,7 +1,9 @@
 #include "battle-core.h"
 #include <stddef.h>
+#include <stdlib.h>
 #include <limits.h>
 #include <math.h>
+#include <string.h>
 #define printf (use report() instead.)
 unsigned long gcdul(unsigned long x,unsigned long y){
 	unsigned long r;
@@ -103,16 +105,16 @@ int attr_init(struct effect *e,long level,int round){
 	if(level<ATTR_MIN)
 		level=ATTR_MIN;
 	e->level=level;
+	update_attr(e->dest);
 	if(!level)
 		return -1;
-	update_attr(e->dest);
 	return 0;
 }
 #define effect_attr(name,attr)\
 void name##_update_attr(struct effect *e,struct unit *u){\
 	if(e->dest==u){\
 		if(e->level<0)\
-			u->attr*=pow(0.75,-e->level);\
+			u->attr*=pow(M_SQRT1_2,-e->level);\
 		else\
 			u->attr*=1.0+0.5*e->level;\
 	}\
@@ -144,11 +146,11 @@ const struct effect_base name[1]={{\
 	.end=effect_update_attr,\
 	.update_attr=name##_update_attr\
 }};
-effect_attr_d(CE,crit_effect,0.8)
-effect_attr_d(PDB,physical_bonus,0.75)
-effect_attr_d(MDB,magical_bonus,0.75)
-effect_attr_d(PDD,physical_derate,0.75)
-effect_attr_d(MDD,magical_derate,0.75)
+effect_attr_d(CE,crit_effect,0.75)
+effect_attr_d(PDB,physical_bonus,0.5)
+effect_attr_d(MDB,magical_bonus,0.5)
+effect_attr_d(PDD,physical_derate,0.5)
+effect_attr_d(MDD,magical_derate,0.5)
 void steel_flywheel(struct unit *s){
 	struct unit *t=gettarget(s);
 	if(hittest(t,s,1.2)){
@@ -233,7 +235,7 @@ void spi_blow(struct unit *s){
 	if(hittest(t,s,1.0)){
 		attack(t,s,0.75*s->atk,DAMAGE_PHYSICAL,0,TYPE_MACHINE);
 	}
-	setspi(t,t->spi+0.02*t->atk);
+	setspi(t,t->spi+0.02*s->atk);
 }
 void spi_shattering_slash(struct unit *s){
 	struct unit *t;
@@ -257,20 +259,16 @@ void angry(struct unit *s){
 }
 void spi_fcrack(struct unit *s){
 	struct unit *t=gettarget(s);
-	unsigned long x=1,y=1,v;
+	unsigned long x=0,y=0;
 	long ds;
 	if(hittest(t,s,1.0)){
-		v=attack(t,s,0.75*s->atk,DAMAGE_PHYSICAL,0,TYPE_MACHINE);
-		if(v>20)
-			x=v;
+		x=attack(t,s,0.75*s->atk,DAMAGE_PHYSICAL,0,TYPE_MACHINE);
 	}
 	if(hittest(t,s,1.0)){
-		v=attack(t,s,0.75*s->atk,DAMAGE_PHYSICAL,0,TYPE_MACHINE);
-		if(v>20)
-			y=v;
+		y=attack(t,s,0.75*s->atk,DAMAGE_PHYSICAL,0,TYPE_MACHINE);
 	}
-	ds=0.015*t->atk;
-	if(gcdul(x,y)==1)
+	ds=0.015*s->atk;
+	if(x<20||y<20||gcdul(x,y)==1)
 		ds*=2;
 	setspi(t,t->spi-ds);
 }
@@ -381,6 +379,7 @@ void mosquito_bump(struct unit *s){
 	if(hittest(t,s,1.1))
 		attack(t,s,0.9*s->atk,DAMAGE_PHYSICAL,0,TYPE_GHOST);
 	effect(avoid,s,s,0,5);
+	setcooldown(s,s->move_cur,2);
 }
 int frost_destroying_init(struct effect *e,long level,int round){
 	if(!e->round)
@@ -443,11 +442,127 @@ const struct effect_base primordial_breath[1]={{
 	.id="primordial_breath",
 	.damage_end=primordial_breath_damage_end,
 	.heal=primordial_breath_heal,
-	.flag=EFFECT_POSITIVE|EFFECT_UNPURIFIABLE,
+	.flag=EFFECT_POSITIVE|EFFECT_UNPURIFIABLE|EFFECT_KEEP,
 	.prior=32
 }};
-void primordial_breath_init(struct unit *u){
-	effect(primordial_breath,u,u,0,-1);
+void primordial_breath_init(struct unit *s){
+	effect(primordial_breath,s,s,0,-1);
+}
+void damage_recuring_damage_end(struct effect *e,struct unit *dest,struct unit *src,unsigned long value,int damage_type,int aflag,int type){
+	addhp(dest->owner->enemy->front,-(long)value);
+}
+const struct effect_base damage_recuring[1]={{
+	.id="damage_recuring",
+	.damage_end=damage_recuring_damage_end,
+}};
+void damage_recur(struct unit *s){
+	effect(damage_recuring,NULL,s,0,4);
+	setcooldown(s,s->move_cur,11);
+}
+void scorching_roaring(struct unit *s){
+	struct unit *t;
+	struct effect *e;
+	long n,n1;
+	n=unit_hasnegative(s);
+	if(!n){
+		t=gettarget(s);
+		if(hittest(t,s,2.5)){
+			attack(t,s,0.6*s->atk,DAMAGE_PHYSICAL,0,TYPE_FIRE);
+			if(test(0.2))
+				effect(burnt,t,s,0,5);
+		}
+		e=unit_findeffect(t,ATK);
+		n=e?e->level:0;
+		e=unit_findeffect(s,ATK);
+		n1=e?e->level:0;
+		if(n>n1+1)
+			n=(n-n1)/2+1;
+		else
+			n=1;
+		effect(ATK,s,s,n,-1);
+		return;
+	}
+	t=s->owner->enemy->front;
+	attack(t,s,(0.55+0.2*n)*s->atk,DAMAGE_MAGICAL,AF_CRIT,TYPE_FIRE);
+	heal(s,0.18*n*s->base->max_hp);
+
+	e=unit_findeffect(s,ATK);
+	n1=e?e->level:0;
+	if(n1<0)
+		purify(e);
+	effect(ATK,s,s,1+n,-1);
+}
+void thunder_roaring(struct unit *s){
+	struct unit *t;
+	struct effect *e;
+	long n,n1;
+	unsigned long dmg;
+	n=unit_hasnegative(s);
+	if(!n){
+		t=gettarget(s);
+		if(hittest(t,s,2.5)){
+
+			attack(t,s,0.6*s->atk,DAMAGE_PHYSICAL,0,TYPE_ELECTRIC);
+			if(test(0.2))
+				effect(paralysed,t,s,0,3);
+		}
+		e=unit_findeffect(t,ATK);
+		n=e?e->level:0;
+		e=unit_findeffect(s,ATK);
+		n1=e?e->level:0;
+		if(n>n1+1)
+			n=(n-n1)/2+1;
+		else
+			n=1;
+		effect(ATK,s,s,n,-1);
+		return;
+	}
+	t=s->owner->enemy->front;
+	dmg=attack(t,s,(0.55+0.2*n)*s->atk,DAMAGE_MAGICAL,AF_CRIT,TYPE_ELECTRIC);
+	for_each_unit(u,t->owner){
+		attack(t,s,0.15*dmg+n*0.06*u->base->max_hp,DAMAGE_REAL,0,TYPE_ELECTRIC);
+	}
+	heal(s,0.2*dmg);
+}
+
+void freezing_roaring(struct unit *s){
+	struct unit *t;
+	long n,n1;
+	n=unit_hasnegative(s);
+	if(!n||!(s->move_cur->mlevel&MLEVEL_FREEZING_ROARING)){
+		struct effect *e;
+		t=gettarget(s);
+		if(hittest(t,s,2.5)){
+
+			attack(t,s,0.6*s->atk,DAMAGE_PHYSICAL,0,TYPE_ICE);
+			if(test(0.2))
+				effect(frozen,t,s,0,3);
+		}
+		e=unit_findeffect(t,ATK);
+		n=e?e->level:0;
+		e=unit_findeffect(s,ATK);
+		n1=e?e->level:0;
+		if(n>n1+1)
+			n=(n-n1)/2+1;
+		else
+			n=1;
+		effect(ATK,s,s,n,-1);
+		return;
+	}
+	for_each_effect(e,s->owner->field->effects){
+		if(e->dest!=s||!effect_isnegative(e))
+			continue;
+		effect_final(e);
+	}
+	t=s->owner->enemy->front;
+	n1=(long)t->hp;
+	t->hp=0;
+	report(s->owner->field,MSG_HPMOD,t,-n1);
+	unit_wipeeffect(t,0);
+	t->state=UNIT_FREEZING_ROARINGED;
+	if(t==t->owner->front)
+		t->owner->action=ACT_ABORT;
+	report(s->owner->field,MSG_FAIL,t);
 }
 const struct move builtin_moves[]={
 	{
@@ -617,5 +732,41 @@ const struct move builtin_moves[]={
 		.flag=0,
 		.mlevel=MLEVEL_REGULAR
 	},
+	{
+		.id="damage_recur",
+		.action=damage_recur,
+		.type=TYPE_GHOST,
+		.flag=0,
+		.mlevel=MLEVEL_REGULAR
+	},
+	{
+		.id="scorching_roaring",
+		.action=scorching_roaring,
+		.type=TYPE_FIRE,
+		.flag=0,
+		.mlevel=MLEVEL_REGULAR
+	},
+	{
+		.id="thunder_roaring",
+		.action=thunder_roaring,
+		.type=TYPE_ELECTRIC,
+		.flag=0,
+		.mlevel=MLEVEL_REGULAR
+	},
+	{
+		.id="freezing_roaring",
+		.action=freezing_roaring,
+		.type=TYPE_ICE,
+		.flag=0,
+		.mlevel=MLEVEL_REGULAR|MLEVEL_FREEZING_ROARING
+	},
 	{NULL}
 };
+const struct move *get_builtin_move_by_id(const char *id){
+	unsigned long i;
+	for(i=0;builtin_moves[i].id;++i){
+		if(!strcmp(id,builtin_moves[i].id))
+			return builtin_moves+i;
+	}
+	return NULL;
+}

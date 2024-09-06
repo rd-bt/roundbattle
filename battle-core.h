@@ -305,7 +305,8 @@ enum {
 	MSG_ROUND,
 	MSG_ROUNDEND,
 	MSG_SPIMOD,
-	MSG_SWITCH
+	MSG_SWITCH,
+	MSG_UPDATE
 };
 struct unit;
 struct player;
@@ -315,17 +316,20 @@ struct move {
 	const char *id;
 	void (*action)(struct unit *);
 	void (*init)(struct unit *);
+	int (*getprior)(struct unit *);
 	int type,mlevel,prior,cooldown,flag,unused;
 };
 struct unit_base {
 	const char *id;
 	unsigned long max_hp,atk;
 	long def;
-	unsigned long speed,hit,avoid,max_spi;
+	unsigned long speed,hit,avoid;
+	long max_spi;
 	double crit_effect,
 		physical_bonus,magical_bonus,
 		physical_derate,magical_derate;
-	int type0,type1,level,unused;
+	int type0,type1;
+	unsigned int level,unused;
 	struct move moves[8];
 	struct move pmoves[2];
 };
@@ -342,17 +346,17 @@ struct effect_base {
 	int (*effect)(struct effect *e,const struct effect_base *base,struct unit *dest,struct unit *src,long *level,int *round);
 	void (*effect_end)(struct effect *e,const struct effect_base *base,struct unit *dest,struct unit *src,long level,int round);
 	int (*heal)(struct effect *e,struct unit *dest,unsigned long *value);
+	void (*heal_end)(struct effect *e,struct unit *dest,unsigned long value);
 	int (*hittest)(struct effect *e,struct unit *dest,struct unit *src,double *hit_rate);
 	void (*hittest_end)(struct effect *e,struct unit *dest,struct unit *src,int hit);
-	void (*heal_end)(struct effect *e,struct unit *dest,unsigned long value);
-	void (*kill)(struct effect *e,struct unit *u);
+	int (*kill)(struct effect *e,struct unit *u);
 	void (*kill_end)(struct effect *e,struct unit *u);
 	int (*move)(struct effect *e,struct unit *u,struct move *m);
 	void (*move_end)(struct effect *e,struct unit *u,struct move *m);
 	void (*roundend)(struct effect *e);
+	void (*roundstart)(struct effect *e);
 	void (*setcooldown)(struct unit *u,struct move *m,int *round);
 	void (*setcooldown_end)(struct unit *u,struct move *m,int round);
-	void (*roundstart)(struct effect *e);
 	void (*update_attr)(struct effect *e,struct unit *u);
 	void (*update_state)(struct effect *e,struct unit *u,int *state);
 	int flag,prior;

@@ -134,18 +134,12 @@ void reporter_default(const struct message *msg){
 		case MSG_SWITCH:
 			printf("%s is on the front\n",msg->un.u2.dest->base->id);
 			break;
+		case MSG_UPDATE:
 		default:
 			break;
 	}
 }
-const struct move *get_builtin_move_by_id(const char *id){
-	unsigned long i;
-	for(i=0;builtin_moves[i].id;++i){
-		if(!strcmp(id,builtin_moves[i].id))
-			return builtin_moves+i;
-	}
-	return NULL;
-}
+
 int rand_selector(struct player *p){
 	int x;
 redo:
@@ -335,12 +329,12 @@ int player_selectunit(struct player *p){
 	r=p->selector(p);
 	switch(r){
 		case ACT_UNIT0 ... ACT_UNIT5:
+			if(!canaction2(p,r))
+				return -1;
 			r-=ACT_UNIT0;
-			if(p->units[r].base&&isalive(p->units[r].state)){
-				report(p->field,MSG_SWITCH,p->units+r,p->front);
-				p->front=p->units+r;
-				return 0;
-			}
+			report(p->field,MSG_SWITCH,p->units+r,p->front);
+			p->front=p->units+r;
+			return 0;
 		default:
 			return -1;
 	}

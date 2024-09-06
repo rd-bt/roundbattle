@@ -9,19 +9,19 @@ int unit_kill(struct unit *u){
 	if(!isalive(u->state))
 			return -1;
 	for_each_effect(e,u->owner->field->effects){
-		if(e->base->kill)
-			e->base->kill(e,u);
+		if(e->base->kill&&e->base->kill(e,u)&&u->hp)
+			return -1;
 	}
 	if(u->hp)return -1;
+	unit_wipeeffect(u,EFFECT_KEEP);
 	u->state=UNIT_FAILED;
+	if(u==u->owner->front)
+		u->owner->action=ACT_ABORT;
 	report(u->owner->field,MSG_FAIL,u);
-	//printf("%s failed\n",u->base->id);
 	for_each_effect(e,u->owner->field->effects){
 		if(e->base->kill_end)
 			e->base->kill_end(e,u);
 	}
-	unit_wipeeffect(u,EFFECT_KEEP);
-	//printf("WIPPED\n");
 	return 0;
 }
 unsigned long damage(struct unit *dest,struct unit *src,unsigned long value,int damage_type,int aflag,int type){
@@ -83,7 +83,6 @@ unsigned long attack(struct unit *dest,struct unit *src,unsigned long value,int 
 		}else
 			value*=2;
 	}
-
 	if(damage_type!=DAMAGE_REAL&&!(aflag&(AF_EFFECT|AF_WEAK))){
 		dest_type=dest->type0|dest->type1;
 		x=__builtin_popcount(dest_type&effect_types(type))
@@ -150,9 +149,9 @@ int hittest(struct unit *dest,struct unit *src,double hit_rate){
 				continue;
 		}
 	}
-	if(!src||dest->avoid<=0)
+	if(dest->avoid<=0)
 		goto hit;
-	real_rate=hit_rate*src->hit/dest->avoid;
+	real_rate=hit_rate*(double)src->hit/(double)dest->avoid;
 	if(rand01()>=real_rate)
 		goto miss;
 hit:
@@ -247,10 +246,10 @@ long setspi(struct unit *dest,long spi){
 	if(!isalive(dest->state))
 			return 0;
 	ospi=dest->spi;
-	if(spi>(long)dest->base->max_spi)
-		spi=(long)dest->base->max_spi;
-	if(spi<-(long)dest->base->max_spi)
-		spi=-(long)dest->base->max_spi;
+	if(spi>dest->base->max_spi)
+		spi=dest->base->max_spi;
+	if(spi<-dest->base->max_spi)
+		spi=-dest->base->max_spi;
 	if(spi==ospi)
 		return spi;
 	dest->spi=spi;
@@ -268,6 +267,7 @@ int setcooldown(struct unit *u,struct move *m,int round){
 			e->base->setcooldown(u,m,&round);
 	}
 	m->cooldown=round;
+	report(u->owner->field,MSG_UPDATE);
 	for_each_effect(e,u->owner->field->effects){
 		if(e->base->setcooldown_end)
 			e->base->setcooldown_end(u,m,round);
@@ -318,7 +318,7 @@ struct effect *effect(const struct effect_base *base,struct unit *dest,struct un
 		f=dest->owner->field;
 	else if(src)
 		f=src->owner->field;
-	if(!f||!isalive(dest->state))
+	if(!f||(dest&&!isalive(dest->state)))
 		return NULL;
 	for_each_effect(e,f->effects){
 		if(e->base->effect&&e->base->effect(e,base,dest,src,&level,&round))
@@ -353,6 +353,7 @@ struct effect *effect(const struct effect_base *base,struct unit *dest,struct un
 		ep->round=round;
 	}
 	report(f,MSG_EFFECT,ep);
+//if(!strcmp(base->id,"damage_recuring"))abort();
 	if(new){
 		effect_insert(ep,f);
 	}
@@ -542,6 +543,7 @@ void unit_cooldown_decrease(struct unit *u,int round){
 		if(r1<0)
 			r1=0;
 		u->moves[r].cooldown=r1;
+		report(u->owner->field,MSG_UPDATE);
 	}
 }
 
@@ -560,6 +562,7 @@ void update_attr(struct unit *u){
 		if(e->base->update_attr)
 			e->base->update_attr(e,u);
 	}
+	report(u->owner->field,MSG_UPDATE);
 }
 
 void update_state(struct unit *u){
@@ -573,6 +576,7 @@ void update_state(struct unit *u){
 		}
 	}
 	u->state=r;
+	report(u->owner->field,MSG_UPDATE);
 }
 void effect_in_roundstart(struct effect *effects){
 	for_each_effect(e,effects){
@@ -603,6 +607,7 @@ void unit_effect_round_decrease(struct unit *u,int round){
 				v->round-=round;
 			else
 				v->round=0;
+			report(u->owner->field,MSG_UPDATE);
 		}
 		if(!v->round)
 			effect_end_in_roundend(v);
@@ -615,6 +620,7 @@ void effect_round_decrease(struct effect *effects,int round){
 				v->round-=round;
 			else
 				v->round=0;
+			report((v->dest?v->dest:v->src)->owner->field,MSG_UPDATE);
 		}
 		if(!v->round)
 			effect_end_in_roundend(v);
@@ -635,7 +641,7 @@ int effect_isnegative(const struct effect *e){
 	else if(e->base->flag&EFFECT_ATTR)
 		return e->level<0;
 	else
-		return e->src&&e->dest&&e->src->owner!=e->dest->owner;
+		return e->src&&e->dest&&e->src->owner==e->dest->owner->enemy;
 }
 int unit_hasnegative(struct unit *u){
 	int r=0;
@@ -656,7 +662,6 @@ int unit_move(struct unit *u,struct move *m){
 		}
 	}
 	u->move_cur=m;
-	//printf("%s uses %s (%s)\n",u->base->id,m->id,type2str(m->type));
 	report(u->owner->field,MSG_MOVE,u,m);
 	m->action(u);
 	u->move_cur=backup;
@@ -697,7 +702,7 @@ int canaction2(struct player *p,int act){
 					return 1;
 			}
 		case ACT_UNIT0 ... ACT_UNIT5:
-			if(!p->units[act-ACT_UNIT0].base)
+			if(p->units+(act-ACT_UNIT0)==p->front||!p->units[act-ACT_UNIT0].base)
 				return 0;
 			switch(p->front->state){
 				case UNIT_CONTROLLED:
@@ -716,7 +721,9 @@ struct player *getprior(struct player *p,struct player *e){
 	int pp,pe,frp=0,fre=0;
 	switch(p->action){
 		case ACT_MOVE0 ... ACT_MOVE7:
-			pp=p->front->moves[p->action].prior;
+			pp=p->front->moves[p->action].getprior?
+				p->front->moves[p->action].getprior(p->front):
+				p->front->moves[p->action].prior;
 			if((p->front->moves[p->action].mlevel&MLEVEL_FREEZING_ROARING)&&unit_hasnegative(p->front))
 				frp=1;
 			break;
@@ -726,7 +733,9 @@ struct player *getprior(struct player *p,struct player *e){
 	}
 	switch(e->action){
 		case ACT_MOVE0 ... ACT_MOVE7:
-			pe=e->front->moves[e->action].prior;
+			pe=e->front->moves[e->action].getprior?
+				e->front->moves[e->action].getprior(e->front):
+				e->front->moves[e->action].prior;
 			if((e->front->moves[e->action].mlevel&MLEVEL_FREEZING_ROARING)&&unit_hasnegative(e->front))
 				fre=1;
 			break;
@@ -800,6 +809,7 @@ void report(struct battle_field *f,int type,...){
 			break;
 		case MSG_ROUND:
 		case MSG_ROUNDEND:
+		case MSG_UPDATE:
 			break;
 		case MSG_SPIMOD:
 			msg.un.spimod.dest=va_arg(ap,const struct unit *);

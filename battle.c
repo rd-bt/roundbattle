@@ -141,14 +141,23 @@ void reporter_default(const struct message *msg){
 }
 
 int rand_selector(struct player *p){
-	int x;
-redo:
-	x=lrand48()%9;
-	if(x==8)
-		return 8;
-	if(p->front->moves[x].id==NULL)
-		goto redo;
-	return x;
+	int n=0,c=0;
+	for(int i=ACT_MOVE0;i<ACT_ABORT;++i)
+		if(canaction2(p,i)){
+			c|=1<<i;
+			++n;
+		}
+	if(!n)
+		return ACT_ABORT;
+	n=randi()%n;
+	for(int i=ACT_MOVE0;i<ACT_ABORT;++i){
+		if((1<<i)&c){
+			if(!n)
+				return i;
+			--n;
+		}
+	}
+	__builtin_unreachable();
 }
 int manual_selector(struct player *p){
 	char buf[32],*endp;
@@ -276,7 +285,6 @@ void player_action(struct player *p){
 		case ACT_NORMALATTACK:
 			t=gettarget(p->front);
 			//printf("%s uses Normal attack (%s)\n",p->front->base->id,type2str(p->front->type0));
-			report(p->field,MSG_NORMALATTACK,t,p->front);
 			normal_attack(t,p->front);
 			return;
 		case ACT_UNIT0 ... ACT_UNIT5:
@@ -386,7 +394,7 @@ void player_moveinit(struct player *p){
 int battle(struct player *p,struct player *e,void (*reporter)(const struct message *)){
 	struct player *prior,*latter;
 	struct battle_field field;
-	int round=0,r0,r1,ret;
+	int round=0,r0,r1,ret,stage=STAGE_INIT;
 	e=p->enemy;
 	if(p==e)
 		return -1;
@@ -400,6 +408,7 @@ int battle(struct player *p,struct player *e,void (*reporter)(const struct messa
 	field.effects=NULL;
 	field.trash=NULL;
 	field.round=&round;
+	field.stage=&stage;
 	field.reporter=reporter;
 	p->field=&field;
 	e->field=&field;
@@ -411,6 +420,7 @@ int battle(struct player *p,struct player *e,void (*reporter)(const struct messa
 	player_moveinit(prior);
 	player_moveinit(prior->enemy);
 	for(;;++round){
+		stage=STAGE_ROUNDSTART;
 		report(&field,MSG_ROUND);
 		effect_in_roundstart(field.effects);
 		deadcheck;
@@ -434,6 +444,7 @@ int battle(struct player *p,struct player *e,void (*reporter)(const struct messa
 			goto out;
 		}
 		latter=(prior=getprior(p,e))->enemy;
+		stage=STAGE_PRIOR;
 		if(canaction(prior)){
 			if(prior->action!=ACT_ABORT){
 				report(&field,MSG_ACTION,prior);
@@ -442,6 +453,7 @@ int battle(struct player *p,struct player *e,void (*reporter)(const struct messa
 			}
 		}
 		player_update_state(latter);
+		stage=STAGE_LATTER;
 		if(canaction(latter)){
 			if(latter->action!=ACT_ABORT){
 				report(&field,MSG_ACTION,latter);
@@ -449,6 +461,7 @@ int battle(struct player *p,struct player *e,void (*reporter)(const struct messa
 				deadcheck;
 			}
 		}
+		stage=STAGE_ROUNDEND;
 		report(&field,MSG_ROUNDEND);
 		effect_in_roundend(field.effects);
 		deadcheck;
@@ -458,6 +471,7 @@ int battle(struct player *p,struct player *e,void (*reporter)(const struct messa
 		cooldown_decrease(latter);
 	}
 out:
+	stage=STAGE_BATTLE_END;
 	report(&field,MSG_BATTLE_END,ret?e:p);
 	for_each_effect(ep,field.effects){
 		effect_final(ep);

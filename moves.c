@@ -387,7 +387,8 @@ int frost_destroying_init(struct effect *e,long level,int round){
 	return 0;
 }
 void frost_destroying_cd(struct effect *e,struct unit *u,struct move *m,int *round){
-	if(e->dest!=u||round<=0)
+	if(e->dest!=u||round<=0||
+		*e->dest->owner->field->stage!=STAGE_ROUNDEND)
 		return;
 	if(m->cooldown>0&&test(0.5)){
 		effect_event(e);
@@ -430,18 +431,9 @@ void primordial_breath_damage_end(struct effect *e,struct unit *dest,struct unit
 		effect_event_end(e);
 	}
 }
-int primordial_breath_heal(struct effect *e,struct unit *dest,unsigned long *value){
-	if(dest!=e->dest||e->level<=0)
-		return 0;
-	effect_event(e);
-	*value*=pow(1.015,e->level);
-	effect_event_end(e);
-	return 0;
-}
 const struct effect_base primordial_breath[1]={{
 	.id="primordial_breath",
 	.damage_end=primordial_breath_damage_end,
-	.heal=primordial_breath_heal,
 	.flag=EFFECT_POSITIVE|EFFECT_UNPURIFIABLE|EFFECT_KEEP,
 	.prior=32
 }};
@@ -449,7 +441,9 @@ void primordial_breath_init(struct unit *s){
 	effect(primordial_breath,s,s,0,-1);
 }
 void damage_recuring_damage_end(struct effect *e,struct unit *dest,struct unit *src,unsigned long value,int damage_type,int aflag,int type){
+	effect_event(e);
 	addhp(dest->owner->enemy->front,-(long)value);
+	effect_event_end(e);
 }
 const struct effect_base damage_recuring[1]={{
 	.id="damage_recuring",
@@ -563,6 +557,89 @@ void freezing_roaring(struct unit *s){
 	if(t==t->owner->front)
 		t->owner->action=ACT_ABORT;
 	report(s->owner->field,MSG_FAIL,t);
+}
+
+void triple_cutter(struct unit *s){
+	struct unit *t;
+	for(int i=0;i<3;++i){
+		t=gettarget(s);
+		if(hittest(t,s,1.0))
+			attack(t,s,0.33*s->atk,DAMAGE_PHYSICAL,0,TYPE_NORMAL);
+	}
+}
+void thorns_damage_end(struct effect *e,struct unit *dest,struct unit *src,unsigned long value,int damage_type,int aflag,int type){
+	unsigned long dmg;
+	if(dest!=e->dest)
+		return;
+	switch(damage_type){
+		case DAMAGE_PHYSICAL:
+		case DAMAGE_MAGICAL:
+			if(src&&(dmg=value*0.15))
+				break;
+		default:
+			return;
+	}
+	effect_event(e);
+	attack(src,dest,dmg,DAMAGE_REAL,aflag,type);
+	effect_event_end(e);
+}
+const struct effect_base thorns[1]={{
+	.id="thorns",
+	.damage_end=thorns_damage_end,
+	.flag=EFFECT_POSITIVE|EFFECT_UNPURIFIABLE|EFFECT_KEEP,
+}};
+void thorns_init(struct unit *s){
+	effect(thorns,s,s,0,-1);
+}
+
+void combo_damage_end(struct effect *e,struct unit *dest,struct unit *src,unsigned long value,int damage_type,int aflag,int type){
+	if(!src||src!=e->dest)
+		return;
+	switch(damage_type){
+		case DAMAGE_PHYSICAL:
+		case DAMAGE_MAGICAL:
+			break;
+		default:
+			return;
+	}
+	if(test(e->level/100.0)){
+		effect_event(e);
+		normal_attack(dest,src);
+		effect_event_end(e);
+	}
+}
+const struct effect_base combo[1]={{
+	.id="combo",
+	.damage_end=combo_damage_end,
+	.flag=EFFECT_POSITIVE|EFFECT_UNPURIFIABLE|EFFECT_KEEP
+}};
+void combo_init(struct unit *s){
+	effect(combo,s,s,20,-1);
+}
+
+void hitback_damage_end(struct effect *e,struct unit *dest,struct unit *src,unsigned long value,int damage_type,int aflag,int type){
+	if(!src||dest!=e->dest)
+		return;
+	switch(damage_type){
+		case DAMAGE_PHYSICAL:
+		case DAMAGE_MAGICAL:
+			break;
+		default:
+			return;
+	}
+	if(test(e->level/100.0)){
+		effect_event(e);
+		normal_attack(src,dest);
+		effect_event_end(e);
+	}
+}
+const struct effect_base hitback[1]={{
+	.id="hitback",
+	.damage_end=hitback_damage_end,
+	.flag=EFFECT_POSITIVE|EFFECT_UNPURIFIABLE|EFFECT_KEEP
+}};
+void hitback_init(struct unit *s){
+	effect(hitback,s,s,20,-1);
 }
 const struct move builtin_moves[]={
 	{
@@ -759,6 +836,34 @@ const struct move builtin_moves[]={
 		.type=TYPE_ICE,
 		.flag=0,
 		.mlevel=MLEVEL_REGULAR|MLEVEL_FREEZING_ROARING
+	},
+	{
+		.id="triple_cutter",
+		.action=triple_cutter,
+		.type=TYPE_NORMAL,
+		.flag=0,
+		.mlevel=MLEVEL_REGULAR
+	},
+	{
+		.id="thorns",
+		.init=thorns_init,
+		.type=TYPE_ICE,
+		.flag=0,
+		.mlevel=MLEVEL_REGULAR
+	},
+	{
+		.id="combo",
+		.init=combo_init,
+		.type=TYPE_FIGHTING,
+		.flag=0,
+		.mlevel=MLEVEL_REGULAR
+	},
+	{
+		.id="hitback",
+		.init=hitback_init,
+		.type=TYPE_FIGHTING,
+		.flag=0,
+		.mlevel=MLEVEL_REGULAR
 	},
 	{NULL}
 };

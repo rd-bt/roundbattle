@@ -149,7 +149,7 @@ int hittest(struct unit *dest,struct unit *src,double hit_rate){
 				continue;
 		}
 	}
-	if(dest->avoid<=0)
+	if(!dest->avoid)
 		goto hit;
 	real_rate=hit_rate*(double)src->hit/(double)dest->avoid;
 	if(rand01()>=real_rate)
@@ -178,6 +178,7 @@ long randi(void){
 	return lrand48();
 }
 unsigned long normal_attack(struct unit *dest,struct unit *src){
+	report(dest->owner->field,MSG_NORMALATTACK,dest,src);
 	if(!hittest(dest,src,1.0))
 		return 0;
 	return attack(dest,src,src->atk,DAMAGE_PHYSICAL,AF_NORMAL,src->type0);
@@ -485,8 +486,10 @@ void effect_event(struct effect *e){
 		f=e->dest->owner->field;
 	else if(e->src)
 		f=e->src->owner->field;
-	if(f)
+	if(f){
+		++e->inevent;
 		report(f,MSG_EFFECT_EVENT,e);
+	}
 	//printf("effect event %s\n",e->base->id);
 }
 void effect_event_end(struct effect *e){
@@ -495,8 +498,10 @@ void effect_event_end(struct effect *e){
 		f=e->dest->owner->field;
 	else if(e->src)
 		f=e->src->owner->field;
-	if(f)
+	if(f){
+		--e->inevent;
 		report(f,MSG_EFFECT_EVENT_END,e);
+	}
 	//printf("effect event %s end\n",e->base->id);
 }
 int revive(struct unit *u,unsigned long hp){
@@ -711,10 +716,11 @@ int canaction2(struct player *p,int act){
 				default:
 					return 1;
 			}
-		default:
 		case ACT_GIVEUP:
 		case ACT_ABORT:
 			return 1;
+		default:
+			return -1;
 	}
 }
 struct player *getprior(struct player *p,struct player *e){

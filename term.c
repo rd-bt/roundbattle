@@ -11,11 +11,11 @@
 #include <unistd.h>
 #include <alloca.h>
 #include <stdarg.h>
-#define RED "\033[31m"
-#define GREEN "\033[32m"
-#define YELLOW "\033[33m"
-#define BLUE "\033[34m"
-#define WHITE "\033[37m"
+#define RED "\033[91m"
+#define GREEN "\033[92m"
+#define YELLOW "\033[93m"
+#define BLUE "\033[94m"
+#define WHITE "\033[39m"
 #define GREEN_BG "\033[42m"
 #define RED_BG "\033[41m"
 #define WHITE_BG "\033[47m"
@@ -188,17 +188,24 @@ void frash(struct player *p,FILE *fp,int current){
 			s1-=r
 		if(e0){
 			peffect(e0);
+			if(e0->inevent)
+				fputs(YELLOW,fp);
 			fputs(buf,fp);
+			if(e0->inevent)
+				fputs(WHITE,fp);
 		}
 		if(e1){
 			peffect(e1);
 			putn(' ',s1);
+			if(e1->inevent)
+				fputs(YELLOW,fp);
 			fputs(buf,fp);
+			if(e1->inevent)
+				fputs(WHITE,fp);
 		}
 		fputc('\n',fp);
 		++line;
 	}
-
 	for_each_effect(ep,f->effects){
 		if(ep->dest)
 			continue;
@@ -209,6 +216,14 @@ void frash(struct player *p,FILE *fp,int current){
 	putn('-',ws.ws_col);
 	fputc('\n',fp);
 	++line;
+	/*switch(*p->field->stage){
+		case STAGE_INIT:
+		case STAGE_BATTLE_END:
+			break;
+		default:
+			break;
+	}*/
+
 	for(c=0;c<REC_SIZE&&rec[c][0];++c);
 	c+=line+11;
 	for(int i=ws.ws_row<c?c-ws.ws_row:0;i<REC_SIZE&&rec[i][0];++i){
@@ -266,14 +281,14 @@ no_move:
 					c=0;
 					goto no_unit;
 				}
-				r=snprintf(buf,buflen,"(%s%s%s)%s",type2str(p->units[i].type0),p->units[i].type1?"/":"",p->units[i].type1?type2str(p->units[i].type1):"",p->units[i].base->id);
+				r=snprintf(buf,buflen,"(%s%s%s)%s %lu/%lu",type2str(p->units[i].type0),p->units[i].type1?"/":"",p->units[i].type1?type2str(p->units[i].type1):"",p->units[i].base->id,p->units[i].hp,p->units[i].base->max_hp);
 				if(r<0){
 					putc('\n',fp);
 					return;
 				}
 				c=canaction2(p,i+ACT_UNIT0);
 				if(!c){
-					strncpy(buf+r,c?"":(p->units+r==p->front?"[F]":"[X]"),buflen-r);
+					strncpy(buf+r,c?"":(p->units+i==p->front?"[F]":"[X]"),buflen-r);
 				}
 				break;
 			case 6:
@@ -405,6 +420,8 @@ delay:
 int term_selector(struct player *p){
 	char buf[32];
 	ssize_t r;
+	if(!canaction2(p,cur))
+		cur=ACT_ABORT;
 refrash:
 	frash(p,stdout,cur);
 	fflush(stdin);
@@ -498,9 +515,66 @@ refrash:
 			if(canaction2(p,cur)){
 				azero(rec);
 				return cur;
-			}
-			else
+			}else {
+				wmf(0,RED "the action is unavailable" WHITE);
 				goto refrash;
+			}
+		case 'D':
+		case 'd':
+		case 'G':
+		case 'g':
+			cur=ACT_GIVEUP;
+			goto refrash;
+		case 'S':
+		case 's':
+			cur=ACT_ABORT;
+			goto refrash;
+		case 'A':
+		case 'a':
+			cur=ACT_NORMALATTACK;
+			goto refrash;
+		case 'q':
+			cur=ACT_MOVE0;
+			goto refrash;
+		case 'w':
+			cur=ACT_MOVE1;
+			goto refrash;
+		case 'e':
+			cur=ACT_MOVE2;
+			goto refrash;
+		case 'r':
+			cur=ACT_MOVE3;
+			goto refrash;
+		case 't':
+			cur=ACT_MOVE4;
+			goto refrash;
+		case 'y':
+			cur=ACT_MOVE5;
+			goto refrash;
+		case 'u':
+			cur=ACT_MOVE6;
+			goto refrash;
+		case 'i':
+			cur=ACT_MOVE7;
+			goto refrash;
+		case 'Q':
+			cur=ACT_UNIT0;
+			goto refrash;
+		case 'W':
+			cur=ACT_UNIT1;
+			goto refrash;
+		case 'E':
+			cur=ACT_UNIT2;
+			goto refrash;
+		case 'R':
+			cur=ACT_UNIT3;
+			goto refrash;
+		case 'T':
+			cur=ACT_UNIT4;
+			goto refrash;
+		case 'Y':
+			cur=ACT_UNIT5;
+			goto refrash;
 	}
 	goto refrash;
 }

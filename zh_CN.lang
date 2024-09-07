@@ -110,4 +110,13 @@ move.thunder_roaring.name=雷霆咆哮
 move.thunder_roaring.desc=根据自身是否有负面状态造成不同的效果。无负面状态：命中后造成物理伤害并有20%概率麻醉目标。提升自身一层攻击，目标每高于自身2层攻击会额外提升一层。有负面状态：对对方造成暴击的魔法伤害，并根据伤害量对对方所有单位造成真实伤害并回复生命值，负面状态项数越多伤害越高。
 move.freezing_roaring.name=冷冻咆哮
 move.freezing_roaring.desc=根据自身是否有负面状态造成不同的效果。无负面状态：命中后造成物理伤害并有20%概率冻结目标。提升自身一层攻击，目标每高于自身2层攻击会额外提升一层。有负面状态：强制解除自身所有负面状态并直接终结对方，无法以任何方式法阻止或逆转。处于负面状态时可在控制效果下或冷却时间内使用并强制先手。
+move.triple_cutter.name=三连切
+move.triple_cutter.desc=攻击三次，每次命中后造成物理伤害。
+move.thorns.name=荆棘
+move.thorns.desc=被动：受到物理或魔法伤害后对攻击者造成伤害值15%的真实伤害。
+move.combo.name=连击
+move.combo.desc=被动：造成物理或魔法伤害后有20%概率发动一次普通攻击。
+move.hitback.name=反击
+move.hitback.desc=被动：受到物理或魔法伤害后有20%概率发动一次普通攻击。
+
 

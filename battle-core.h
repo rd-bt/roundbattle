@@ -286,6 +286,13 @@
 #define EFFECT_KEEP 128
 #define for_each_effect(_var,_ehead) for(struct effect *_var=(_ehead),*_next=_var?_var->next:NULL;_next=_var?_var->next:NULL,_var;_var=_var->intrash?_next:_var->next)
 #define for_each_unit(_var,_player) for(struct unit *_var=(_player)->units,*_p0=_var+6;_var<_p0&&_var->base;++_var)
+
+#define STAGE_INIT 0
+#define STAGE_ROUNDSTART 1
+#define STAGE_PRIOR 2
+#define STAGE_LATTER 3
+#define STAGE_ROUNDEND 4
+#define STAGE_BATTLE_END 5
 enum {
 	MSG_ACTION=0,
 	MSG_BATTLE_END,
@@ -367,7 +374,7 @@ struct effect {
 	struct unit *src,*src1;
 	struct effect *next,*prev;
 	int round;
-	unsigned int active:1,intrash:1,:0;
+	unsigned int active:1,intrash:1,:0,inevent;
 	long level;
 	char data[64];
 };
@@ -447,7 +454,7 @@ struct battle_field {
 	struct player *p,*e;
 	struct effect *effects,*trash;
 	void (*reporter)(const struct message *msg);
-	const volatile int *round;
+	const volatile int *round,*stage;
 };
 int unit_kill(struct unit *up);
 

@@ -15,6 +15,7 @@
 #define GREEN "\033[92m"
 #define YELLOW "\033[93m"
 #define BLUE "\033[94m"
+#define CYAN "\033[96m"
 #define WHITE "\033[39m"
 #define GREEN_BG "\033[42m"
 #define RED_BG "\033[41m"
@@ -125,8 +126,8 @@ void frash(struct player *p,FILE *fp,int current){
 	fputs(buf,fp);\
 	fputc('\n',fp);\
 	++line
-	print_attr("lv:%u %s %lu/%lu %.2lf%%",u->base->level,u->base->id,u->hp,u->base->max_hp,100.0*u->hp/u->base->max_hp);
-	print_attr("atk:%lu def:%ld speed:%lu",u->atk,u->def,u->speed);
+	print_attr("(%s%s%s) %s %lu/%lu %.2lf%%",type2str(u->type0),u->type1?"/":"",u->type1?type2str(u->type1):"",u->base->id,u->hp,u->base->max_hp,100.0*u->hp/u->base->max_hp);
+	print_attr("lv:%u atk:%lu def:%ld speed:%lu",u->base->level,u->atk,u->def,u->speed);
 	print_attr("hit:%lu avd:%lu ce:%.2lf%%",u->hit,u->avoid,100*u->crit_effect);
 	if(p->front->physical_bonus!=0.0||p->front->magical_bonus!=0.0||e->front->physical_bonus!=0.0||e->front->magical_bonus!=0.0){
 		print_attr("phy:%.2lf%% mag:%.2lf%%",100*u->physical_bonus,100*u->magical_bonus);
@@ -190,18 +191,20 @@ void frash(struct player *p,FILE *fp,int current){
 			peffect(e0);
 			if(e0->inevent)
 				fputs(YELLOW,fp);
+			else if(effect_isnegative(e0))
+				fputs(BLUE,fp);
 			fputs(buf,fp);
-			if(e0->inevent)
-				fputs(WHITE,fp);
+			fputs(WHITE,fp);
 		}
 		if(e1){
 			peffect(e1);
 			putn(' ',s1);
 			if(e1->inevent)
 				fputs(YELLOW,fp);
+			else if(effect_isnegative(e1))
+				fputs(BLUE,fp);
 			fputs(buf,fp);
-			if(e1->inevent)
-				fputs(WHITE,fp);
+			fputs(WHITE,fp);
 		}
 		fputc('\n',fp);
 		++line;
@@ -210,7 +213,15 @@ void frash(struct player *p,FILE *fp,int current){
 		if(ep->dest)
 			continue;
 		peffect(ep);
-		fprintf(fp,"global:%s\n",buf);
+		if(ep->base->flag&EFFECT_ENV){
+			fputs(ep->inevent?YELLOW:CYAN,fp);
+			fprintf(fp,"environment:%s\n",buf);
+		}else {
+			if(ep->inevent)
+				fputs(YELLOW,fp);
+			fprintf(fp,"global:%s\n",buf);
+		}
+		fputs(WHITE,fp);
 		++line;
 	}
 	putn('-',ws.ws_col);
@@ -335,10 +346,12 @@ void __attribute__((destructor)) tm_end(void){
 }
 static int cur=ACT_NORMALATTACK;
 //static const int dtc[3]={'R','P','M'};
-static const char *dtco[3]={YELLOW,RED,BLUE};
+static const char *dtco[3]={YELLOW,RED,CYAN};
 void reporter_term(const struct message *msg){
 	struct player *p=msg->field->p;
 	char buf[32];
+	if(*msg->field->stage==STAGE_BATTLE_END&&msg->type!=MSG_BATTLE_END)
+		return;
 	switch(msg->type){
 		case MSG_ACTION:
 		case MSG_UPDATE:
@@ -357,18 +370,35 @@ void reporter_term(const struct message *msg){
 					strcat(buf," E");
 				if(msg->un.damage.aflag&AF_WEAK)
 					strcat(buf," W");
+				if(msg->un.damage.dest!=msg->un.damage.dest->owner->front){
+					strcat(buf," (");
+					strcat(buf,msg->un.damage.dest->base->id);
+					strcat(buf,")");
+				}
 				wmf(msg->un.damage.dest->owner==p?0:1,"%s-%lu%s" WHITE,dtco[msg->un.damage.damage_type],msg->un.damage.value,buf);
 			}
 			goto delay;
 		case MSG_EFFECT:
 			if(msg->un.e->dest){
-				wmf(msg->un.e->dest->owner==p?0:1,"effect %s",msg->un.e->base->id);
+				buf[0]=0;
+				if(msg->un.e->dest!=msg->un.e->dest->owner->front){
+					strcat(buf," (");
+					strcat(buf,msg->un.e->dest->base->id);
+					strcat(buf,")");
+				}
+				wmf(msg->un.e->dest->owner==p?0:1,"effect %s%s",msg->un.e->base->id,buf);
 				goto delay;
 			}
 			break;
 		case MSG_EFFECT_END:
 			if(msg->un.e->dest){
-				wmf(msg->un.e->dest->owner==p?0:1,"%s end",msg->un.e->base->id);
+				buf[0]=0;
+				if(msg->un.e->dest!=msg->un.e->dest->owner->front){
+					strcat(buf," (");
+					strcat(buf,msg->un.e->dest->base->id);
+					strcat(buf,")");
+				}
+				wmf(msg->un.e->dest->owner==p?0:1,"%s end",msg->un.e->base->id,buf);
 				goto delay;
 			}
 			break;
@@ -420,8 +450,22 @@ delay:
 int term_selector(struct player *p){
 	char buf[32];
 	ssize_t r;
-	if(!canaction2(p,cur))
+	if(!canaction2(p,cur)){
+		if(isalive(p->front->state)){
+			if(cur!=ACT_NORMALATTACK&&canaction2(p,ACT_NORMALATTACK)){
+				cur=ACT_NORMALATTACK;
+				goto refrash;
+			}
+		}else {
+			for(int i=0;i<6;++i){
+				if(isalive(p->units[i].state)){
+					cur=ACT_UNIT0+i;
+					goto refrash;
+				}
+			}
+		}
 		cur=ACT_ABORT;
+	}
 refrash:
 	frash(p,stdout,cur);
 	fflush(stdin);

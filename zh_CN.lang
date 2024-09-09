@@ -118,5 +118,14 @@ move.combo.name=连击
 move.combo.desc=被动：造成物理或魔法伤害后有20%概率发动一次普通攻击。
 move.hitback.name=反击
 move.hitback.desc=被动：受到物理或魔法伤害后有20%概率发动一次普通攻击。
-
+move.thermobaric.name=温压弹
+move.thermobaric.desc=命中后造成物理伤害。生成血月环境。
+move.myriad.name=森罗万象
+move.myriad.desc=被动：造成的物理伤害附带伤害值35%的魔法伤害，每回合末回复16%已损生命值。
+move.ablaze.name=烈火燎原
+move.ablaze.desc=生成高温环境，命中后造成物理伤害。
+move.spray.name=喷雾
+move.spray.desc=生成潮湿环境，命中后降低目标2层命中。
+move.cold_wave.name=寒流
+move.cold_wave.desc=生成低温环境，命中后造成物理伤害。
 

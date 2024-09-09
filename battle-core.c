@@ -268,7 +268,7 @@ int setcooldown(struct unit *u,struct move *m,int round){
 			e->base->setcooldown(u,m,&round);
 	}
 	m->cooldown=round;
-	report(u->owner->field,MSG_UPDATE);
+	report(u->owner->field,MSG_UPDATE,m);
 	for_each_effect(e,u->owner->field->effects){
 		if(e->base->setcooldown_end)
 			e->base->setcooldown_end(u,m,round);
@@ -365,7 +365,6 @@ struct effect *effect(const struct effect_base *base,struct unit *dest,struct un
 		if(e->base->effect_end)
 			e->base->effect_end(e,base,dest,src,level,round);
 	}
-	//printf("EFFECT %p\n",ep);
 	return ep;
 }
 int effect_end(struct effect *e){
@@ -548,7 +547,7 @@ void unit_cooldown_decrease(struct unit *u,int round){
 		if(r1<0)
 			r1=0;
 		u->moves[r].cooldown=r1;
-		report(u->owner->field,MSG_UPDATE);
+		report(u->owner->field,MSG_UPDATE,u->moves+r);
 	}
 }
 
@@ -567,7 +566,7 @@ void update_attr(struct unit *u){
 		if(e->base->update_attr)
 			e->base->update_attr(e,u);
 	}
-	report(u->owner->field,MSG_UPDATE);
+	report(u->owner->field,MSG_UPDATE,u);
 }
 
 void update_state(struct unit *u){
@@ -581,7 +580,7 @@ void update_state(struct unit *u){
 		}
 	}
 	u->state=r;
-	report(u->owner->field,MSG_UPDATE);
+	report(u->owner->field,MSG_UPDATE,u);
 }
 void effect_in_roundstart(struct effect *effects){
 	for_each_effect(e,effects){
@@ -612,7 +611,7 @@ void unit_effect_round_decrease(struct unit *u,int round){
 				v->round-=round;
 			else
 				v->round=0;
-			report(u->owner->field,MSG_UPDATE);
+			report(u->owner->field,MSG_UPDATE,v);
 		}
 		if(!v->round)
 			effect_end_in_roundend(v);
@@ -625,7 +624,7 @@ void effect_round_decrease(struct effect *effects,int round){
 				v->round-=round;
 			else
 				v->round=0;
-			report((v->dest?v->dest:v->src)->owner->field,MSG_UPDATE);
+			report((v->dest?v->dest:v->src)->owner->field,MSG_UPDATE,v);
 		}
 		if(!v->round)
 			effect_end_in_roundend(v);
@@ -815,12 +814,13 @@ void report(struct battle_field *f,int type,...){
 			break;
 		case MSG_ROUND:
 		case MSG_ROUNDEND:
-		case MSG_UPDATE:
 			break;
 		case MSG_SPIMOD:
 			msg.un.spimod.dest=va_arg(ap,const struct unit *);
 			msg.un.spimod.value=va_arg(ap,long);
 			break;
+		case MSG_UPDATE:
+			msg.un.uaddr=va_arg(ap,const void *);
 		default:
 			break;
 	}

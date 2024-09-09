@@ -281,9 +281,10 @@
 #define EFFECT_CONTROL 4
 #define EFFECT_POSITIVE 8
 #define EFFECT_NEGATIVE 16
-#define EFFECT_UNPURIFIABLE 32
-#define EFFECT_ISOLATED 64
-#define EFFECT_KEEP 128
+#define EFFECT_ENV 32
+#define EFFECT_UNPURIFIABLE 64
+#define EFFECT_ISOLATED 128
+#define EFFECT_KEEP 256
 #define for_each_effect(_var,_ehead) for(struct effect *_var=(_ehead),*_next=_var?_var->next:NULL;_next=_var?_var->next:NULL,_var;_var=_var->intrash?_next:_var->next)
 #define for_each_unit(_var,_player) for(struct unit *_var=(_player)->units,*_p0=_var+6;_var<_p0&&_var->base;++_var)
 
@@ -447,6 +448,7 @@ struct message {
 		struct {
 			const struct unit *dest,*src;
 		} u2;
+		const void *uaddr;
 	} un;
 };
 

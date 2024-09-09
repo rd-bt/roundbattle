@@ -354,6 +354,7 @@ void player_moveinit(struct player *p){
 				break;
 			if(u->pmoves[i].init)
 				u->pmoves[i].init(u);
+			//fprintf(stderr,"%s:%s\n",u->base->id,u->pmoves[i].id);
 		}
 		for(int i=0;i<8;++i){
 			if(!u->moves[i].id)
@@ -362,6 +363,7 @@ void player_moveinit(struct player *p){
 				u->moves[i].init(u);
 		}
 	}
+	//fprintf(stderr,"---\n");
 }
 #define deadcheck do {\
 	r0=!isalive(p->front->state);\

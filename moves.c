@@ -276,8 +276,8 @@ int natural_shield_damage(struct effect *e,struct unit *dest,struct unit *src,un
 	if(dest!=e->dest)
 		return 0;
 	effect_event(e);
-	if(*value<8)
-		*value=1;
+	if(*value<3)
+		*value=0;
 	else
 		*value=log(*value);
 	effect_event_end(e);
@@ -461,7 +461,7 @@ void scorching_roaring(struct unit *s){
 	if(!n){
 		t=gettarget(s);
 		if(hittest(t,s,2.5)){
-			attack(t,s,0.6*s->atk,DAMAGE_PHYSICAL,0,TYPE_FIRE);
+			attack(t,s,0.75*s->atk,DAMAGE_PHYSICAL,0,TYPE_FIRE);
 			if(test(0.2))
 				effect(burnt,t,s,0,5);
 		}
@@ -496,7 +496,7 @@ void thunder_roaring(struct unit *s){
 		t=gettarget(s);
 		if(hittest(t,s,2.5)){
 
-			attack(t,s,0.6*s->atk,DAMAGE_PHYSICAL,0,TYPE_ELECTRIC);
+			attack(t,s,0.75*s->atk,DAMAGE_PHYSICAL,0,TYPE_ELECTRIC);
 			if(test(0.2))
 				effect(paralysed,t,s,0,3);
 		}
@@ -528,7 +528,7 @@ void freezing_roaring(struct unit *s){
 		t=gettarget(s);
 		if(hittest(t,s,2.5)){
 
-			attack(t,s,0.6*s->atk,DAMAGE_PHYSICAL,0,TYPE_ICE);
+			attack(t,s,0.75*s->atk,DAMAGE_PHYSICAL,0,TYPE_ICE);
 			if(test(0.2))
 				effect(frozen,t,s,0,3);
 		}
@@ -640,6 +640,141 @@ const struct effect_base hitback[1]={{
 }};
 void hitback_init(struct unit *s){
 	effect(hitback,s,s,20,-1);
+}
+void bm_roundend(struct effect *e){
+	effect_event(e);
+	for_each_unit(u,e->src->owner->enemy){
+		attack(u,NULL,u->base->max_hp/20,DAMAGE_REAL,0,TYPE_VOID);
+	}
+	for_each_unit(u,e->src->owner){
+		attack(u,NULL,u->base->max_hp/20,DAMAGE_REAL,0,TYPE_VOID);
+	}
+	effect_event_end(e);
+}
+void effect_update_attr_all(struct effect *e){
+	for_each_unit(u,e->src->owner->enemy){
+		update_attr(u);
+	}
+	for_each_unit(u,e->src->owner){
+		update_attr(u);
+	}
+}
+void bm_update_attr(struct effect *e,struct unit *u){
+	u->atk*=0.75;
+}
+const struct effect_base blood_moon[1]={{
+	.id="blood_moon",
+	.inited=effect_update_attr_all,
+	.roundend=bm_roundend,
+	.update_attr=bm_update_attr,
+	.flag=EFFECT_ENV,
+	.prior=30
+}};
+void thermobaric(struct unit *s){
+	struct unit *t;
+	t=gettarget(s);
+	if(hittest(t,s,1.5))
+		attack(t,s,0.6*s->atk,DAMAGE_PHYSICAL,0,TYPE_FIRE);
+	effect(blood_moon,NULL,s,0,3);
+	setcooldown(s,s->move_cur,6);
+}
+
+void myriad_damage_end(struct effect *e,struct unit *dest,struct unit *src,unsigned long value,int damage_type,int aflag,int type){
+	if(src!=e->dest||dest->owner!=src->owner->enemy||damage_type!=DAMAGE_PHYSICAL||value<3)
+		return;
+	effect_event(e);
+	attack(dest,src,0.35*value,DAMAGE_MAGICAL,0,TYPE_DEVINEGRASS);	
+	effect_event_end(e);
+}
+void myriad_roundend(struct effect *e){
+	long v=(long)e->dest->base->max_hp-(long)e->dest->hp;
+	if(v>6){
+		effect_event(e);
+		heal(e->dest,0.16*v);
+		effect_event_end(e);
+	}
+}
+const struct effect_base myriad[1]={{
+	.id="myriad",
+	.damage_end=myriad_damage_end,
+	.roundend=myriad_roundend,
+	.flag=EFFECT_POSITIVE|EFFECT_UNPURIFIABLE|EFFECT_KEEP
+}};
+void myriad_init(struct unit *s){
+	effect(myriad,s,s,0,-1);
+}
+int hot_damage(struct effect *e,struct unit *dest,struct unit *src,unsigned long *value,int *damage_type,int *aflag,int *type){
+	if(!(*type&(TYPE_FIRE|TYPE_ICE)))
+		return 0;
+	effect_event(e);
+	if(*type&TYPE_FIRE)
+		*value*=1.5;
+	if(*type&TYPE_ICE)
+		*value*=0.5;
+	effect_event_end(e);
+	return 0;
+}
+const struct effect_base hot[1]={{
+	.id="hot",
+	.damage=hot_damage,
+	.flag=EFFECT_ENV,
+}};
+void ablaze(struct unit *s){
+	struct unit *t;
+	effect(hot,NULL,s,0,3);
+	t=gettarget(s);
+	if(hittest(t,s,1.5))
+		attack(t,s,0.75*s->atk,DAMAGE_PHYSICAL,0,TYPE_FIRE);
+	setcooldown(s,s->move_cur,6);
+}
+
+int wet_damage(struct effect *e,struct unit *dest,struct unit *src,unsigned long *value,int *damage_type,int *aflag,int *type){
+	if(!(*type&(TYPE_FIRE|TYPE_WATER)))
+		return 0;
+	effect_event(e);
+	if(*type&TYPE_WATER)
+		*value*=1.5;
+	if(*type&TYPE_FIRE)
+		*value*=0.5;
+	effect_event_end(e);
+	return 0;
+}
+const struct effect_base wet[1]={{
+	.id="wet",
+	.damage=wet_damage,
+	.flag=EFFECT_ENV,
+}};
+void spray(struct unit *s){
+	struct unit *t;
+	effect(hot,NULL,s,0,3);
+	t=gettarget(s);
+	if(hittest(t,s,1.5))
+		effect(HIT,t,s,-2,-1);
+	setcooldown(s,s->move_cur,6);
+}
+int cold_damage(struct effect *e,struct unit *dest,struct unit *src,unsigned long *value,int *damage_type,int *aflag,int *type){
+	if(!(*type&(TYPE_FIRE|TYPE_ICE)))
+		return 0;
+	effect_event(e);
+	if(*type&TYPE_ICE)
+		*value*=1.5;
+	if(*type&TYPE_FIRE)
+		*value*=0.5;
+	effect_event_end(e);
+	return 0;
+}
+const struct effect_base cold[1]={{
+	.id="cold",
+	.damage=cold_damage,
+	.flag=EFFECT_ENV,
+}};
+void cold_wave(struct unit *s){
+	struct unit *t;
+	effect(cold,NULL,s,0,3);
+	t=gettarget(s);
+	if(hittest(t,s,1.5))
+		attack(t,s,0.75*s->atk,DAMAGE_PHYSICAL,0,TYPE_ICE);
+	setcooldown(s,s->move_cur,6);
 }
 const struct move builtin_moves[]={
 	{
@@ -776,7 +911,7 @@ const struct move builtin_moves[]={
 		.type=TYPE_DEVINEGRASS,
 		.prior=0,
 		.flag=0,
-		.mlevel=MLEVEL_REGULAR|MLEVEL_CONCEPTUAL
+		.mlevel=MLEVEL_CONCEPTUAL
 	},
 	{
 		.id="metal_bomb",
@@ -862,6 +997,41 @@ const struct move builtin_moves[]={
 		.id="hitback",
 		.init=hitback_init,
 		.type=TYPE_FIGHTING,
+		.flag=0,
+		.mlevel=MLEVEL_REGULAR
+	},
+	{
+		.id="thermobaric",
+		.action=thermobaric,
+		.type=TYPE_FIRE,
+		.flag=0,
+		.mlevel=MLEVEL_REGULAR
+	},
+	{
+		.id="myriad",
+		.init=myriad_init,
+		.type=TYPE_DEVINEGRASS,
+		.flag=0,
+		.mlevel=MLEVEL_REGULAR
+	},
+	{
+		.id="ablaze",
+		.action=ablaze,
+		.type=TYPE_FIRE,
+		.flag=0,
+		.mlevel=MLEVEL_REGULAR
+	},
+	{
+		.id="spray",
+		.action=spray,
+		.type=TYPE_WATER,
+		.flag=0,
+		.mlevel=MLEVEL_REGULAR
+	},
+	{
+		.id="cold_wave",
+		.action=cold_wave,
+		.type=TYPE_ICE,
 		.flag=0,
 		.mlevel=MLEVEL_REGULAR
 	},

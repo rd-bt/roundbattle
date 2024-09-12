@@ -129,7 +129,7 @@ const struct effect_base name[1]={{\
 	.prior=64\
 }};
 effect_attr(ATK,atk)
-effect_attr(DEF,atk)
+effect_attr(DEF,def)
 effect_attr(SPEED,speed)
 effect_attr(HIT,hit)
 effect_attr(AVOID,avoid)
@@ -552,11 +552,11 @@ void freezing_roaring(struct unit *s){
 	n1=(long)t->hp;
 	t->hp=0;
 	report(s->owner->field,MSG_HPMOD,t,-n1);
-	unit_wipeeffect(t,0);
 	t->state=UNIT_FREEZING_ROARINGED;
 	if(t==t->owner->front)
 		t->owner->action=ACT_ABORT;
 	report(s->owner->field,MSG_FAIL,t);
+	unit_wipeeffect(t,0);
 }
 
 void triple_cutter(struct unit *s){
@@ -688,11 +688,13 @@ void myriad_damage_end(struct effect *e,struct unit *dest,struct unit *src,unsig
 }
 void myriad_roundend(struct effect *e){
 	long v=(long)e->dest->base->max_hp-(long)e->dest->hp;
-	if(v>6){
-		effect_event(e);
-		heal(e->dest,0.16*v);
-		effect_event_end(e);
-	}
+	if(v<e->dest->base->max_hp/100)
+		v=e->dest->base->max_hp/100;
+	if(v<7)
+		v=7;
+	effect_event(e);
+	heal(e->dest,0.16*v);
+	effect_event_end(e);
 }
 const struct effect_base myriad[1]={{
 	.id="myriad",
@@ -775,6 +777,105 @@ void cold_wave(struct unit *s){
 	if(hittest(t,s,1.5))
 		attack(t,s,0.75*s->atk,DAMAGE_PHYSICAL,0,TYPE_ICE);
 	setcooldown(s,s->move_cur,6);
+}
+
+int gp_init(struct effect *e,long level,int round){
+	level+=e->level;
+	if(level<0)
+		level=0;
+	if(level>16)
+		level=16;
+	if(!e->level)
+		e->round=round;
+	e->level=level;
+	return 0;
+}
+void gp_damage_end(struct effect *e,struct unit *dest,struct unit *src,unsigned long value,int damage_type,int aflag,int type){
+	if(dest!=e->dest||damage_type!=DAMAGE_PHYSICAL)
+		return;
+	if(e->level>3){
+		e->level-=3;
+		report(e->dest->owner->field,MSG_UPDATE,e);
+	}else
+		effect_end(e);
+}
+const struct effect_base gravitational_potential[1]={{
+	.id="gravitational_potential",
+	.init=gp_init,
+	.damage_end=gp_damage_end,
+	.flag=EFFECT_POSITIVE|EFFECT_UNPURIFIABLE
+}};
+void bh_inited(struct effect *e){
+	effect(gravitational_potential,e->src,NULL,16,12);
+	effect(gravitational_potential,e->src->owner->enemy->front,NULL,16,12);
+}
+void bh_end(struct effect *e){
+	unsigned long gp0,gp1;
+	struct unit *s=e->src->owner->front;
+	struct unit *t=s->owner->enemy->front;
+	struct effect *ep;
+	ep=unit_findeffect(s,gravitational_potential);
+	if(ep){
+		gp0=ep->level;
+		effect_end(ep);
+	}else
+		gp0=0;
+	ep=unit_findeffect(t,gravitational_potential);
+	if(ep){
+		gp1=ep->level;
+		effect_end(ep);
+	}else
+		gp1=0;
+	if(gp0==gp1){
+		gp0=s->speed;
+		gp1=t->speed;
+	}
+	if(gp0<gp1)
+		sethp(s,0);
+	else
+		sethp(t,0);
+}
+const struct effect_base black_hole[1]={{
+	.id="black_hole",
+	.inited=bh_inited,
+	.end=bh_end,
+	.flag=EFFECT_ENV
+}};
+void collapse(struct unit *s){
+	struct unit *t;
+	t=gettarget(s);
+	if(hittest(t,s,1.8)){
+		attack(t,s,0.75*s->atk,DAMAGE_PHYSICAL,0,TYPE_ROCK);
+		effect(DEF,t,s,-1,-1);
+	}
+	effect(black_hole,NULL,s,0,4);
+	setcooldown(s,s->move_cur,9);
+}
+int cyce_damage(struct effect *e,struct unit *dest,struct unit *src,unsigned long *value,int *damage_type,int *aflag,int *type){
+	return dest==e->src&&(*aflag&AF_IDEATH);
+}
+int cyce_hittest(struct effect *e,struct unit *dest,struct unit *src,double *hit_rate){
+	if(dest==e->src)
+		return 0;
+	else if(src==e->src)
+		return 1;
+	else
+		return -1;
+}
+const struct effect_base cycle_eden[1]={{
+	.id="cycle_eden",
+	.damage=cyce_damage,
+	.hittest=cyce_hittest,
+	.flag=EFFECT_ENV
+}};
+void cycle_erode(struct unit *s){
+	struct unit *t;
+	int plv=test(0.5)?2:1;
+	t=gettarget(s);
+	effect(PDD,t,s,-plv,-1);
+	attack(t,s,1.05*s->atk,DAMAGE_PHYSICAL,0,TYPE_MACHINE);
+	effect(cycle_eden,NULL,s,0,4);
+	setcooldown(s,s->move_cur,16);
 }
 const struct move builtin_moves[]={
 	{
@@ -1034,6 +1135,21 @@ const struct move builtin_moves[]={
 		.type=TYPE_ICE,
 		.flag=0,
 		.mlevel=MLEVEL_REGULAR
+	},
+	{
+		.id="collapse",
+		.action=collapse,
+		.type=TYPE_ROCK,
+		.flag=0,
+		.mlevel=MLEVEL_REGULAR
+	},
+	{
+		.id="cycle_erode",
+		.action=cycle_erode,
+		.type=TYPE_MACHINE,
+		.prior=0,
+		.flag=0,
+		.mlevel=MLEVEL_CONCEPTUAL
 	},
 	{NULL}
 };

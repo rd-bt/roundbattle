@@ -128,4 +128,7 @@ move.spray.name=喷雾
 move.spray.desc=生成潮湿环境，命中后降低目标2层命中。
 move.cold_wave.name=寒流
 move.cold_wave.desc=生成低温环境，命中后造成物理伤害。
-
+move.collapse.name=压缩
+move.collapse.desc=命中后造成物理伤害并减少1层防御力。生成黑洞环境。
+move.cycle_erode.name=轮回侵蚀
+move.cycle_erode.desc=减少目标1层物理抗性并造成物理伤害，50%概率额外减少一层物理抗性。展开轮回乐园环境4回合。

@@ -33,11 +33,11 @@
 
 #define AF_CRIT 1
 #define AF_NODEF 2
-#define AF_NOSHIELD 4
-#define AF_EFFECT 8
-#define AF_WEAK 16
-#define AF_NORMAL 32
-#define AF_NOFLOAT 64
+#define AF_EFFECT 4
+#define AF_WEAK 8
+#define AF_NORMAL 16
+#define AF_NOFLOAT 32
+#define AF_IDEATH 64
 
 #define MF_NOCONTROL 1
 
@@ -365,6 +365,8 @@ struct effect_base {
 	void (*roundstart)(struct effect *e);
 	void (*setcooldown)(struct unit *u,struct move *m,int *round);
 	void (*setcooldown_end)(struct unit *u,struct move *m,int round);
+	int (*switchunit)(struct effect *e,struct unit *t);
+	void (*switchunit_end)(struct effect *e,struct unit *t);
 	void (*update_attr)(struct effect *e,struct unit *u);
 	void (*update_state)(struct effect *e,struct unit *u,int *state);
 	int flag,prior;
@@ -423,6 +425,11 @@ struct message {
 			int damage_type,aflag,type,unused;
 		} damage;
 		const struct effect *e;
+		struct {
+			const struct effect *e;
+			long level;
+			int round;
+		} e_init;
 		struct {
 			const struct event *ev;
 			const struct unit *src;
@@ -533,6 +540,8 @@ int effect_isnegative(const struct effect *e);
 int unit_hasnegative(struct unit *u);
 
 int unit_move(struct unit *u,struct move *m);
+
+int switchunit(struct unit *t);
 
 int canaction2(struct player *p,int act);
 

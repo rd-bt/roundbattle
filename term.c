@@ -23,7 +23,7 @@
 #define BLACK_BG "\033[40m"
 #define putn(c,n) for(unsigned short _i=(n),_c=(c);_i>0;--_i)fputc(_c,fp)
 #define azero(a) memset((a),0,sizeof(a))
-#define REC_SIZE 32
+#define REC_SIZE 64
 static char rec[REC_SIZE][129];
 size_t strrlen(const char *s){
 	size_t r=0;
@@ -126,7 +126,7 @@ void frash(struct player *p,FILE *fp,int current){
 	fputs(buf,fp);\
 	fputc('\n',fp);\
 	++line
-	print_attr("(%s%s%s) %s %lu/%lu %.2lf%%",type2str(u->type0),u->type1?"/":"",u->type1?type2str(u->type1):"",u->base->id,u->hp,u->base->max_hp,100.0*u->hp/u->base->max_hp);
+	print_attr("(%s%s%s) %s[%ld] %lu/%lu %.2lf%%",type2str(u->type0),u->type1?"/":"",u->type1?type2str(u->type1):"",u->base->id,u-u->owner->units,u->hp,u->base->max_hp,100.0*u->hp/u->base->max_hp);
 	print_attr("lv:%u atk:%lu def:%ld speed:%lu",u->base->level,u->atk,u->def,u->speed);
 	print_attr("hit:%lu avd:%lu ce:%.2lf%%",u->hit,u->avoid,100*u->crit_effect);
 	if(p->front->physical_bonus!=0.0||p->front->magical_bonus!=0.0||e->front->physical_bonus!=0.0||e->front->magical_bonus!=0.0){
@@ -256,7 +256,6 @@ void frash(struct player *p,FILE *fp,int current){
 	fputs(c?"\n":"[X]\n",fp);
 	if(current==ACT_NORMALATTACK)
 		fputs(WHITE,fp);
-
 	for(int i=0;i<8;++i){
 		int color;
 		s1=ws.ws_col;
@@ -379,7 +378,11 @@ void reporter_term(const struct message *msg){
 			}
 			goto delay;
 		case MSG_EFFECT:
+			if(*msg->field->stage==STAGE_INIT)
+				break;
 			if(msg->un.e->dest){
+				if(!isalive(msg->un.e->dest->state))
+					break;
 				buf[0]=0;
 				if(msg->un.e->dest!=msg->un.e->dest->owner->front){
 					strcat(buf," (");
@@ -392,6 +395,8 @@ void reporter_term(const struct message *msg){
 			break;
 		case MSG_EFFECT_END:
 			if(msg->un.e->dest){
+				if(!isalive(msg->un.e->dest->state))
+					break;
 				buf[0]=0;
 				if(msg->un.e->dest!=msg->un.e->dest->owner->front){
 					strcat(buf," (");
@@ -414,10 +419,22 @@ void reporter_term(const struct message *msg){
 			wmf(msg->un.u->owner==p?0:1,"failed");
 			break;
 		case MSG_HEAL:
-			wmf(msg->un.heal.dest->owner==p?0:1,GREEN "+%lu" WHITE,msg->un.heal.value);
+			buf[0]=0;
+			if(msg->un.heal.dest!=msg->un.heal.dest->owner->front){
+				strcat(buf," (");
+				strcat(buf,msg->un.heal.dest->base->id);
+				strcat(buf,")");
+			}
+			wmf(msg->un.heal.dest->owner==p?0:1,GREEN "+%lu%s" WHITE,msg->un.heal.value,buf);
 			goto delay;
 		case MSG_HPMOD:
-			wmf(msg->un.hpmod.dest->owner==p?0:1,"%+ld",msg->un.hpmod.value);
+			buf[0]=0;
+			if(msg->un.hpmod.dest!=msg->un.hpmod.dest->owner->front){
+				strcat(buf," (");
+				strcat(buf,msg->un.hpmod.dest->base->id);
+				strcat(buf,")");
+			}
+			wmf(msg->un.hpmod.dest->owner==p?0:1,"%+ld%s",msg->un.hpmod.value,buf);
 			goto delay;
 		case MSG_MISS:
 			wmf(msg->un.u2.dest->owner==p?0:1,"MISS");
@@ -434,9 +451,16 @@ void reporter_term(const struct message *msg){
 			wmf(0,"ROUND END");
 			break;
 		case MSG_SPIMOD:
-			wmf(msg->un.spimod.dest->owner==p?0:1,"%+ld spi",msg->un.spimod.value);
+			buf[0]=0;
+			if(msg->un.spimod.dest!=msg->un.spimod.dest->owner->front){
+				strcat(buf," (");
+				strcat(buf,msg->un.spimod.dest->base->id);
+				strcat(buf,")");
+			}
+			wmf(msg->un.spimod.dest->owner==p?0:1,"%+ld spi%s",msg->un.spimod.value,buf);
 			goto delay;
 		case MSG_SWITCH:
+			wmf(msg->un.u2.dest->owner==p?0:1,"%s[%ld]",msg->un.u2.dest->base->id,msg->un.u2.dest-msg->un.u2.dest->owner->units);
 			break;
 		default:
 			break;
@@ -618,6 +642,10 @@ refrash:
 			goto refrash;
 		case 'Y':
 			cur=ACT_UNIT5;
+			goto refrash;
+		case 'x':
+			frash(p->enemy,stdout,-1);
+			read(STDIN_FILENO,buf,31);
 			goto refrash;
 	}
 	goto refrash;

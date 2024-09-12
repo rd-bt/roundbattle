@@ -142,6 +142,28 @@ void reporter_default(const struct message *msg){
 
 int rand_selector(struct player *p){
 	int n=0,c=0;
+	if(!isalive(p->front->state)){
+		/*for(int i=ACT_UNIT0;i<=ACT_UNIT5;++i)
+			if(canaction2(p,i)){
+				c|=1<<i;
+				++n;
+			}
+		if(!n)
+			return ACT_GIVEUP;
+
+		n=randi()%n;
+		for(int i=ACT_UNIT0;i<=ACT_UNIT5;++i){
+			if((1<<i)&c){
+				if(!n)
+					return i;
+				--n;
+			}
+		}*/
+		for(int i=ACT_UNIT0;i<=ACT_UNIT5;++i)
+			if(canaction2(p,i))
+				return i;
+		return ACT_GIVEUP;
+	}
 	for(int i=ACT_MOVE0;i<ACT_ABORT;++i)
 		if(canaction2(p,i)){
 			c|=1<<i;
@@ -289,9 +311,8 @@ void player_action(struct player *p){
 			return;
 		case ACT_UNIT0 ... ACT_UNIT5:
 			r=p->action-ACT_UNIT0;
-			if(p->units[r].base&&isalive(p->units[r].state)){
-				p->front=p->units+r;
-				report(p->field,MSG_SWITCH,p->units+r,p->front);
+			if(p->units[r].base){
+				switchunit(p->units+r);
 				return;
 			}
 		default:
@@ -321,27 +342,25 @@ void cooldown_decrease(struct player *p){
 		unit_cooldown_decrease(p->units+r,1);
 	}
 }
-int player_selectunit(struct player *p){
-	int r=0;
+int player_hasunit(struct player *p){
 	for(int i=0;i<6;++i){
 		if(!p->units[i].base)
 			break;
 		if(isalive(p->units[i].state)){
-			//printf("%d:%s\n",ACT_UNIT0+i,p->units[i].base->id);
-			r=1;
-			break;
+			return 1;
 		}
 	}
-	if(!r)
-		return -1;
+	return 0;
+}
+int player_selectunit(struct player *p){
+	int r=0;
 	r=p->selector(p);
 	switch(r){
 		case ACT_UNIT0 ... ACT_UNIT5:
 			if(!canaction2(p,r))
 				return -1;
 			r-=ACT_UNIT0;
-			report(p->field,MSG_SWITCH,p->units+r,p->front);
-			p->front=p->units+r;
+			switchunit(p->units+r);
 			return 0;
 		default:
 			return -1;
@@ -369,10 +388,10 @@ void player_moveinit(struct player *p){
 	r0=!isalive(p->front->state);\
 	r1=!isalive(e->front->state);\
 	if(r0){\
-		r0=player_selectunit(p);\
+		r0=!player_hasunit(p)||player_selectunit(p);\
 	}\
 	if(r1){\
-		r1=player_selectunit(e);\
+		r1=!player_hasunit(e)||player_selectunit(e);\
 	}\
 	if(r0||r1){\
 		if(r0&&r1){\
@@ -470,7 +489,9 @@ int battle(struct player *p,struct player *e,void (*reporter)(const struct messa
 		effect_round_decrease(field.effects,1);
 		deadcheck;
 		cooldown_decrease(prior);
+		deadcheck;
 		cooldown_decrease(latter);
+		deadcheck;
 	}
 out:
 	stage=STAGE_BATTLE_END;

@@ -3,7 +3,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
-const char *moves[]={"steel_flywheel","ablaze","freezing_roaring","cold_wave","scorching_roaring","spray","natural_shield","spi_shattering_slash",NULL};
+const char *moves[]={"steel_flywheel","thermobaric","freezing_roaring","cycle_erode","scorching_roaring","spi_fcrack","natural_shield","spi_shattering_slash",NULL};
 
 void reporter_term(const struct message *msg);
 int term_selector(struct player *p);
@@ -31,11 +31,17 @@ int main(){
 	for(r=0;moves[r];++r)
 		memcpy(bt.moves+r,get_builtin_move_by_id(moves[r]),sizeof(struct move));
 	memcpy(bb.pmoves,get_builtin_move_by_id("thorns"),sizeof(struct move));
+	memcpy(bb.pmoves+1,get_builtin_move_by_id("primordial_breath"),sizeof(struct move));
 	memcpy(bt.pmoves,get_builtin_move_by_id("myriad"),sizeof(struct move));
 	memcpy(bt.pmoves+1,get_builtin_move_by_id("combo"),sizeof(struct move));
 	p1.units->base=&bt;
+	(p1.units+1)->base=&bt;
 	p2.units->base=&bb;
-	(p1.units+1)->base=&bb;
+	(p2.units+1)->base=&bb;
+	(p2.units+2)->base=&bb;
+	(p2.units+3)->base=&bb;
+	(p2.units+4)->base=&bb;
+	(p2.units+5)->base=&bb;
 	r=battle(&p1,&p2,reporter_term);
 	if(r<0)puts("cannot battle");
 	else if(r==0)puts("tiger wins");

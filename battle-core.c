@@ -13,11 +13,12 @@ int unit_kill(struct unit *u){
 			return -1;
 	}
 	if(u->hp)return -1;
-	unit_wipeeffect(u,EFFECT_KEEP);
-	u->state=UNIT_FAILED;
+	if(isalive(u->state))
+		u->state=UNIT_FAILED;
 	if(u==u->owner->front)
 		u->owner->action=ACT_ABORT;
 	report(u->owner->field,MSG_FAIL,u);
+	unit_wipeeffect(u,EFFECT_KEEP);
 	for_each_effect(e,u->owner->field->effects){
 		if(e->base->kill_end)
 			e->base->kill_end(e,u);
@@ -135,20 +136,23 @@ no_derate:
 
 int hittest(struct unit *dest,struct unit *src,double hit_rate){
 	double real_rate;
+	int effect_miss=0;
 	if(!isalive(dest->state))
 			return 0;
 	for_each_effect(e,dest->owner->field->effects){
 		if(!e->base->hittest)
 			continue;
 		switch(e->base->hittest(e,dest,src,&hit_rate)){
-			case 0:
-				goto miss;
 			case 1:
 				goto hit;
+			case 0:
+				effect_miss=1;
 			default:
 				continue;
 		}
 	}
+	if(effect_miss)
+		goto miss;
 	if(!dest->avoid)
 		goto hit;
 	real_rate=hit_rate*(double)src->hit/(double)dest->avoid;
@@ -204,7 +208,7 @@ unsigned long heal(struct unit *dest,unsigned long value){
 	return value;
 }
 void instant_death(struct unit *dest){
-	damage(dest,NULL,dest->base->max_hp*64,DAMAGE_REAL,0,TYPE_VOID);
+	damage(dest,NULL,dest->base->max_hp*64,DAMAGE_REAL,AF_IDEATH,TYPE_VOID);
 }
 unsigned long sethp(struct unit *dest,unsigned long hp){
 	unsigned long ohp;
@@ -353,7 +357,7 @@ struct effect *effect(const struct effect_base *base,struct unit *dest,struct un
 		ep->level=level;
 		ep->round=round;
 	}
-	report(f,MSG_EFFECT,ep);
+	report(f,MSG_EFFECT,ep,level,round);
 //if(!strcmp(base->id,"damage_recuring"))abort();
 	if(new){
 		effect_insert(ep,f);
@@ -675,6 +679,26 @@ int unit_move(struct unit *u,struct move *m){
 	}
 	return 0;
 }
+int switchunit(struct unit *t){
+	int enforce;
+	if(t->owner->front==t||!isalive(t->state))
+		return -1;
+	if(!isalive(t->owner->front->state))
+		enforce=0;
+	else
+		enforce=1;
+	for_each_effect(e,t->owner->field->effects){
+		if(e->base->switchunit&&e->base->switchunit(e,t)&&!enforce)
+			return -1;
+	}
+	t->owner->front=t;
+	report(t->owner->field,MSG_SWITCH,t,t->owner->front);
+	for_each_effect(e,t->owner->field->effects){
+		if(e->base->switchunit_end)
+			e->base->switchunit_end(e,t);
+	}
+	return 0;
+}
 int canaction2(struct player *p,int act){
 	struct move *m;
 	switch(act){
@@ -706,7 +730,7 @@ int canaction2(struct player *p,int act){
 					return 1;
 			}
 		case ACT_UNIT0 ... ACT_UNIT5:
-			if(p->units+(act-ACT_UNIT0)==p->front||!p->units[act-ACT_UNIT0].base)
+			if(p->units+(act-ACT_UNIT0)==p->front||!p->units[act-ACT_UNIT0].base||!isalive(p->units[act-ACT_UNIT0].state))
 				return 0;
 			switch(p->front->state){
 				case UNIT_CONTROLLED:
@@ -781,6 +805,10 @@ void report(struct battle_field *f,int type,...){
 			msg.un.damage.type=va_arg(ap,int);
 			break;
 		case MSG_EFFECT:
+			msg.un.e=va_arg(ap,const struct effect *);
+			msg.un.e_init.level=va_arg(ap,long);
+			msg.un.e_init.round=va_arg(ap,int);
+			break;
 		case MSG_EFFECT_END:
 		case MSG_EFFECT_EVENT:
 		case MSG_EFFECT_EVENT_END:

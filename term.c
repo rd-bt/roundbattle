@@ -74,6 +74,7 @@ void frash(struct player *p,FILE *fp,int current){
 	size_t buflen;
 	int r,r1,c;
 	int found0=0,found1=0,cf0,cf1;
+	static const char *sstr[5]={"normal","controlled","spuuressed","failed","freezing_roaringed"};
 	fputs("\033c",fp);
 	fprintf(fp,"ROUND %d\n",*f->round);
 	++line;
@@ -250,12 +251,37 @@ void frash(struct player *p,FILE *fp,int current){
 	putn('-',ws.ws_col);
 	fputc('\n',fp);
 	c=canaction2(p,ACT_NORMALATTACK);
+	r=snprintf(buf,buflen,"(%s)%s",type2str(u->type0),"normal_attack");
+	r+=snprintf(buf+r,buflen-r,"%s",c?"":"[X]");
 	if(current==ACT_NORMALATTACK)
 		fputs(c?GREEN:RED,fp);
-	fprintf(fp,"(%s)%s",type2str(u->type0),"normal_attack");
-	fputs(c?"\n":"[X]\n",fp);
+	fputs(buf,fp);
 	if(current==ACT_NORMALATTACK)
 		fputs(WHITE,fp);
+	switch(current){
+		case ACT_MOVE0 ... ACT_MOVE7:
+			r1=snprintf(buf,buflen,"prior:%d",u->moves[current].prior);
+			break;
+		case ACT_UNIT0 ... ACT_UNIT5:
+			r1=p->units[current-ACT_UNIT0].base?
+				snprintf(buf,buflen,"state:%s",sstr[p->units[current-ACT_UNIT0].state])
+				:0;
+			break;
+		case ACT_NORMALATTACK:
+			r1=snprintf(buf,buflen,"prior:0");
+			break;
+		default:
+			r1=0;
+			break;
+	}
+	if(ws.ws_col>r+r1)
+		putn(' ',ws.ws_col-r-r1);
+	if(r1){
+		fputs(canaction2(p,current)?GREEN:RED,fp);
+		fputs(buf,fp);
+		fputs(WHITE,fp);
+	}
+	fputs("\n",fp);
 	for(int i=0;i<8;++i){
 		int color;
 		s1=ws.ws_col;
@@ -297,8 +323,21 @@ no_move:
 					return;
 				}
 				c=canaction2(p,i+ACT_UNIT0);
-				if(!c){
-					strncpy(buf+r,c?"":(p->units+i==p->front?"[F]":"[X]"),buflen-r);
+				switch(p->units[i].state){
+					case UNIT_NORMAL:
+						if(p->units+i==p->front)
+							strncpy(buf+r,"[B]",buflen-r);
+						break;
+					case UNIT_CONTROLLED:
+					case UNIT_SUPPRESSED:
+						strncpy(buf+r,"[C]",buflen-r);
+						break;
+					case UNIT_FAILED:
+						strncpy(buf+r,"[X]",buflen-r);
+						break;
+					case UNIT_FREEZING_ROARINGED:
+						strncpy(buf+r,"[F]",buflen-r);
+						break;
 				}
 				break;
 			case 6:
@@ -348,7 +387,8 @@ static int cur=ACT_NORMALATTACK;
 static const char *dtco[3]={YELLOW,RED,CYAN};
 void reporter_term(const struct message *msg){
 	struct player *p=msg->field->p;
-	char buf[32];
+	char buf[128];
+	int r;
 	if(*msg->field->stage==STAGE_BATTLE_END&&msg->type!=MSG_BATTLE_END)
 		return;
 	switch(msg->type){
@@ -384,11 +424,13 @@ void reporter_term(const struct message *msg){
 				if(!isalive(msg->un.e->dest->state))
 					break;
 				buf[0]=0;
+				buf[127]=0;
+				r=0;
 				if(msg->un.e->dest!=msg->un.e->dest->owner->front){
-					strcat(buf," (");
-					strcat(buf,msg->un.e->dest->base->id);
-					strcat(buf,")");
+					r=snprintf(buf,127," (%s)",msg->un.e->dest->base->id);
 				}
+				if(msg->un.e_init.level)
+					snprintf(buf+r,127-r," %+ld",msg->un.e_init.level);
 				wmf(msg->un.e->dest->owner==p?0:1,"effect %s%s",msg->un.e->base->id,buf);
 				goto delay;
 			}

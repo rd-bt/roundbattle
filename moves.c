@@ -105,7 +105,6 @@ int attr_init(struct effect *e,long level,int round){
 	if(level<ATTR_MIN)
 		level=ATTR_MIN;
 	e->level=level;
-	update_attr(e->dest);
 	if(!level)
 		return -1;
 	return 0;
@@ -652,12 +651,7 @@ void bm_roundend(struct effect *e){
 	effect_event_end(e);
 }
 void effect_update_attr_all(struct effect *e){
-	for_each_unit(u,e->src->owner->enemy){
-		update_attr(u);
-	}
-	for_each_unit(u,e->src->owner){
-		update_attr(u);
-	}
+	update_attr_all((e->dest?e->dest:e->src)->owner->field);
 }
 void bm_update_attr(struct effect *e,struct unit *u){
 	u->atk*=0.75;
@@ -688,12 +682,12 @@ void myriad_damage_end(struct effect *e,struct unit *dest,struct unit *src,unsig
 }
 void myriad_roundend(struct effect *e){
 	long v=(long)e->dest->base->max_hp-(long)e->dest->hp;
-	if(v<e->dest->base->max_hp/100)
-		v=e->dest->base->max_hp/100;
-	if(v<7)
-		v=7;
+	if(!v)
+		return;
+	if(v<25)
+		v=25;
 	effect_event(e);
-	heal(e->dest,0.16*v);
+	heal(e->dest,v*4/25);
 	effect_event_end(e);
 }
 const struct effect_base myriad[1]={{
@@ -872,10 +866,31 @@ void cycle_erode(struct unit *s){
 	struct unit *t;
 	int plv=test(0.5)?2:1;
 	t=gettarget(s);
-	effect(PDD,t,s,-plv,-1);
+	if(effect(PDD,t,s,-plv,-1))
+		effect(PDD,s,s,plv,-1);
 	attack(t,s,1.05*s->atk,DAMAGE_PHYSICAL,0,TYPE_MACHINE);
 	effect(cycle_eden,NULL,s,0,4);
 	setcooldown(s,s->move_cur,16);
+}
+void cycle_erode_init(struct unit *s){
+	struct unit *t;
+	if(!isfront(s))
+		return;
+	t=s->owner->enemy->front;
+	attack(t,s,1.3*s->atk,DAMAGE_PHYSICAL,0,TYPE_MACHINE);
+	effect(ATK,t,s,-2,-1);
+}
+
+void soul_back(struct unit *s){
+	for_each_unit(u,s->owner){
+		if(isalive(u->state))
+			continue;
+		if(!revive(u,u->base->max_hp)){
+			sethp(s,0);
+			setcooldown(s,s->move_cur,16);
+		}
+		return;
+	}
 }
 const struct move builtin_moves[]={
 	{
@@ -1146,10 +1161,19 @@ const struct move builtin_moves[]={
 	{
 		.id="cycle_erode",
 		.action=cycle_erode,
+		.init=cycle_erode_init,
 		.type=TYPE_MACHINE,
 		.prior=0,
 		.flag=0,
 		.mlevel=MLEVEL_CONCEPTUAL
+	},
+	{
+		.id="soul_back",
+		.action=soul_back,
+		.type=TYPE_NORMAL,
+		.prior=5,
+		.flag=0,
+		.mlevel=MLEVEL_REGULAR
 	},
 	{NULL}
 };

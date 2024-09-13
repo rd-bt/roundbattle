@@ -371,15 +371,17 @@ void player_moveinit(struct player *p){
 		for(int i=0;i<2;++i){
 			if(!u->pmoves[i].id)
 				break;
-			if(u->pmoves[i].init)
-				u->pmoves[i].init(u);
-			//fprintf(stderr,"%s:%s\n",u->base->id,u->pmoves[i].id);
+			if(!u->pmoves[i].init)
+				continue;
+			u->pmoves[i].init(u);
 		}
 		for(int i=0;i<8;++i){
 			if(!u->moves[i].id)
 				break;
-			if(u->moves[i].init)
-				u->moves[i].init(u);
+			if(!u->moves[i].init)
+				continue;
+			//fprintf(stderr,"%s:%s\n",u->base->id,u->moves[i].id);
+			u->moves[i].init(u);
 		}
 	}
 	//fprintf(stderr,"---\n");

@@ -1,27 +1,13 @@
 #ifndef _BATTLE_CORE_H_
 #define _BATTLE_CORE_H_
 #include <stddef.h>
+
 #define UNIT_NORMAL 0
 #define UNIT_CONTROLLED 1
-#define UNIT_INDUCED 2
-#define UNIT_SUPPRESSED 3
-#define UNIT_FAILED 4
-#define UNIT_FREEZING_ROARINGED 5
-#define isalive(s) (\
-{\
-		int _r;\
-		switch(s){\
-			case UNIT_FAILED:\
-			case UNIT_FREEZING_ROARINGED:\
-				_r=0;\
-				break;\
-			default:\
-				_r=1;\
-				break;\
-		}\
-		_r;\
-}\
-)
+#define UNIT_SUPPRESSED 2
+#define UNIT_FAILED 3
+#define UNIT_FREEZING_ROARINGED 4
+
 #define MLEVEL_REGULAR 1
 #define MLEVEL_CONCEPTUAL 2
 #define MLEVEL_FREEZING_ROARING 4
@@ -118,6 +104,65 @@
 #define TYPES_NORMAL_EFFECT (TYPE_VOID)
 #define TYPES_NORMAL_WEAK (TYPE_VOID)
 
+#define ACT_MOVE0 0
+#define ACT_MOVE1 1
+#define ACT_MOVE2 2
+#define ACT_MOVE3 3
+#define ACT_MOVE4 4
+#define ACT_MOVE5 5
+#define ACT_MOVE6 6
+#define ACT_MOVE7 7
+#define ACT_NORMALATTACK 8
+#define ACT_ABORT 9
+#define ACT_UNIT0 10
+#define ACT_UNIT1 11
+#define ACT_UNIT2 12
+#define ACT_UNIT3 13
+#define ACT_UNIT4 14
+#define ACT_UNIT5 15
+#define ACT_GIVEUP 16
+
+#define ATTR_MAX (+8)
+#define ATTR_MIN (-8)
+
+#define EFFECT_ATTR 1
+#define EFFECT_ABNORMAL 2
+#define EFFECT_CONTROL 4
+#define EFFECT_POSITIVE 8
+#define EFFECT_NEGATIVE 16
+#define EFFECT_ENV 32
+#define EFFECT_UNPURIFIABLE 64
+#define EFFECT_ISOLATED 128
+#define EFFECT_KEEP 256
+
+#define STAGE_INIT 0
+#define STAGE_ROUNDSTART 1
+#define STAGE_PRIOR 2
+#define STAGE_LATTER 3
+#define STAGE_ROUNDEND 4
+#define STAGE_BATTLE_END 5
+
+#define isalive(s) (\
+{\
+		int _r;\
+		switch(s){\
+			case UNIT_FAILED:\
+			case UNIT_FREEZING_ROARINGED:\
+				_r=0;\
+				break;\
+			default:\
+				_r=1;\
+				break;\
+		}\
+		_r;\
+}\
+)
+#define isfront(u) (\
+{\
+		struct unit *_u=(u);\
+		_u->owner->front==_u;\
+}\
+)
 #define effect_types(t) (\
 {\
 		int _r;\
@@ -252,48 +297,9 @@
 		_r;\
 }\
 )
-
-
-
-#define ACT_MOVE0 0
-#define ACT_MOVE1 1
-#define ACT_MOVE2 2
-#define ACT_MOVE3 3
-#define ACT_MOVE4 4
-#define ACT_MOVE5 5
-#define ACT_MOVE6 6
-#define ACT_MOVE7 7
-#define ACT_NORMALATTACK 8
-#define ACT_ABORT 9
-#define ACT_UNIT0 10
-#define ACT_UNIT1 11
-#define ACT_UNIT2 12
-#define ACT_UNIT3 13
-#define ACT_UNIT4 14
-#define ACT_UNIT5 15
-#define ACT_GIVEUP 16
-
-#define ATTR_MAX (+8)
-#define ATTR_MIN (-8)
-
-#define EFFECT_ATTR 1
-#define EFFECT_ABNORMAL 2
-#define EFFECT_CONTROL 4
-#define EFFECT_POSITIVE 8
-#define EFFECT_NEGATIVE 16
-#define EFFECT_ENV 32
-#define EFFECT_UNPURIFIABLE 64
-#define EFFECT_ISOLATED 128
-#define EFFECT_KEEP 256
 #define for_each_effect(_var,_ehead) for(struct effect *_var=(_ehead),*_next=_var?_var->next:NULL;_next=_var?_var->next:NULL,_var;_var=_var->intrash?_next:_var->next)
 #define for_each_unit(_var,_player) for(struct unit *_var=(_player)->units,*_p0=_var+6;_var<_p0&&_var->base;++_var)
 
-#define STAGE_INIT 0
-#define STAGE_ROUNDSTART 1
-#define STAGE_PRIOR 2
-#define STAGE_LATTER 3
-#define STAGE_ROUNDEND 4
-#define STAGE_BATTLE_END 5
 enum {
 	MSG_ACTION=0,
 	MSG_BATTLE_END,
@@ -316,6 +322,7 @@ enum {
 	MSG_SWITCH,
 	MSG_UPDATE
 };
+
 struct unit;
 struct player;
 struct battle_field;
@@ -517,6 +524,8 @@ struct unit *gettarget(struct unit *u);
 
 void update_attr(struct unit *u);
 
+void update_attr_all(struct battle_field *f);
+
 void update_state(struct unit *u);
 
 void unit_cooldown_decrease(struct unit *u,int round);
@@ -541,7 +550,7 @@ int unit_hasnegative(struct unit *u);
 
 int unit_move(struct unit *u,struct move *m);
 
-int switchunit(struct unit *t);
+int switchunit(struct unit *to);
 
 int canaction2(struct player *p,int act);
 

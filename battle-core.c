@@ -449,6 +449,7 @@ int effect_final(struct effect *e){
 		e->next->prev=e->prev;
 	if(!e->prev&&!e->next)
 		f->effects=NULL;
+	update_attr_all(f);
 	report(f,MSG_EFFECT_END,e);
 	//printf("FREE3 %p\n",e);
 	effect_free(e,f);
@@ -513,6 +514,7 @@ int revive(struct unit *u,unsigned long hp){
 	u->state=UNIT_NORMAL;
 	sethp(u,hp);
 	update_state(u);
+	update_attr(u);
 	return 0;
 }
 int event(const struct event *ev,struct unit *src){
@@ -572,7 +574,14 @@ void update_attr(struct unit *u){
 	}
 	report(u->owner->field,MSG_UPDATE,u);
 }
-
+void update_attr_all(struct battle_field *f){
+	for_each_unit(u,f->p){
+		update_attr(u);
+	}
+	for_each_unit(u,f->e){
+		update_attr(u);
+	}
+}
 void update_state(struct unit *u){
 	int r;
 	if(!isalive(u->state))
@@ -679,23 +688,21 @@ int unit_move(struct unit *u,struct move *m){
 	}
 	return 0;
 }
-int switchunit(struct unit *t){
+int switchunit(struct unit *to){
+	struct unit *f=to->owner->front;
 	int enforce;
-	if(t->owner->front==t||!isalive(t->state))
+	if(f==to||!isalive(to->state))
 		return -1;
-	if(!isalive(t->owner->front->state))
-		enforce=0;
-	else
-		enforce=1;
-	for_each_effect(e,t->owner->field->effects){
-		if(e->base->switchunit&&e->base->switchunit(e,t)&&!enforce)
+	enforce=!isalive(f->state);
+	for_each_effect(e,to->owner->field->effects){
+		if(e->base->switchunit&&e->base->switchunit(e,to)&&!enforce)
 			return -1;
 	}
-	t->owner->front=t;
-	report(t->owner->field,MSG_SWITCH,t,t->owner->front);
-	for_each_effect(e,t->owner->field->effects){
+	to->owner->front=to;
+	report(to->owner->field,MSG_SWITCH,to,f);
+	for_each_effect(e,to->owner->field->effects){
 		if(e->base->switchunit_end)
-			e->base->switchunit_end(e,t);
+			e->base->switchunit_end(e,to);
 	}
 	return 0;
 }

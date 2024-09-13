@@ -364,7 +364,7 @@ struct effect_base {
 	void (*heal_end)(struct effect *e,struct unit *dest,unsigned long value);
 	int (*hittest)(struct effect *e,struct unit *dest,struct unit *src,double *hit_rate);
 	void (*hittest_end)(struct effect *e,struct unit *dest,struct unit *src,int hit);
-	int (*kill)(struct effect *e,struct unit *u);
+	void (*kill)(struct effect *e,struct unit *u);
 	void (*kill_end)(struct effect *e,struct unit *u);
 	int (*move)(struct effect *e,struct unit *u,struct move *m);
 	void (*move_end)(struct effect *e,struct unit *u,struct move *m);

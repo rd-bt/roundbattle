@@ -6,13 +6,12 @@
 #define SHEAR_COEF (M_SQRT2/128)
 #define printf (use report() instead.)
 int unit_kill(struct unit *u){
-	if(!isalive(u->state))
+	if(!isalive(u->state)||u->hp)
 			return -1;
 	for_each_effect(e,u->owner->field->effects){
-		if(e->base->kill&&e->base->kill(e,u)&&u->hp)
+		if(e->base->kill&&(e->base->kill(e,u),u->hp))
 			return -1;
 	}
-	if(u->hp)return -1;
 	if(isalive(u->state))
 		u->state=UNIT_FAILED;
 	if(u==u->owner->front)

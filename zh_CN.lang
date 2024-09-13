@@ -134,3 +134,5 @@ move.cycle_erode.name=轮回侵蚀
 move.cycle_erode.desc=减少目标1层物理抗性并造成物理伤害，50%概率额外减少一层物理抗性。展开轮回乐园环境4回合。被动：首发时对对方造成物理伤害并减少其2层攻击力。
 move.soul_back.name=还魂术
 move.soul_back.desc=消耗自身所有生命值复活场下序号最靠前的战败单位，如果场下没有战败单位或目标单位被负面效果下释放的冷冻咆哮击败，技能会失败且没有任何效果。
+move.absolutely_immortal.name=绝对不灭
+move.absolutely_immortal.desc=进入绝对不灭的状态5回合，期间生命值最低降至1。

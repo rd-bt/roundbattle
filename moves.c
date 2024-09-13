@@ -846,13 +846,24 @@ void collapse(struct unit *s){
 	setcooldown(s,s->move_cur,9);
 }
 int cyce_damage(struct effect *e,struct unit *dest,struct unit *src,unsigned long *value,int *damage_type,int *aflag,int *type){
-	return dest==e->src&&(*aflag&AF_IDEATH);
+	if(dest==e->src&&(*aflag&AF_IDEATH)){
+		effect_event(e);
+		effect_event_end(e);
+		return 1;
+	}else
+		return 0;
 }
 int cyce_hittest(struct effect *e,struct unit *dest,struct unit *src,double *hit_rate){
-	if(dest==e->src)
+	if(dest==e->src){
+		effect_event(e);
 		return 0;
-	else if(src==e->src)
+		effect_event_end(e);
+	}
+	else if(src==e->src){
+		effect_event(e);
 		return 1;
+		effect_event_end(e);
+	}
 	else
 		return -1;
 }
@@ -891,6 +902,34 @@ void soul_back(struct unit *s){
 		}
 		return;
 	}
+}
+void absolutely_immortal_kill(struct effect *e,struct unit *u){
+	if(u==e->dest){
+		effect_event(e);
+		sethp(u,1);
+		effect_event_end(e);
+	}
+}
+int absolutely_immortal_damage(struct effect *e,struct unit *dest,struct unit *src,unsigned long *value,int *damage_type,int *aflag,int *type){
+	if(dest==e->dest){
+		if(*value>=dest->hp){
+			effect_event(e);
+			*value=dest->hp-1;
+			effect_event_end(e);
+		}
+	}
+	return 0;
+}
+const struct effect_base absolutely_immortal_effect[1]={{
+	.id="absolutely_immortal",
+	.damage=absolutely_immortal_damage,
+	.kill=absolutely_immortal_kill,
+	.flag=EFFECT_POSITIVE|EFFECT_UNPURIFIABLE,
+	.prior=-128
+}};
+void absolutely_immortal(struct unit *s){
+	effect(absolutely_immortal_effect,s,s,0,5);
+	setcooldown(s,s->move_cur,15);
 }
 const struct move builtin_moves[]={
 	{
@@ -1174,6 +1213,14 @@ const struct move builtin_moves[]={
 		.prior=5,
 		.flag=0,
 		.mlevel=MLEVEL_REGULAR
+	},
+	{
+		.id="absolutely_immortal",
+		.action=absolutely_immortal,
+		.type=TYPE_NORMAL,
+		.prior=0,
+		.flag=0,
+		.mlevel=MLEVEL_CONCEPTUAL
 	},
 	{NULL}
 };

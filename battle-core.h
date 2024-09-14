@@ -12,6 +12,9 @@
 #define MLEVEL_CONCEPTUAL 2
 #define MLEVEL_FREEZING_ROARING 4
 
+#define MOVE_NOCONTROL 1
+#define MOVE_NORMALATTACK 2
+
 #define DAMAGE_REAL 0
 #define DAMAGE_PHYSICAL 1
 #define DAMAGE_MAGICAL 2
@@ -25,7 +28,6 @@
 #define AF_NOFLOAT 32
 #define AF_IDEATH 64
 
-#define MF_NOCONTROL 1
 
 #define TYPE_VOID (0)
 #define TYPE_GRASS (1<<0)
@@ -315,7 +317,6 @@ enum {
 	MSG_HPMOD,
 	MSG_MISS,
 	MSG_MOVE,
-	MSG_NORMALATTACK,
 	MSG_ROUND,
 	MSG_ROUNDEND,
 	MSG_SPIMOD,
@@ -486,7 +487,7 @@ double rand01(void);
 
 long randi(void);
 
-unsigned long normal_attack(struct unit *dest,struct unit *src);
+void normal_attack(struct unit *src);
 
 unsigned long heal(struct unit *dest,unsigned long value);
 

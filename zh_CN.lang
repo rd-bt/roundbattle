@@ -136,3 +136,7 @@ move.soul_back.name=还魂术
 move.soul_back.desc=消耗自身所有生命值复活场下序号最靠前的战败单位，如果场下没有战败单位或目标单位被负面效果下释放的冷冻咆哮击败，技能会失败且没有任何效果。
 move.absolutely_immortal.name=绝对不灭
 move.absolutely_immortal.desc=进入绝对不灭的状态5回合，期间生命值最低降至1。
+move.overload.name=过载
+move.overload.desc=提升1层攻击力,命中后造成物理伤害。会直接斩杀灵力的绝对值高于60%的目标并额外提升1层攻击。
+move.super_scissors.name=无敌剪刀手
+move.super_scissors.desc=命中后造成物理伤害。偷取目标本回合使用的技能并替换本技能，无法偷取概念级别或更高级别的技能，可偷取包含常规级别的混合级别的技能，但是使用时只能造成其中常规级别的效果。

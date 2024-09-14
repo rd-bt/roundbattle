@@ -180,11 +180,26 @@ double rand01(void){
 long randi(void){
 	return lrand48();
 }
-unsigned long normal_attack(struct unit *dest,struct unit *src){
-	report(dest->owner->field,MSG_NORMALATTACK,dest,src);
+static void do_normal_attack(struct unit *src){
+	struct unit *dest=gettarget(src);
 	if(!hittest(dest,src,1.0))
-		return 0;
-	return attack(dest,src,src->atk,DAMAGE_PHYSICAL,AF_NORMAL,src->type0);
+		return;
+	attack(dest,src,src->atk,DAMAGE_PHYSICAL,AF_NORMAL,src->type0);
+}
+void normal_attack(struct unit *src){
+	struct move am;
+	am.id="normal_attack";
+	am.action=do_normal_attack;
+	am.init=NULL;
+	am.getprior=NULL;
+	am.type=src->type0;
+	am.mlevel=MLEVEL_REGULAR;
+	am.prior=0;
+	am.cooldown=0;
+	am.flag=MOVE_NORMALATTACK;
+	am.unused=0;
+	unit_move(src,&am);
+	//report(dest->owner->field,MSG_NORMALATTACK,dest,src);
 }
 unsigned long heal(struct unit *dest,unsigned long value){
 	unsigned long hp;
@@ -714,7 +729,7 @@ int canaction2(struct player *p,int act){
 				return 0;
 			switch(p->front->state){
 				case UNIT_CONTROLLED:
-					if(m->flag&MF_NOCONTROL)
+					if(m->flag&MOVE_NOCONTROL)
 						return 1;
 				case UNIT_SUPPRESSED:
 					if(m->mlevel&MLEVEL_FREEZING_ROARING)
@@ -837,7 +852,7 @@ void report(struct battle_field *f,int type,...){
 			msg.un.hpmod.value=va_arg(ap,long);
 			break;
 		case MSG_MISS:
-		case MSG_NORMALATTACK:
+		//case MSG_NORMALATTACK:
 		case MSG_SWITCH:
 			msg.un.u2.dest=va_arg(ap,const struct unit *);
 			msg.un.u2.src=va_arg(ap,const struct unit *);

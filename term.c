@@ -25,6 +25,13 @@
 #define azero(a) memset((a),0,sizeof(a))
 #define REC_SIZE 64
 static char rec[REC_SIZE][129];
+static const char *types_string[21]={"Void type","Grass","Fire","Water","Steel","Light","Fighting","Wind","Poison","Rock","Electric","Ghost","Ice","Bug","Machine","Soil","Dragon","Normal","Devine grass","Alkali fire","Devine water"};
+const char *type2str(int type){
+	unsigned int index=type?__builtin_ctz(type)+1:0;
+	if(index>=21)
+		return "Unknown";
+	return types_string[index];
+}
 size_t strrlen(const char *s){
 	size_t r=0;
 	while(*s){
@@ -484,9 +491,9 @@ void reporter_term(const struct message *msg){
 		case MSG_MOVE:
 			wmf(msg->un.move.u->owner==p?0:1,"%s",msg->un.move.m->id);
 			goto delay;
-		case MSG_NORMALATTACK:
+		/*case MSG_NORMALATTACK:
 			wmf(msg->un.u2.src->owner==p?0:1,"normal_attack");
-			goto delay;
+			goto delay;*/
 		case MSG_ROUND:
 			break;
 		case MSG_ROUNDEND:

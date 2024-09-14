@@ -1,6 +1,7 @@
 #include "battle-core.h"
 #include <stddef.h>
 #include <stdlib.h>
+#include <string.h>
 #include <limits.h>
 #include <math.h>
 #include <string.h>
@@ -603,7 +604,7 @@ void combo_damage_end(struct effect *e,struct unit *dest,struct unit *src,unsign
 	}
 	if(test(e->level/100.0)){
 		effect_event(e);
-		normal_attack(dest,src);
+		normal_attack(src);
 		effect_event_end(e);
 	}
 }
@@ -628,7 +629,7 @@ void hitback_damage_end(struct effect *e,struct unit *dest,struct unit *src,unsi
 	}
 	if(test(e->level/100.0)){
 		effect_event(e);
-		normal_attack(src,dest);
+		normal_attack(dest);
 		effect_event_end(e);
 	}
 }
@@ -931,6 +932,52 @@ void absolutely_immortal(struct unit *s){
 	effect(absolutely_immortal_effect,s,s,0,5);
 	setcooldown(s,s->move_cur,15);
 }
+void overload(struct unit *s){
+	struct unit *t=gettarget(s);
+	if(5*labs(t->spi)>t->base->max_spi*3){
+		instant_death(t);
+		effect(ATK,s,s,2,-1);
+	}else {
+		effect(ATK,s,s,1,-1);
+		attack(t,s,0.95*s->atk,DAMAGE_PHYSICAL,0,TYPE_MACHINE);
+	}
+}
+void escape(struct unit *s){
+	struct unit *t=gettarget(s);
+	struct unit *ring[12];
+	size_t rsize=0,sindex=0;
+	for(int i=0;i<6;++i){
+		t=s->owner->units+i;
+		if(!t->base||!isalive(t->state))
+			continue;
+		if(t==s)
+			sindex=rsize;
+		ring[rsize++]=t;
+	}
+	memcpy(ring+rsize,ring,rsize*sizeof(struct unit *));
+	t=ring[sindex+1];
+	//fprintf(stderr,"i:%zu,size:%zu,switch to %s\n",sindex,rsize,t->base->id);
+	if(t==s)
+		return;
+	switchunit(t);
+}
+void super_scissors(struct unit *s){
+	struct unit *t=gettarget(s);
+	struct move *mp;
+	int r;
+	if(hittest(t,s,1.0))
+		attack(t,s,0.6*s->atk,DAMAGE_PHYSICAL,0,TYPE_NORMAL);
+	switch((r=t->owner->action)){
+		case ACT_MOVE0 ... ACT_MOVE7:
+			mp=t->moves+r;
+			if(mp->action==s->move_cur->action||!(mp->mlevel&MLEVEL_REGULAR))
+				break;
+			memcpy(s->move_cur,mp,sizeof(struct move));
+			s->move_cur->mlevel&=MLEVEL_REGULAR;
+		default:
+			break;
+	}
+}
 const struct move builtin_moves[]={
 	{
 		.id="steel_flywheel",
@@ -1221,6 +1268,27 @@ const struct move builtin_moves[]={
 		.prior=0,
 		.flag=0,
 		.mlevel=MLEVEL_CONCEPTUAL
+	},
+	{
+		.id="overload",
+		.action=overload,
+		.type=TYPE_MACHINE,
+		.flag=0,
+		.mlevel=MLEVEL_REGULAR
+	},
+	{
+		.id="escape",
+		.action=escape,
+		.type=TYPE_NORMAL,
+		.flag=MOVE_NOCONTROL,
+		.mlevel=MLEVEL_REGULAR
+	},
+	{
+		.id="super_scissors",
+		.action=super_scissors,
+		.type=TYPE_NORMAL,
+		.flag=0,
+		.mlevel=MLEVEL_REGULAR
 	},
 	{NULL}
 };

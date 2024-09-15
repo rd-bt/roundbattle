@@ -3,7 +3,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
-const char *moves[]={"steel_flywheel","absolutely_immortal","freezing_roaring","defend","scorching_roaring","spi_fcrack","natural_shield","spi_shattering_slash",NULL};
+const char *moves[]={"steel_flywheel","absolutely_immortal","freezing_roaring","flamethrower","scorching_roaring","spi_fcrack","natural_shield","spi_shattering_slash",NULL};
 
 void reporter_term(const struct message *msg);
 int term_selector(struct player *p);
@@ -33,7 +33,7 @@ int main(){
 	memcpy(bb.pmoves,get_builtin_move_by_id("thorns"),sizeof(struct move));
 	memcpy(bb.pmoves+1,get_builtin_move_by_id("primordial_breath"),sizeof(struct move));
 	memcpy(bt.pmoves,get_builtin_move_by_id("myriad"),sizeof(struct move));
-	memcpy(bt.pmoves+1,get_builtin_move_by_id("combo"),sizeof(struct move));
+	memcpy(bt.pmoves+1,get_builtin_move_by_id("heat_engine"),sizeof(struct move));
 	p1.units->base=&bt;
 	(p1.units+1)->base=&bt;
 	p2.units->base=&bb;

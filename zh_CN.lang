@@ -149,3 +149,7 @@ move.cog_hit.name=齿轮打击
 move.cog_hit.desc=命中后造成物理伤害并减少目标1层防御。
 move.defend.name=防御
 move.defend.desc=提升2层防御力。先制+5;
+move.heat_engine.name=热机
+move.heat_engine.desc=被动：使用机械系技能后，如果对方处于烧伤效果且自身可供消耗的灵力充足，会消耗自身2点灵力立即结算一次对方的烧伤效果并延长一回合。
+move.flamethrower.name=喷火
+move.flamethrower.desc=命中后令目标烧伤。

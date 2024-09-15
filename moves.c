@@ -1024,6 +1024,36 @@ void cog_hit(struct unit *s){
 void defend(struct unit *s){
 	effect(DEF,s,s,2,-1);
 }
+void heat_engine_move_end(struct effect *e,struct unit *u,struct move *m){
+	struct effect *ep;
+	if(u==e->dest&&
+		(m->type&TYPE_MACHINE)&&
+		u->spi>=2-u->base->max_spi&&
+		(ep=unit_findeffect(u->osite,burnt))
+	){
+		effect_event(e);
+		setspi(u,u->spi-2);
+		++ep->round;
+		report(u->owner->field,MSG_UPDATE,ep);
+		ep->base->roundend(ep);
+		effect_event_end(e);
+	}
+}
+const struct effect_base heat_engine[1]={{
+	.id="heat_engine",
+	.move_end=heat_engine_move_end,
+	.flag=EFFECT_POSITIVE|EFFECT_UNPURIFIABLE|EFFECT_KEEP
+}};
+void heat_engine_init(struct unit *s){
+	effect(heat_engine,s,s,0,-1);
+}
+
+void flamethrower(struct unit *s){
+	struct unit *t;
+	t=gettarget(s);
+	if(hittest(t,s,1.0))
+		effect(burnt,t,s,0,5);
+}
 const struct move builtin_moves[]={
 	{
 		.id="steel_flywheel",
@@ -1366,8 +1396,23 @@ const struct move builtin_moves[]={
 		.flag=0,
 		.mlevel=MLEVEL_REGULAR
 	},
+	{
+		.id="heat_engine",
+		.init=heat_engine_init,
+		.type=TYPE_MACHINE,
+		.flag=0,
+		.mlevel=MLEVEL_REGULAR
+	},
+	{
+		.id="flamethrower",
+		.action=flamethrower,
+		.type=TYPE_FIRE,
+		.flag=0,
+		.mlevel=MLEVEL_REGULAR
+	},
 	{NULL}
 };
+const size_t builtin_moves_size=sizeof(builtin_moves)/sizeof(builtin_moves[0])-1;
 const struct move *get_builtin_move_by_id(const char *id){
 	unsigned long i;
 	for(i=0;builtin_moves[i].id;++i){

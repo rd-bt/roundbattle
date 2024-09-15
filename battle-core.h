@@ -301,7 +301,7 @@
 )
 #define for_each_effect(_var,_ehead) for(struct effect *_var=(_ehead),*_next=_var?_var->next:NULL;_next=_var?_var->next:NULL,_var;_var=_var->intrash?_next:_var->next)
 #define for_each_unit(_var,_player) for(struct unit *_var=(_player)->units,*_p0=_var+6;_var<_p0&&_var->base;++_var)
-
+#define osite owner->enemy->front
 enum {
 	MSG_ACTION=0,
 	MSG_BATTLE_END,
@@ -354,6 +354,8 @@ struct effect_base {
 	int (*init)(struct effect *,long level,int round);
 	void (*inited)(struct effect *);
 	void (*end)(struct effect *);
+	int (*action)(struct effect *e,struct player *p);
+	void (*action_end)(struct effect *e,struct player *p);
 	int (*attack)(struct effect *e,struct unit *dest,struct unit *src,unsigned long *value,int *damage_type,int *aflag,int *type);
 	void (*attack_end)(struct effect *e,struct unit *dest,struct unit *src,unsigned long value,int damage_type,int aflag,int type);
 	void (*cooldown_decrease)(struct effect *e,struct unit *u,struct move *m,int *round);
@@ -361,6 +363,7 @@ struct effect_base {
 	void (*damage_end)(struct effect *e,struct unit *dest,struct unit *src,unsigned long value,int damage_type,int aflag,int type);
 	int (*effect)(struct effect *e,const struct effect_base *base,struct unit *dest,struct unit *src,long *level,int *round);
 	void (*effect_end)(struct effect *e,const struct effect_base *base,struct unit *dest,struct unit *src,long level,int round);
+	struct unit *(*gettarget)(struct effect *e,struct unit *u);
 	int (*heal)(struct effect *e,struct unit *dest,unsigned long *value);
 	void (*heal_end)(struct effect *e,struct unit *dest,unsigned long value);
 	int (*hittest)(struct effect *e,struct unit *dest,struct unit *src,double *hit_rate);
@@ -554,6 +557,8 @@ int unit_move(struct unit *u,struct move *m);
 int switchunit(struct unit *to);
 
 int canaction2(struct player *p,int act);
+
+void player_action(struct player *p);
 
 struct player *getprior(struct player *p,struct player *e);
 

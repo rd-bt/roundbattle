@@ -3,7 +3,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
-const char *moves[]={"steel_flywheel","absolutely_immortal","freezing_roaring","super_scissors","scorching_roaring","spi_fcrack","natural_shield","spi_shattering_slash",NULL};
+const char *moves[]={"steel_flywheel","absolutely_immortal","freezing_roaring","sonic","scorching_roaring","spi_fcrack","natural_shield","spi_shattering_slash",NULL};
 
 void reporter_term(const struct message *msg);
 int term_selector(struct player *p);

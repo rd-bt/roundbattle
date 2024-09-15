@@ -28,6 +28,11 @@ unsigned long gcdul(unsigned long x,unsigned long y){
 	}
 }
 
+int abnormal_init(struct effect *e,long level,int round){
+	if(!e->round)
+		e->round=round;
+	return 0;
+}
 #define abnormal_damage(name,frac,type)\
 void name##_roundend(struct effect *e){\
 	effect_event(e);\
@@ -41,7 +46,7 @@ int name##_init(struct effect *e,long level,int round){\
 }\
 const struct effect_base name[1]={{\
 	.id=#name,\
-	.init=name##_init,\
+	.init=abnormal_init,\
 	.roundend=name##_roundend,\
 	.flag=EFFECT_ABNORMAL|EFFECT_NEGATIVE,\
 	.prior=-64\
@@ -51,14 +56,9 @@ void name##_update_state(struct effect *e,struct unit *u,int *state){\
 	if(e->dest==u&&*state==UNIT_NORMAL)\
 		*state=UNIT_CONTROLLED;\
 }\
-int name##_init(struct effect *e,long level,int round){\
-	if(!e->round)\
-		e->round=round;\
-	return 0;\
-}\
 const struct effect_base name[1]={{\
 	.id=#name,\
-	.init=name##_init,\
+	.init=abnormal_init,\
 	.update_state=name##_update_state,\
 	.flag=EFFECT_ABNORMAL|EFFECT_CONTROL|EFFECT_NEGATIVE,\
 }};
@@ -69,22 +69,29 @@ abnormal_damage(burnt,10,TYPE_FIRE)
 
 void parasitized_roundend(struct effect *e){
 	effect_event(e);
-	heal(e->dest->owner->enemy->front,
+	heal(e->dest->osite,
 		attack(e->dest,NULL,e->dest->base->max_hp/12,DAMAGE_REAL,0,TYPE_GRASS)
 	);
 	effect_event_end(e);
 }
-int parasitized_init(struct effect *e,long level,int round){
-	if(!e->round)
-		e->round=round;
-	return 0;
-}
 const struct effect_base parasitized[1]={{
 	.id="parasitized",
-	.init=parasitized_init,
+	.init=abnormal_init,
 	.roundend=parasitized_roundend,
 	.flag=EFFECT_ABNORMAL|EFFECT_NEGATIVE,
 	.prior=-64
+}};
+struct unit *confused_gettarget(struct effect *e,struct unit *u){
+	if(u==e->dest&&test(0.5))
+		return u;
+	return NULL;
+}
+
+const struct effect_base confused[1]={{
+	.id="confused",
+	.init=abnormal_init,
+	.gettarget=confused_gettarget,
+	.flag=EFFECT_ABNORMAL|EFFECT_NEGATIVE,
 }};
 abnormal_control(frozen)
 abnormal_control(asleep)
@@ -129,7 +136,7 @@ const struct effect_base name[1]={{\
 	.prior=64\
 }};
 effect_attr(ATK,atk)
-effect_attr(DEF,def)
+//effect_attr(DEF,def)
 effect_attr(SPEED,speed)
 effect_attr(HIT,hit)
 effect_attr(AVOID,avoid)
@@ -146,6 +153,7 @@ const struct effect_base name[1]={{\
 	.end=effect_update_attr,\
 	.update_attr=name##_update_attr\
 }};
+effect_attr_d(DEF,def,0.5*u->def)
 effect_attr_d(CE,crit_effect,0.75)
 effect_attr_d(PDB,physical_bonus,0.5)
 effect_attr_d(MDB,magical_bonus,0.5)
@@ -173,20 +181,20 @@ void ground_force(struct unit *s){
 		attack(t,s,40,DAMAGE_REAL,0,TYPE_SOIL);
 }
 void spoony_spell(struct unit *s){
-	struct unit *t=s->owner->enemy->front;
+	struct unit *t=s->osite;
 	unsigned long dmg=2.1*s->atk+0.3*s->base->max_hp;
 	attack(t,s,dmg,DAMAGE_REAL,0,TYPE_SOIL);
 	attack(s,s,dmg,DAMAGE_REAL,0,TYPE_SOIL);
 }
 void self_explode(struct unit *s){
-	struct unit *t=s->owner->enemy->front;
+	struct unit *t=s->osite;
 	unsigned long dmg=1.8*s->atk+0.25*s->base->max_hp;
 	attack(t,s,dmg,DAMAGE_PHYSICAL,0,TYPE_NORMAL);
 	attack(t,s,dmg,DAMAGE_MAGICAL,0,TYPE_NORMAL);
 	sethp(s,0);
 }
 void health_exchange(struct unit *s){
-	struct unit *t=s->owner->enemy->front;
+	struct unit *t=s->osite;
 	unsigned long a=s->hp,b=t->hp;
 	sethp(t,a);
 	sethp(s,b);
@@ -200,7 +208,7 @@ void double_slash(struct unit *s){
 	if(hittest(t,s,1.0))
 		attack(t,s,0.6*s->atk,DAMAGE_PHYSICAL,t->hp==t->base->max_hp?AF_CRIT:0,TYPE_WIND);
 	if(s->move_cur&&(s->move_cur->mlevel&MLEVEL_CONCEPTUAL))
-		addhp(s->owner->enemy->front,s->def>16?-s->def:-16);
+		addhp(s->osite,s->def>16?-s->def:-16);
 }
 void petrifying_ray(struct unit *s){
 	struct unit *t=gettarget(s);
@@ -241,7 +249,7 @@ void spi_shattering_slash(struct unit *s){
 	struct unit *t;
 	if(s->spi){
 		setspi(s,0);
-		instant_death(s->owner->enemy->front);
+		instant_death(s->osite);
 		unit_cooldown_decrease(s,3);
 		return;
 
@@ -348,7 +356,7 @@ const struct effect_base metal_bomb_effect[1]={{
 	.prior=5
 }};
 void metal_bomb(struct unit *s){
-	effect(metal_bomb_effect,s->owner->enemy->front,s,0,0);
+	effect(metal_bomb_effect,s->osite,s,0,0);
 }
 void fate_destroying_slash(struct unit *s){
 	struct unit *t=gettarget(s);
@@ -442,7 +450,7 @@ void primordial_breath_init(struct unit *s){
 }
 void damage_recuring_damage_end(struct effect *e,struct unit *dest,struct unit *src,unsigned long value,int damage_type,int aflag,int type){
 	effect_event(e);
-	addhp(dest->owner->enemy->front,-(long)value);
+	addhp(dest->osite,-(long)value);
 	effect_event_end(e);
 }
 const struct effect_base damage_recuring[1]={{
@@ -476,7 +484,7 @@ void scorching_roaring(struct unit *s){
 		effect(ATK,s,s,n,-1);
 		return;
 	}
-	t=s->owner->enemy->front;
+	t=s->osite;
 	attack(t,s,(0.55+0.2*n)*s->atk,DAMAGE_MAGICAL,AF_CRIT,TYPE_FIRE);
 	heal(s,0.18*n*s->base->max_hp);
 
@@ -511,7 +519,7 @@ void thunder_roaring(struct unit *s){
 		effect(ATK,s,s,n,-1);
 		return;
 	}
-	t=s->owner->enemy->front;
+	t=s->osite;
 	dmg=attack(t,s,(0.55+0.2*n)*s->atk,DAMAGE_MAGICAL,AF_CRIT,TYPE_ELECTRIC);
 	for_each_unit(u,t->owner){
 		attack(t,s,0.15*dmg+n*0.06*u->base->max_hp,DAMAGE_REAL,0,TYPE_ELECTRIC);
@@ -548,7 +556,7 @@ void freezing_roaring(struct unit *s){
 			continue;
 		effect_final(e);
 	}
-	t=s->owner->enemy->front;
+	t=s->osite;
 	n1=(long)t->hp;
 	t->hp=0;
 	report(s->owner->field,MSG_HPMOD,t,-n1);
@@ -802,12 +810,12 @@ const struct effect_base gravitational_potential[1]={{
 }};
 void bh_inited(struct effect *e){
 	effect(gravitational_potential,e->src,NULL,16,12);
-	effect(gravitational_potential,e->src->owner->enemy->front,NULL,16,12);
+	effect(gravitational_potential,e->src->osite,NULL,16,12);
 }
 void bh_end(struct effect *e){
 	unsigned long gp0,gp1;
 	struct unit *s=e->src->owner->front;
-	struct unit *t=s->owner->enemy->front;
+	struct unit *t=s->osite;
 	struct effect *ep;
 	ep=unit_findeffect(s,gravitational_potential);
 	if(ep){
@@ -888,7 +896,7 @@ void cycle_erode_init(struct unit *s){
 	struct unit *t;
 	if(!isfront(s))
 		return;
-	t=s->owner->enemy->front;
+	t=s->osite;
 	attack(t,s,1.3*s->atk,DAMAGE_PHYSICAL,0,TYPE_MACHINE);
 	effect(ATK,t,s,-2,-1);
 }
@@ -966,7 +974,7 @@ void super_scissors(struct unit *s){
 	struct move *mp;
 	int r;
 	if(hittest(t,s,1.0))
-		attack(t,s,0.6*s->atk,DAMAGE_PHYSICAL,0,TYPE_NORMAL);
+		attack(t,s,0.45*s->atk,DAMAGE_PHYSICAL,0,TYPE_NORMAL);
 	switch((r=t->owner->action)){
 		case ACT_MOVE0 ... ACT_MOVE7:
 			mp=t->moves+r;
@@ -974,6 +982,33 @@ void super_scissors(struct unit *s){
 				break;
 			memcpy(s->move_cur,mp,sizeof(struct move));
 			s->move_cur->mlevel&=MLEVEL_REGULAR;
+		default:
+			break;
+	}
+}
+void sonic(struct unit *s){
+	struct unit *t=gettarget(s);
+	if(hittest(t,s,1.0))
+		effect(confused,t,s,0,3);
+}
+void maya_mirror(struct unit *s){
+	struct unit *t=s->osite;
+	struct move m;
+	int r;
+	if(hittest(t,s,1.0))
+		attack(t,s,0.20*s->atk,DAMAGE_PHYSICAL,0,TYPE_STEEL);
+	switch((r=t->owner->action)){
+		case ACT_MOVE0 ... ACT_MOVE7:
+			memcpy(&m,t->moves+r,sizeof(struct move));
+			if(m.action==s->move_cur->action||!(m.mlevel&(MLEVEL_REGULAR|MLEVEL_CONCEPTUAL)))
+				break;
+			m.mlevel&=MLEVEL_REGULAR|MLEVEL_CONCEPTUAL;
+			unit_move(s,&m);
+			setcooldown(s,s->move_cur,m.cooldown);
+			break;
+		case ACT_NORMALATTACK:
+			normal_attack(s);
+			break;
 		default:
 			break;
 	}
@@ -1289,6 +1324,21 @@ const struct move builtin_moves[]={
 		.type=TYPE_NORMAL,
 		.flag=0,
 		.mlevel=MLEVEL_REGULAR
+	},
+	{
+		.id="sonic",
+		.action=sonic,
+		.type=TYPE_NORMAL,
+		.flag=0,
+		.mlevel=MLEVEL_REGULAR
+	},
+	{
+		.id="maya_mirror",
+		.action=maya_mirror,
+		.type=TYPE_STEEL,
+		.prior=0,
+		.flag=0,
+		.mlevel=MLEVEL_CONCEPTUAL
 	},
 	{NULL}
 };

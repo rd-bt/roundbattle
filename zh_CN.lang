@@ -139,4 +139,8 @@ move.absolutely_immortal.desc=进入绝对不灭的状态5回合，期间生命�
 move.overload.name=过载
 move.overload.desc=提升1层攻击力,命中后造成物理伤害。会直接斩杀灵力的绝对值高于60%的目标并额外提升1层攻击。
 move.super_scissors.name=无敌剪刀手
-move.super_scissors.desc=命中后造成物理伤害。偷取目标本回合使用的技能并替换本技能，无法偷取概念级别或更高级别的技能，可偷取包含常规级别的混合级别的技能，但是使用时只能造成其中常规级别的效果。
+move.super_scissors.desc=命中后造成物理伤害。偷取目标本回合使用的技能并替换本技能，无法偷取概念级别的技能，可偷取包含常规级别的混合级别的技能，但是使用时只能造成其中常规级别的效果。
+#无法偷取概念级别或更高级别的技能->无法偷取概念级别的技能，由于不存在级别仅为MLEVEL_FREEZING_ROARING的技能。
+move.maya_mirror.name=摩耶之镜
+move.maya_mirror.desc=先对对方发动一次攻击，命中后造成物理伤害。随后使用一次和对方本回合使用技能相同的技能并进入对应技能的冷却时间。使用对方的技能时无法造成高于概念级别的效果。
+

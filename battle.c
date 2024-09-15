@@ -73,27 +73,6 @@ void player_fillattr(struct player *p){
 		p->units[i].owner=p;
 	}
 }
-void player_action(struct player *p){
-	int r;
-	switch(p->action){
-		case ACT_MOVE0 ... ACT_MOVE7:
-			unit_move(p->front,p->front->moves+p->action);
-			return;
-		case ACT_NORMALATTACK:
-			normal_attack(p->front);
-			return;
-		case ACT_UNIT0 ... ACT_UNIT5:
-			r=p->action-ACT_UNIT0;
-			if(p->units[r].base){
-				switchunit(p->units+r);
-				return;
-			}
-		default:
-			return;
-	}
-}
-
-
 
 int canaction(struct player *p){
 	return canaction2(p,p->action);
@@ -241,31 +220,21 @@ int battle(struct player *p,struct player *e,void (*reporter)(const struct messa
 		}
 		latter=(prior=getprior(p,e))->enemy;
 		stage=STAGE_PRIOR;
-		if(canaction(prior)){
-			if(prior->action!=ACT_ABORT){
-				report(&field,MSG_ACTION,prior);
-				player_action(prior);
-				deadcheck;
-			}
-		}
+		player_action(prior);
+		deadcheck;
 		player_update_state(latter);
 		stage=STAGE_LATTER;
-		if(canaction(latter)){
-			if(latter->action!=ACT_ABORT){
-				report(&field,MSG_ACTION,latter);
-				player_action(latter);
-				deadcheck;
-			}
-		}
+		player_action(latter);
+		deadcheck;
 		stage=STAGE_ROUNDEND;
 		report(&field,MSG_ROUNDEND);
 		effect_in_roundend(field.effects);
 		deadcheck;
-		effect_round_decrease(field.effects,1);
-		deadcheck;
 		cooldown_decrease(prior);
 		deadcheck;
 		cooldown_decrease(latter);
+		deadcheck;
+		effect_round_decrease(field.effects,1);
 		deadcheck;
 	}
 out:

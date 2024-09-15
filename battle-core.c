@@ -278,7 +278,12 @@ long setspi(struct unit *dest,long spi){
 	return spi;
 }
 struct unit *gettarget(struct unit *u){
-	return u->owner->enemy->front;
+	struct unit *r;
+	for_each_effect(e,u->owner->field->effects){
+		if(e->base->gettarget&&(r=e->base->gettarget(e,u)))
+			return r;
+	}
+	return u->osite;
 }
 int setcooldown(struct unit *u,struct move *m,int round){
 	for_each_effect(e,u->owner->field->effects){
@@ -765,6 +770,54 @@ int canaction2(struct player *p,int act){
 			return 1;
 		default:
 			return -1;
+	}
+}
+
+void player_action(struct player *p){
+	int r;
+	if(!canaction2(p,p->action))
+		return;
+	switch(p->action){
+		case ACT_MOVE0 ... ACT_MOVE7:
+			if(p->front->moves[p->action].mlevel&MLEVEL_FREEZING_ROARING)
+				break;
+		default:
+			for_each_effect(e,p->field->effects){
+				if(e->base->action&&e->base->action(e,p))
+					return;
+			}
+			break;
+	}
+
+	switch(p->action){
+		case ACT_MOVE0 ... ACT_MOVE7:
+		case ACT_NORMALATTACK:
+		case ACT_UNIT0 ... ACT_UNIT5:
+			report(p->field,MSG_ACTION,p);
+			break;
+		default:
+			break;
+	}
+	switch(p->action){
+		case ACT_MOVE0 ... ACT_MOVE7:
+			unit_move(p->front,p->front->moves+p->action);
+			break;
+		case ACT_NORMALATTACK:
+			normal_attack(p->front);
+			break;
+		case ACT_UNIT0 ... ACT_UNIT5:
+			r=p->action-ACT_UNIT0;
+			if(p->units[r].base){
+				switchunit(p->units+r);
+			}
+			break;
+		default:
+			break;
+	}
+
+	for_each_effect(e,p->field->effects){
+		if(e->base->action_end)
+			e->base->action_end(e,p);
 	}
 }
 struct player *getprior(struct player *p,struct player *e){

@@ -97,9 +97,9 @@ move.natural_shield.desc=5回合内自身受到的伤害变为对应的自然对
 move.metal_bomb.name=金属炸弹
 move.metal_bomb.desc=安装一颗金属炸弹，回合结束时自动解除。金属炸弹解除时会爆炸造成物理伤害并施加神火印16回合。爆炸影响已经处于神火印下的敌人时会引发「真火破灭」事件，根据自身防御力对所有处于神火印下的敌方单位造成最大生命值比例的真实伤害。安装金属炸弹后如果双方有水属性，金属炸弹会立即解除。
 move.fate_destorying_slash.name=缘灭斩
-move.fate_destorying_slash.desc=命中后造成物理伤害。附带目标已损生命值12%的真实伤害，每100点攻防属性提升1.2%系数，成功击败目标后自身会回复同等比例的生命值。
+move.fate_destorying_slash.desc=命中后造成物理伤害。附带目标已损生命值12%的真实伤害，每100点攻防属性提升1.2%系数，成功击败目标后自身会回复同等比例的生命值。先制+1。
 move.mosquito_bump.name=蚊式冲撞
-move.mosquito_bump.desc=命中后造成物理伤害，闪避对方下一次攻击。
+move.mosquito_bump.desc=命中后造成物理伤害，闪避对方下一次攻击。先制+1。
 move.primordial_breath.name=原初吐息
 move.primordial_breath.desc=被动：对敌方单位造成不暴击的冰属性物理伤害且该伤害不高于受击单位的最大生命值50%时触发。对受击单位施加霜灭效果，霜灭效果不可重复施加，如果受击单位已经处于霜灭效果下会减少受击单位一层物理抗性。
 move.damage_recur.name=伤害复现
@@ -141,6 +141,11 @@ move.overload.desc=提升1层攻击力,命中后造成物理伤害。会直接�
 move.super_scissors.name=无敌剪刀手
 move.super_scissors.desc=命中后造成物理伤害。偷取目标本回合使用的技能并替换本技能，无法偷取概念级别的技能，可偷取包含常规级别的混合级别的技能，但是使用时只能造成其中常规级别的效果。
 #无法偷取概念级别或更高级别的技能->无法偷取概念级别的技能，由于不存在级别仅为MLEVEL_FREEZING_ROARING的技能。
+move.sonic.name=声波
+move.sonic.desc=命中后令目标混乱。
 move.maya_mirror.name=摩耶之镜
 move.maya_mirror.desc=先对对方发动一次攻击，命中后造成物理伤害。随后使用一次和对方本回合使用技能相同的技能并进入对应技能的冷却时间。使用对方的技能时无法造成高于概念级别的效果。
-
+move.cog_hit.name=齿轮打击
+move.cog_hit.desc=命中后造成物理伤害并减少目标1层防御。
+move.defend.name=防御
+move.defend.desc=提升2层防御力。先制+5;

@@ -153,7 +153,7 @@ const struct effect_base name[1]={{\
 	.end=effect_update_attr,\
 	.update_attr=name##_update_attr\
 }};
-effect_attr_d(DEF,def,0.5*u->def)
+effect_attr_d(DEF,def,(e->level>0?0.5:0.2)*u->def)
 effect_attr_d(CE,crit_effect,0.75)
 effect_attr_d(PDB,physical_bonus,0.5)
 effect_attr_d(MDB,magical_bonus,0.5)
@@ -947,7 +947,8 @@ void overload(struct unit *s){
 		effect(ATK,s,s,2,-1);
 	}else {
 		effect(ATK,s,s,1,-1);
-		attack(t,s,0.95*s->atk,DAMAGE_PHYSICAL,0,TYPE_MACHINE);
+		if(hittest(t,s,1.0))
+			attack(t,s,0.95*s->atk,DAMAGE_PHYSICAL,0,TYPE_MACHINE);
 	}
 }
 void escape(struct unit *s){
@@ -1012,6 +1013,16 @@ void maya_mirror(struct unit *s){
 		default:
 			break;
 	}
+}
+void cog_hit(struct unit *s){
+	struct unit *t=gettarget(s);
+	if(!hittest(t,s,1.0))
+		return;
+	attack(t,s,s->atk,DAMAGE_PHYSICAL,0,TYPE_MACHINE);
+	effect(DEF,t,s,-1,-1);
+}
+void defend(struct unit *s){
+	effect(DEF,s,s,2,-1);
 }
 const struct move builtin_moves[]={
 	{
@@ -1339,6 +1350,21 @@ const struct move builtin_moves[]={
 		.prior=0,
 		.flag=0,
 		.mlevel=MLEVEL_CONCEPTUAL
+	},
+	{
+		.id="cog_hit",
+		.action=cog_hit,
+		.type=TYPE_MACHINE,
+		.flag=0,
+		.mlevel=MLEVEL_REGULAR
+	},
+	{
+		.id="defend",
+		.action=defend,
+		.type=TYPE_NORMAL,
+		.prior=5,
+		.flag=0,
+		.mlevel=MLEVEL_REGULAR
 	},
 	{NULL}
 };

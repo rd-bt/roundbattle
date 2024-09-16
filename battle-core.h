@@ -332,7 +332,7 @@ struct move {
 	const char *id;
 	void (*action)(struct unit *);
 	void (*init)(struct unit *);
-	int (*getprior)(struct unit *);
+	int (*getprior)(const struct unit *);
 	int type,mlevel,prior,cooldown,flag,unused;
 };
 struct unit_base {
@@ -364,6 +364,7 @@ struct effect_base {
 	int (*effect)(struct effect *e,const struct effect_base *base,struct unit *dest,struct unit *src,long *level,int *round);
 	void (*effect_end)(struct effect *e,const struct effect_base *base,struct unit *dest,struct unit *src,long level,int round);
 	struct unit *(*gettarget)(struct effect *e,struct unit *u);
+	int (*getprior)(struct effect *e,struct player *p);
 	int (*heal)(struct effect *e,struct unit *dest,unsigned long *value);
 	void (*heal_end)(struct effect *e,struct unit *dest,unsigned long value);
 	int (*hittest)(struct effect *e,struct unit *dest,struct unit *src,double *hit_rate);
@@ -409,7 +410,7 @@ struct unit {
 	double crit_effect,
 		physical_bonus,magical_bonus,
 		physical_derate,magical_derate;
-	int type0,type1,state,unused;
+	int type0,type1,level,state;
 	struct move moves[8];
 	struct move pmoves[2];
 	struct player *owner;
@@ -418,7 +419,7 @@ struct unit {
 
 struct player {
 	struct unit units[6];
-	int (*selector)(struct player *);
+	int (*selector)(const struct player *);
 	struct unit *front;
 	struct player *enemy;
 	struct battle_field *field;
@@ -550,13 +551,13 @@ struct effect *unit_findeffect(struct unit *u,const struct effect_base *base);
 
 int effect_isnegative(const struct effect *e);
 
-int unit_hasnegative(struct unit *u);
+int unit_hasnegative(const struct unit *u);
 
 int unit_move(struct unit *u,struct move *m);
 
 int switchunit(struct unit *to);
 
-int canaction2(struct player *p,int act);
+int canaction2(const struct player *p,int act);
 
 void player_action(struct player *p);
 

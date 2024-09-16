@@ -33,7 +33,7 @@ int abnormal_init(struct effect *e,long level,int round){
 		e->round=round;
 	return 0;
 }
-#define abnormal_damage(name,frac,type)\
+#define abnormal_damage(name,frac,type,extra)\
 void name##_roundend(struct effect *e){\
 	effect_event(e);\
 	attack(e->dest,NULL,e->dest->base->max_hp/frac,DAMAGE_REAL,0,type);\
@@ -48,6 +48,7 @@ const struct effect_base name[1]={{\
 	.id=#name,\
 	.init=abnormal_init,\
 	.roundend=name##_roundend,\
+	extra\
 	.flag=EFFECT_ABNORMAL|EFFECT_NEGATIVE,\
 	.prior=-64\
 }};
@@ -62,15 +63,26 @@ const struct effect_base name[1]={{\
 	.update_state=name##_update_state,\
 	.flag=EFFECT_ABNORMAL|EFFECT_CONTROL|EFFECT_NEGATIVE,\
 }};
-abnormal_damage(cursed,5,TYPE_STEEL)
-abnormal_damage(radiated,5,TYPE_LIGHT)
-abnormal_damage(poisoned,10,TYPE_POISON)
-abnormal_damage(burnt,10,TYPE_FIRE)
+#define COMMA ,
+int poisoned_attack(struct effect *e,struct unit *dest,struct unit *src,unsigned long *value,int *damage_type,int *aflag,int *type){
+	if(src==e->dest&&*damage_type==DAMAGE_MAGICAL)
+		*value*=0.85;
+	return 0;
+}
+int burnt_attack(struct effect *e,struct unit *dest,struct unit *src,unsigned long *value,int *damage_type,int *aflag,int *type){
+	if(src==e->dest&&*damage_type==DAMAGE_PHYSICAL)
+		*value*=0.85;
+	return 0;
+}
+abnormal_damage(cursed,5,TYPE_STEEL,)
+abnormal_damage(radiated,5,TYPE_LIGHT,)
+abnormal_damage(poisoned,10,TYPE_POISON,.attack=poisoned_attack COMMA)
+abnormal_damage(burnt,10,TYPE_FIRE,.attack=burnt_attack COMMA)
 
 void parasitized_roundend(struct effect *e){
 	effect_event(e);
 	heal(e->dest->osite,
-		attack(e->dest,NULL,e->dest->base->max_hp/12,DAMAGE_REAL,0,TYPE_GRASS)
+		attack(e->dest,NULL,e->dest->base->max_hp/10,DAMAGE_REAL,0,TYPE_GRASS)
 	);
 	effect_event_end(e);
 }
@@ -205,10 +217,15 @@ void urgently_repair(struct unit *s){
 }
 void double_slash(struct unit *s){
 	struct unit *t=gettarget(s);
+	long vd;
 	if(hittest(t,s,1.0))
-		attack(t,s,0.6*s->atk,DAMAGE_PHYSICAL,t->hp==t->base->max_hp?AF_CRIT:0,TYPE_WIND);
-	if(s->move_cur&&(s->move_cur->mlevel&MLEVEL_CONCEPTUAL))
-		addhp(s->osite,s->def>16?-s->def:-16);
+		attack(t,s,0.3*s->atk,DAMAGE_PHYSICAL,t->hp==t->base->max_hp?AF_CRIT:0,TYPE_WIND);
+	if(s->move_cur->mlevel&MLEVEL_CONCEPTUAL){
+		vd=40+1.3*s->def;
+		if(vd<60)
+			vd=60;
+		addhp(s->osite,-vd);
+	}
 }
 void petrifying_ray(struct unit *s){
 	struct unit *t=gettarget(s);
@@ -413,7 +430,7 @@ int frost_destroying_damage(struct effect *e,struct unit *dest,struct unit *src,
 	return 0;
 }
 void frost_destroying_move_end(struct effect *e,struct unit *u,struct move *m){
-	if(e->dest==u){
+	if(e->dest==u&&m->cooldown>=0){
 		effect_event(e);
 		++m->cooldown;
 		effect_event_end(e);
@@ -709,7 +726,7 @@ void myriad_init(struct unit *s){
 	effect(myriad,s,s,0,-1);
 }
 int hot_damage(struct effect *e,struct unit *dest,struct unit *src,unsigned long *value,int *damage_type,int *aflag,int *type){
-	if(!(*type&(TYPE_FIRE|TYPE_ICE)))
+	if(!(*type&(TYPE_FIRE|TYPE_ICE))||!(*damage_type&(DAMAGE_PHYSICAL|DAMAGE_MAGICAL)))
 		return 0;
 	effect_event(e);
 	if(*type&TYPE_FIRE)
@@ -734,7 +751,7 @@ void ablaze(struct unit *s){
 }
 
 int wet_damage(struct effect *e,struct unit *dest,struct unit *src,unsigned long *value,int *damage_type,int *aflag,int *type){
-	if(!(*type&(TYPE_FIRE|TYPE_WATER)))
+	if(!(*type&(TYPE_FIRE|TYPE_WATER))||!(*damage_type&(DAMAGE_PHYSICAL|DAMAGE_MAGICAL)))
 		return 0;
 	effect_event(e);
 	if(*type&TYPE_WATER)
@@ -758,7 +775,7 @@ void spray(struct unit *s){
 	setcooldown(s,s->move_cur,6);
 }
 int cold_damage(struct effect *e,struct unit *dest,struct unit *src,unsigned long *value,int *damage_type,int *aflag,int *type){
-	if(!(*type&(TYPE_FIRE|TYPE_ICE)))
+	if(!(*type&(TYPE_FIRE|TYPE_ICE))||!(*damage_type&(DAMAGE_PHYSICAL|DAMAGE_MAGICAL)))
 		return 0;
 	effect_event(e);
 	if(*type&TYPE_ICE)
@@ -794,10 +811,10 @@ int gp_init(struct effect *e,long level,int round){
 	return 0;
 }
 void gp_damage_end(struct effect *e,struct unit *dest,struct unit *src,unsigned long value,int damage_type,int aflag,int type){
-	if(dest!=e->dest||damage_type!=DAMAGE_PHYSICAL)
+	if(dest!=e->dest||(damage_type!=DAMAGE_PHYSICAL&&damage_type!=DAMAGE_MAGICAL))
 		return;
 	if(e->level>3){
-		e->level-=3;
+		e->level-=damage_type==DAMAGE_PHYSICAL?3:2;
 		report(e->dest->owner->field,MSG_UPDATE,e);
 	}else
 		effect_end(e);
@@ -865,13 +882,13 @@ int cyce_damage(struct effect *e,struct unit *dest,struct unit *src,unsigned lon
 int cyce_hittest(struct effect *e,struct unit *dest,struct unit *src,double *hit_rate){
 	if(dest==e->src){
 		effect_event(e);
-		return 0;
 		effect_event_end(e);
+		return 0;
 	}
 	else if(src==e->src){
 		effect_event(e);
-		return 1;
 		effect_event_end(e);
+		return 1;
 	}
 	else
 		return -1;

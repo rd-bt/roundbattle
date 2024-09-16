@@ -99,7 +99,7 @@ unsigned long attack(struct unit *dest,struct unit *src,unsigned long value,int 
 	}
 	if(!(aflag&AF_NODEF)&&damage_type!=DAMAGE_REAL){
 		x=512+dest->def;
-		if(src)x+=dest->base->level-src->base->level;
+		if(src)x+=dest->level-src->level;
 		if(x<=0)
 			value*=1-dest->def;
 		else
@@ -235,7 +235,6 @@ unsigned long sethp(struct unit *dest,unsigned long hp){
 		return hp;
 	dest->hp=hp;
 	report(dest->owner->field,MSG_HPMOD,dest,(long)hp-(long)ohp);
-	//printf("%s %+ld hp,current hp:%lu\n",dest->base->id,(long)hp-(long)ohp,hp);
 	if(!hp)
 		unit_kill(dest);
 	return hp;
@@ -255,7 +254,6 @@ unsigned long addhp(struct unit *dest,long hp){
 		rhp=dest->base->max_hp;
 	dest->hp=rhp;
 	report(dest->owner->field,MSG_HPMOD,dest,hp);
-	//printf("%s %+ld hp,current hp:%lu\n",dest->base->id,hp,(unsigned long)rhp);
 	if(!rhp)
 		unit_kill(dest);
 	return rhp;
@@ -273,7 +271,6 @@ long setspi(struct unit *dest,long spi){
 		return spi;
 	dest->spi=spi;
 	report(dest->owner->field,MSG_SPIMOD,dest,spi-ospi);
-	//printf("%s %+ld spi,current spi:%ld\n",dest->base->id,spi-ospi,spi);
 	addhp(dest,-(SHEAR_COEF*dest->base->max_hp+1)*labs(spi-ospi));
 	return spi;
 }
@@ -587,6 +584,7 @@ void update_attr(struct unit *u){
 	u->magical_bonus=u->base->magical_bonus;
 	u->physical_derate=u->base->physical_derate;
 	u->magical_derate=u->base->magical_derate;
+	u->level=u->base->level;
 	for_each_effect(e,u->owner->field->effects){
 		if(e->base->update_attr)
 			e->base->update_attr(e,u);
@@ -679,7 +677,7 @@ int effect_isnegative(const struct effect *e){
 	else
 		return e->src&&e->dest&&e->src->owner==e->dest->owner->enemy;
 }
-int unit_hasnegative(struct unit *u){
+int unit_hasnegative(const struct unit *u){
 	int r=0;
 	for_each_effect(e,u->owner->field->effects){
 		if(e->dest==u&&effect_isnegative(e))
@@ -725,7 +723,7 @@ int switchunit(struct unit *to){
 	}
 	return 0;
 }
-int canaction2(struct player *p,int act){
+int canaction2(const struct player *p,int act){
 	struct move *m;
 	switch(act){
 		case ACT_MOVE0 ... ACT_MOVE7:
@@ -821,6 +819,7 @@ void player_action(struct player *p){
 	}
 }
 struct player *getprior(struct player *p,struct player *e){
+	struct player *prior;
 	int pp,pe,frp=0,fre=0;
 	switch(p->action){
 		case ACT_MOVE0 ... ACT_MOVE7:
@@ -849,12 +848,26 @@ struct player *getprior(struct player *p,struct player *e){
 	if(frp!=fre){
 		return frp?p:e;
 	}
-	if(pp!=pe){
-		return pp>pe?p:e;
+	if(pp!=pe)
+		prior=pp>pe?p:e;
+	else if(p->front->speed!=e->front->speed)
+		prior=p->front->speed>e->front->speed?p:e;
+	else
+		prior=test(0.5)?p:e;
+	for_each_effect(e,p->field->effects){
+		if(!e->base->getprior)
+			continue;
+		switch(e->base->getprior(e,prior)){
+			case 0:
+				break;
+			case 1:
+				return prior;
+			default:
+				prior=prior->enemy;
+				break;
+		}
 	}
-	if(p->front->speed!=e->front->speed)
-		return p->front->speed>e->front->speed?p:e;
-	return test(0.5)?p:e;
+	return prior;
 }
 void report(struct battle_field *f,int type,...){
 	void (*rr)(const struct message *)=f->reporter;

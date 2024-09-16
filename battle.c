@@ -2,7 +2,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-int rand_selector(struct player *p){
+int rand_selector(const struct player *p){
 	int n=0,c=0;
 	if(!isalive(p->front->state)){
 		/*for(int i=ACT_UNIT0;i<=ACT_UNIT5;++i)
@@ -60,7 +60,7 @@ void unit_fillattr(struct unit *u){
 	u->type0=u->base->type0;
 	u->type1=u->base->type1;
 	u->state=UNIT_NORMAL;
-	u->unused=0;
+	u->level=u->base->level;
 	memcpy(u->moves,u->base->moves,8*sizeof(struct move));
 	memcpy(u->pmoves,u->base->pmoves,2*sizeof(struct move));
 	u->move_cur=NULL;

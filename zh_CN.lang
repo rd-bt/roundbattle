@@ -205,9 +205,9 @@ move.heat_engine.desc=被动：使用机械系技能后，如果对方处于烧�
 move.flamethrower.name=喷火
 move.flamethrower.desc=命中后令目标烧伤。
 move.time_back.name=时光倒流
-move.time_back.desc=复活己方最后倒下的单位，被复活的单位会获得50%生命值并切换上场，随后本技能进入30回合冷却。如果己方没有战败单位或无法复活指定单位，本技能会失败并进入3回合冷却。
+move.time_back.desc=复活己方最后倒下的单位，被复活的单位会获得50%生命值并切换上场，随后本技能进入30回合冷却。如果己方没有战败单位或无法复活指定单位，本技能会失败并进入3回合冷却。可在受控制期间使用。
 move.star_move.name=斗转星移
-move.star_move.desc=对对方造成等同于自身本回合所受总伤害的真实伤害，自身回复等量生命值。可在受控制期间使用但冷却时间加倍。先制-6。
+move.star_move.desc=对对方造成等同于自身本回合所受总伤害的真实伤害，自身回复等量生命值。先制-6。
 move.rebound.name=反弹
 move.rebound.desc=本回合反弹对方技能效果。先制+5。
 

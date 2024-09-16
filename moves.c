@@ -1108,7 +1108,7 @@ void star_move(struct unit *s){
 	if(dmg){
 		attack(s->osite,s,dmg,DAMAGE_REAL,0,TYPE_VOID);
 		heal(s,dmg);
-		setcooldown(s,s->move_cur,2);
+		setcooldown(s,s->move_cur,s->state==UNIT_CONTROLLED?3:2);
 	}
 }
 struct unit *rebound_gettarget(struct effect *e,struct unit *u){
@@ -1498,6 +1498,7 @@ const struct move builtin_moves[]={
 		.action=star_move,
 		.type=TYPE_STEEL,
 		.prior=-6,
+		.flag=MOVE_NOCONTROL,
 		.mlevel=MLEVEL_REGULAR
 	},
 	{

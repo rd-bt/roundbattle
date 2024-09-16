@@ -195,7 +195,7 @@ void ground_force(struct unit *s){
 void spoony_spell(struct unit *s){
 	struct unit *t=s->osite;
 	unsigned long dmg=2.1*s->atk+0.3*s->base->max_hp;
-	attack(t,s,dmg,DAMAGE_REAL,0,TYPE_SOIL);
+	dmg=attack(t,s,dmg,DAMAGE_REAL,0,TYPE_SOIL);
 	attack(s,s,dmg,DAMAGE_REAL,0,TYPE_SOIL);
 }
 void self_explode(struct unit *s){
@@ -982,7 +982,6 @@ void escape(struct unit *s){
 	}
 	memcpy(ring+rsize,ring,rsize*sizeof(struct unit *));
 	t=ring[sindex+1];
-	//fprintf(stderr,"i:%zu,size:%zu,switch to %s\n",sindex,rsize,t->base->id);
 	if(t==s)
 		return;
 	switchunit(t);
@@ -1070,6 +1069,65 @@ void flamethrower(struct unit *s){
 	t=gettarget(s);
 	if(hittest(t,s,1.0))
 		effect(burnt,t,s,0,5);
+}
+void time_back(struct unit *s){
+	struct battle_field *f=s->owner->field;
+	struct unit *t;
+	for(const struct message *p=f->rec+f->rec_size-1;p>=f->rec;--p){
+		if(p->type!=MSG_FAIL
+		||p->un.u->owner!=s->owner
+		||isalive(p->un.u->state))
+			continue;
+		t=(struct unit *)p->un.u;
+		goto found;
+	}
+	goto fail;
+found:
+	if(!revive(t,t->base->max_hp/2)){
+		setcooldown(s,s->move_cur,31);
+		switchunit(t);
+		return;
+	}
+fail:
+	setcooldown(s,s->move_cur,4);
+}
+
+void star_move(struct unit *s){
+	struct battle_field *f=s->owner->field;
+	unsigned long dmg=0;
+	int round=*f->round;
+	for(const struct message *p=f->rec+f->rec_size-1;p>=f->rec;--p){
+		if(p->type!=MSG_DAMAGE
+		||damage_type_check(p->un.damage.damage_type)
+		||p->un.damage.dest!=s)
+			continue;
+		if(p->round!=round)
+			break;
+		dmg+=p->un.damage.value;
+	}
+	if(dmg){
+		attack(s->osite,s,dmg,DAMAGE_REAL,0,TYPE_VOID);
+		heal(s,dmg);
+		setcooldown(s,s->move_cur,2);
+	}
+}
+struct unit *rebound_gettarget(struct effect *e,struct unit *u){
+	if(u->owner!=e->dest->owner){
+		effect_event(e);
+		effect_event_end(e);
+		return u;
+	}
+	return NULL;
+}
+
+const struct effect_base rebound_effect[1]={{
+	.id="rebound",
+	.gettarget=rebound_gettarget,
+	.flag=EFFECT_POSITIVE
+}};
+void rebound(struct unit *s){
+	effect(rebound_effect,s,s,0,1);
+	setcooldown(s,s->move_cur,3);
 }
 const struct move builtin_moves[]={
 	{
@@ -1425,6 +1483,28 @@ const struct move builtin_moves[]={
 		.action=flamethrower,
 		.type=TYPE_FIRE,
 		.flag=0,
+		.mlevel=MLEVEL_REGULAR
+	},
+	{
+		.id="time_back",
+		.action=time_back,
+		.type=TYPE_LIGHT,
+		.prior=5,
+		.flag=MOVE_NOCONTROL,
+		.mlevel=MLEVEL_CONCEPTUAL
+	},
+	{
+		.id="star_move",
+		.action=star_move,
+		.type=TYPE_STEEL,
+		.prior=-6,
+		.mlevel=MLEVEL_REGULAR
+	},
+	{
+		.id="rebound",
+		.action=rebound,
+		.type=TYPE_NORMAL,
+		.prior=5,
 		.mlevel=MLEVEL_REGULAR
 	},
 	{NULL}

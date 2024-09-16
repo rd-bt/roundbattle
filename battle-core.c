@@ -918,7 +918,6 @@ void report(struct battle_field *f,int type,...){
 			msg.un.hpmod.value=va_arg(ap,long);
 			break;
 		case MSG_MISS:
-		//case MSG_NORMALATTACK:
 		case MSG_SWITCH:
 			msg.un.u2.dest=va_arg(ap,const struct unit *);
 			msg.un.u2.src=va_arg(ap,const struct unit *);
@@ -939,7 +938,30 @@ void report(struct battle_field *f,int type,...){
 		default:
 			break;
 	}
+	va_end(ap);
 	if(rr)
 		rr(&msg);
-	va_end(ap);
+	if(msg.type==MSG_UPDATE)
+		return;
+	if(f->rec_size>=f->rec_length){
+		struct message *p;
+		size_t len;
+		len=f->rec_length+1024;
+		if(!f->rec){
+			p=malloc(len*sizeof(struct message));
+			if(!p)
+				return;
+			f->rec=p;
+			f->rec_length=len;
+		}else {
+			p=realloc(f->rec,len*sizeof(struct message));
+			if(p){
+				f->rec=p;
+				f->rec_length=len;
+			}else {
+				f->rec_size=0;
+			}
+		}
+	}
+	memcpy(f->rec+f->rec_size++,&msg,sizeof(struct message));
 }

@@ -159,6 +159,23 @@
 		_r;\
 }\
 )
+
+#define damage_type_check(s) (\
+{\
+		int _r;\
+		switch(s){\
+			case DAMAGE_REAL:\
+			case DAMAGE_PHYSICAL:\
+			case DAMAGE_MAGICAL:\
+				_r=0;\
+				break;\
+			default:\
+				_r=1;\
+				break;\
+		}\
+		_r;\
+}\
+)
 #define isfront(u) (\
 {\
 		struct unit *_u=(u);\
@@ -475,6 +492,8 @@ struct battle_field {
 	struct player *p,*e;
 	struct effect *effects,*trash;
 	void (*reporter)(const struct message *msg);
+	struct message *rec;
+	size_t rec_size,rec_length;
 	const volatile int *round,*stage;
 };
 int unit_kill(struct unit *up);

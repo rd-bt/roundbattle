@@ -185,6 +185,9 @@ int battle(struct player *p,struct player *e,void (*reporter)(const struct messa
 	field.round=&round;
 	field.stage=&stage;
 	field.reporter=reporter;
+	field.rec=NULL;
+	field.rec_size=0;
+	field.rec_length=0;
 	p->field=&field;
 	e->field=&field;
 	player_fillattr(p);
@@ -244,5 +247,10 @@ out:
 		effect_final(ep);
 	}
 	wipetrash(&field);
+	if(field.rec){
+//		for(size_t i=0;i<field.rec_size;++i)
+//			fprintf(stderr,"record:%d\n",field.rec[i].type);
+		free(field.rec);
+	}
 	return ret;
 }

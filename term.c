@@ -664,9 +664,16 @@ int term_selector(const struct player *p){
 	ssize_t r;
 	if(!canaction2(p,cur)){
 		if(isalive(p->front->state)){
-			if(cur!=ACT_NORMALATTACK&&canaction2(p,ACT_NORMALATTACK)){
+			if(canaction2(p,ACT_NORMALATTACK)){
 				cur=ACT_NORMALATTACK;
 				goto refrash;
+			}
+
+			for(int i=0;i<8;++i){
+				if(canaction2(p,i)){
+					cur=i;
+					goto refrash;
+				}
 			}
 		}else {
 			for(int i=0;i<6;++i){

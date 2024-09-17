@@ -442,7 +442,9 @@ struct player {
 	struct battle_field *field;
 	int action,unused;
 };
-
+struct history {
+	struct player p,e;
+};
 struct message {
 	int type,round;
 	unsigned long index;
@@ -494,6 +496,8 @@ struct battle_field {
 	void (*reporter)(const struct message *msg);
 	struct message *rec;
 	size_t rec_size,rec_length;
+	struct history *ht;
+	size_t ht_size,ht_length;
 	const volatile int *round,*stage;
 };
 int unit_kill(struct unit *up);
@@ -583,5 +587,7 @@ void player_action(struct player *p);
 struct player *getprior(struct player *p,struct player *e);
 
 void report(struct battle_field *f,int type,...);
+
+void history_add(struct battle_field *f);
 
 #endif

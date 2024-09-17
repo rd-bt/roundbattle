@@ -974,3 +974,28 @@ void report(struct battle_field *f,int type,...){
 	}
 	memcpy(f->rec+f->rec_size++,&msg,sizeof(struct message));
 }
+void history_add(struct battle_field *f){
+	struct history *h;
+	if(f->ht_size>=f->ht_length){
+		size_t len;
+		len=f->ht_length+128;
+		if(!f->ht){
+			h=malloc(len*sizeof(struct history));
+			if(!h)
+				return;
+			f->ht=h;
+			f->ht_length=len;
+		}else {
+			h=realloc(f->rec,len*sizeof(struct history));
+			if(h){
+				f->ht=h;
+				f->ht_length=len;
+			}else {
+				f->ht_size=0;
+			}
+		}
+	}
+	h=f->ht+f->ht_size++;
+	memcpy(&h->p,f->p,sizeof(struct player));
+	memcpy(&h->e,f->e,sizeof(struct player));
+}

@@ -189,6 +189,9 @@ int battle(struct player *p,struct player *e,void (*reporter)(const struct messa
 	field.rec=NULL;
 	field.rec_size=0;
 	field.rec_length=0;
+	field.ht=NULL;
+	field.ht_size=0;
+	field.ht_length=0;
 	p->field=&field;
 	e->field=&field;
 	player_fillattr(p);
@@ -200,7 +203,10 @@ int battle(struct player *p,struct player *e,void (*reporter)(const struct messa
 	player_moveinit(prior->enemy);
 	for(;;++round){
 		stage=STAGE_ROUNDSTART;
+		p->action=ACT_ABORT;
+		e->action=ACT_ABORT;
 		report(&field,MSG_ROUND);
+		history_add(&field);
 		effect_in_roundstart(field.effects);
 		deadcheck;
 		if(p->front->speed>e->front->speed)
@@ -256,6 +262,9 @@ out:
 //		for(size_t i=0;i<field.rec_size;++i)
 //			fprintf(stderr,"record:%d\n",field.rec[i].type);
 		free(field.rec);
+	}
+	if(field.ht){
+		free(field.ht);
 	}
 	return ret;
 }

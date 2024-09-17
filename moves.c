@@ -207,9 +207,15 @@ void self_explode(struct unit *s){
 }
 void health_exchange(struct unit *s){
 	struct unit *t=s->osite;
-	unsigned long a=s->hp,b=t->hp;
-	sethp(t,a);
+	unsigned long b=t->hp;
+	sethp(t,s->hp);
 	sethp(s,b);
+}
+void spi_exchange(struct unit *s){
+	struct unit *t=s->osite;
+	long b=t->spi;
+	setspi(t,s->spi);
+	setspi(s,b);
 }
 void urgently_repair(struct unit *s){
 	heal(s,s->base->max_hp/2);
@@ -433,6 +439,7 @@ void frost_destroying_move_end(struct effect *e,struct unit *u,struct move *m){
 	if(e->dest==u&&m->cooldown>=0){
 		effect_event(e);
 		++m->cooldown;
+		report(u->owner->field,MSG_UPDATE,m);
 		effect_event_end(e);
 	}
 }
@@ -1107,7 +1114,7 @@ void flamethrower(struct unit *s){
 	if(hittest(t,s,1.0))
 		effect(burnt,t,s,0,5);
 }
-void time_back(struct unit *s){
+void time_back_locally(struct unit *s){
 	struct battle_field *f=s->owner->field;
 	struct unit *t;
 	for(const struct message *p=f->rec+f->rec_size-1;p>=f->rec;--p){
@@ -1177,12 +1184,12 @@ void force_vh_p(struct unit *s){
 
 void vh_roundend(struct effect *e){
 	struct move *m;
+	struct unit *t;
 	if(!e->active)
 		return;
-	m=getmove(e->dest->osite);
+	m=getmove(t=e->dest->osite);
 	if(m){
-		m->cooldown=-1;
-		report(e->dest->owner->field,MSG_UPDATE,m);
+		setcooldown(t,m,-1);
 	}
 	effect_end(e);
 }
@@ -1221,6 +1228,30 @@ void force_vh(struct unit *s){
 		attack(t,s,s->atk/3,DAMAGE_PHYSICAL,0,TYPE_DRAGON);
 	effect(force_vh_effect,s,s,0,2);
 	setcooldown(s,s->move_cur,2);
+}
+void back(struct player *p,const struct player *h){
+	for(int i=0;i<6&&p->units[i].base;++i){
+		if(p->units[i].state==UNIT_FREEZING_ROARINGED)
+			continue;
+		memcpy(p->units+i,h->units+i,offsetof(struct unit,owner));
+	}
+	p->action=ACT_ABORT;
+	p->front=h->front;
+}
+void time_back(struct unit *s){
+	struct battle_field *f=s->owner->field;
+	struct history *h;
+	int round=*f->round-20,off=s->move_cur-s->moves;
+	if(round<0)
+		round=0;
+	if(round>=f->ht_size)
+		return;
+	h=f->ht+round;
+	back(f->p,&h->p);
+	back(f->e,&h->e);
+	update_attr_all(f);
+	if(s->moves[off].action==time_back)
+		setcooldown(s,s->move_cur,41);
 }
 const struct move builtin_moves[]={
 	{
@@ -1267,6 +1298,15 @@ const struct move builtin_moves[]={
 		.id="health_exchange",
 		.action=health_exchange,
 		.type=TYPE_GHOST,
+		.prior=0,
+		.flag=0,
+		.mlevel=MLEVEL_REGULAR
+	},
+
+	{
+		.id="spi_exchange",
+		.action=spi_exchange,
+		.type=TYPE_MACHINE,
 		.prior=0,
 		.flag=0,
 		.mlevel=MLEVEL_REGULAR
@@ -1579,8 +1619,8 @@ const struct move builtin_moves[]={
 		.mlevel=MLEVEL_REGULAR
 	},
 	{
-		.id="time_back",
-		.action=time_back,
+		.id="time_back_locally",
+		.action=time_back_locally,
 		.type=TYPE_LIGHT,
 		.prior=5,
 		.flag=MOVE_NOCONTROL,
@@ -1608,6 +1648,14 @@ const struct move builtin_moves[]={
 		.type=TYPE_DRAGON,
 		.flag=0,
 		.mlevel=MLEVEL_REGULAR
+	},
+	{
+		.id="time_back",
+		.action=time_back,
+		.type=TYPE_LIGHT,
+		.prior=5,
+		.flag=MOVE_NOCONTROL,
+		.mlevel=MLEVEL_CONCEPTUAL
 	},
 	{NULL}
 };

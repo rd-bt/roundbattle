@@ -483,7 +483,7 @@ void scorching_roaring(struct unit *s){
 	struct effect *e;
 	long n,n1;
 	n=unit_hasnegative(s);
-	if(!n){
+	if(n<=0){
 		t=gettarget(s);
 		if(hittest(t,s,2.5)){
 			attack(t,s,0.75*s->atk,DAMAGE_PHYSICAL,0,TYPE_FIRE);
@@ -517,7 +517,7 @@ void thunder_roaring(struct unit *s){
 	long n,n1;
 	unsigned long dmg;
 	n=unit_hasnegative(s);
-	if(!n){
+	if(n<=0){
 		t=gettarget(s);
 		if(hittest(t,s,2.5)){
 
@@ -582,6 +582,11 @@ void freezing_roaring(struct unit *s){
 		t->owner->action=ACT_ABORT;
 	report(s->owner->field,MSG_FAIL,t);
 	unit_wipeeffect(t,0);
+	for(struct move *mp=s->moves,*endp=mp+8;mp<endp&&mp->id;++mp)
+		if(mp->cooldown){
+			mp->cooldown=0;
+			report(s->owner->field,MSG_UPDATE,mp);
+		}
 }
 
 void triple_cutter(struct unit *s){
@@ -986,6 +991,36 @@ void escape(struct unit *s){
 		return;
 	switchunit(t);
 }
+
+struct move *getmove(struct unit *u){
+	struct battle_field *f=u->owner->field;
+	const struct move *ret=NULL;
+	int round=*f->round,r;
+	for(const struct message *p=f->rec+f->rec_size-1;p>=f->rec;--p){
+		if(p->type!=MSG_MOVE
+		||p->un.move.u!=u)
+			continue;
+		if(p->round!=round)
+			break;
+		switch(p->un.move.m-p->un.move.u->moves){
+			case 0 ... 7:
+				ret=p->un.move.m;
+			default:
+				break;
+		}
+	}
+	if(!ret){
+		switch((r=u->owner->action)){
+			case ACT_MOVE0 ... ACT_MOVE7:
+				if(u->moves[r].id){
+					return u->moves+r;
+				}
+			default:
+				break;
+		}
+	}
+	return (struct move *)ret;
+}
 void super_scissors(struct unit *s){
 	struct unit *t=gettarget(s);
 	struct move *mp;
@@ -995,7 +1030,7 @@ void super_scissors(struct unit *s){
 	switch((r=t->owner->action)){
 		case ACT_MOVE0 ... ACT_MOVE7:
 			mp=t->moves+r;
-			if(mp->action==s->move_cur->action||!(mp->mlevel&MLEVEL_REGULAR))
+			if(!mp->id||mp->action==s->move_cur->action||!(mp->mlevel&MLEVEL_REGULAR))
 				break;
 			memcpy(s->move_cur,mp,sizeof(struct move));
 			s->move_cur->mlevel&=MLEVEL_REGULAR;
@@ -1016,6 +1051,8 @@ void maya_mirror(struct unit *s){
 		attack(t,s,0.20*s->atk,DAMAGE_PHYSICAL,0,TYPE_STEEL);
 	switch((r=t->owner->action)){
 		case ACT_MOVE0 ... ACT_MOVE7:
+			if(!t->moves[r].id)
+				break;
 			memcpy(&m,t->moves+r,sizeof(struct move));
 			if(m.action==s->move_cur->action||!(m.mlevel&(MLEVEL_REGULAR|MLEVEL_CONCEPTUAL)))
 				break;
@@ -1119,7 +1156,6 @@ struct unit *rebound_gettarget(struct effect *e,struct unit *u){
 	}
 	return NULL;
 }
-
 const struct effect_base rebound_effect[1]={{
 	.id="rebound",
 	.gettarget=rebound_gettarget,
@@ -1128,6 +1164,63 @@ const struct effect_base rebound_effect[1]={{
 void rebound(struct unit *s){
 	effect(rebound_effect,s,s,0,1);
 	setcooldown(s,s->move_cur,3);
+}
+extern const struct effect_base force_vh_effect[1];
+void force_vh_p(struct unit *s){
+	struct unit *t=gettarget(s);
+	struct effect *e=unit_findeffect(s,force_vh_effect);
+	if(hittest(t,s,1.0))
+		attack(t,s,2*s->atk/3,DAMAGE_PHYSICAL,0,TYPE_DRAGON);
+	if(e)
+		e->active=1;
+}
+
+void vh_roundend(struct effect *e){
+	struct move *m;
+	if(!e->active)
+		return;
+	m=getmove(e->dest->osite);
+	if(m){
+		m->cooldown=-1;
+		report(e->dest->owner->field,MSG_UPDATE,m);
+	}
+	effect_end(e);
+}
+int vh_init(struct effect *e,long level,int round){
+	if(!e->round)
+		e->round=round;
+	return 0;
+}
+const struct move force_vh_pm={
+	.id="force_vh",
+	.action=force_vh_p,
+	.type=TYPE_DRAGON,
+	.prior=0,
+	.flag=0,
+	.mlevel=MLEVEL_REGULAR
+};
+void vh_move_end(struct effect *e,struct unit *u,struct move *m){
+	struct move am;
+	if(e->round>1||e->active||e->dest!=u)
+		return;
+	effect_event(e);
+	memcpy(&am,&force_vh_pm,sizeof(struct move));
+	unit_move(u,&am);
+	effect_event_end(e);
+}
+const struct effect_base force_vh_effect[1]={{
+	.id="force_vh",
+	.init=vh_init,
+	.move_end=vh_move_end,
+	.roundend=vh_roundend,
+	.flag=EFFECT_POSITIVE
+}};
+void force_vh(struct unit *s){
+	struct unit *t=gettarget(s);
+	if(hittest(t,s,1.0))
+		attack(t,s,s->atk/3,DAMAGE_PHYSICAL,0,TYPE_DRAGON);
+	effect(force_vh_effect,s,s,0,2);
+	setcooldown(s,s->move_cur,2);
 }
 const struct move builtin_moves[]={
 	{
@@ -1505,7 +1598,15 @@ const struct move builtin_moves[]={
 		.id="rebound",
 		.action=rebound,
 		.type=TYPE_NORMAL,
+		.flag=0,
 		.prior=5,
+		.mlevel=MLEVEL_REGULAR
+	},
+	{
+		.id="force_vh",
+		.action=force_vh,
+		.type=TYPE_DRAGON,
+		.flag=0,
 		.mlevel=MLEVEL_REGULAR
 	},
 	{NULL}

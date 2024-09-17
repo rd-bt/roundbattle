@@ -683,13 +683,21 @@ int unit_hasnegative(const struct unit *u){
 		if(e->dest==u&&effect_isnegative(e))
 			++r;
 	}
+	if(!r)
+		switch(u->state){
+			case UNIT_CONTROLLED:
+			case UNIT_SUPPRESSED:
+				return -1;
+			default:
+				break;
+		}
 	return r;
 }
 int unit_move(struct unit *u,struct move *m){
 	struct move *backup=u->move_cur;
 	if(!isalive(u->state))
 			return -1;
-	if(!(m->mlevel&MLEVEL_FREEZING_ROARING)){
+	if(!(m->mlevel&MLEVEL_FREEZING_ROARING&&unit_hasnegative(u))){
 		for_each_effect(e,u->owner->field->effects){
 			if(e->base->move&&e->base->move(e,u,m))
 				return -1;
@@ -715,6 +723,7 @@ int switchunit(struct unit *to){
 		if(e->base->switchunit&&e->base->switchunit(e,to)&&!enforce)
 			return -1;
 	}
+	to->owner->action=ACT_ABORT;
 	to->owner->front=to;
 	report(to->owner->field,MSG_SWITCH,to,f);
 	for_each_effect(e,to->owner->field->effects){
@@ -728,14 +737,14 @@ int canaction2(const struct player *p,int act){
 	switch(act){
 		case ACT_MOVE0 ... ACT_MOVE7:
 			m=p->front->moves+act;
-			if(!m->id||(m->cooldown&&!(m->mlevel&MLEVEL_FREEZING_ROARING)))
+			if(!m->id||(m->cooldown&&!(m->mlevel&MLEVEL_FREEZING_ROARING&&unit_hasnegative(p->front))))
 				return 0;
 			switch(p->front->state){
 				case UNIT_CONTROLLED:
 					if(m->flag&MOVE_NOCONTROL)
 						return 1;
 				case UNIT_SUPPRESSED:
-					if(m->mlevel&MLEVEL_FREEZING_ROARING)
+					if((m->mlevel&MLEVEL_FREEZING_ROARING)&&unit_hasnegative(p->front))
 						return 1;
 				case UNIT_FAILED:
 				case UNIT_FREEZING_ROARINGED:
@@ -777,7 +786,7 @@ void player_action(struct player *p){
 		return;
 	switch(p->action){
 		case ACT_MOVE0 ... ACT_MOVE7:
-			if(p->front->moves[p->action].mlevel&MLEVEL_FREEZING_ROARING)
+			if((p->front->moves[p->action].mlevel&MLEVEL_FREEZING_ROARING)&&unit_hasnegative(p->front))
 				break;
 		default:
 			for_each_effect(e,p->field->effects){

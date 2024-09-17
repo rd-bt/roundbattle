@@ -4,6 +4,7 @@
 #include <string.h>
 int rand_selector(const struct player *p){
 	int n=0,c=0;
+	//if(canaction2(p,3))return 3;
 	if(!isalive(p->front->state)){
 		/*for(int i=ACT_UNIT0;i<=ACT_UNIT5;++i)
 			if(canaction2(p,i)){
@@ -216,11 +217,15 @@ int battle(struct player *p,struct player *e,void (*reporter)(const struct messa
 			ret=prior==p?1:0;
 			goto out;
 		}
+		if(!canaction(prior))
+			prior->action=ACT_ABORT;
 		latter->action=latter->selector(latter);
 		if((unsigned int)latter->action>=ACT_GIVEUP){
 			ret=latter==p?1:0;
 			goto out;
 		}
+		if(!canaction(latter))
+			latter->action=ACT_ABORT;
 		latter=(prior=getprior(p,e))->enemy;
 		stage=STAGE_PRIOR;
 		player_action(prior);

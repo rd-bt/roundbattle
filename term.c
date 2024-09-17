@@ -407,10 +407,9 @@ void frash(const struct player *p,FILE *fp,int current){
 		}
 		c=canaction2(p,i);
 		r=snprintf(buf,buflen,"(%s)%s",type2str(u->moves[i].type),move_ts(u->moves[i].id));
-		if(!c){
-			if(u->moves[i].cooldown){
-				r1=snprintf(buf+r,buflen-r,"[%d]",u->moves[i].cooldown);
-			}else
+		if(u->moves[i].cooldown)
+			r1=u->moves[i].cooldown<0?snprintf(buf+r,buflen-r,"[inf]"):snprintf(buf+r,buflen-r,"[%d]",u->moves[i].cooldown);
+		else if(!c){
 				strncpy(buf+r,"[X]",buflen-r);
 		}
 no_move:

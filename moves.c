@@ -1127,7 +1127,7 @@ void time_back_locally(struct unit *s){
 	}
 	goto fail;
 found:
-	if(!revive(t,t->base->max_hp/2)){
+	if(!revive_nonhookable(t,t->base->max_hp/2)){
 		setcooldown(s,s->move_cur,31);
 		switchunit(t);
 		return;
@@ -1252,6 +1252,116 @@ void time_back(struct unit *s){
 	update_attr_all(f);
 	if(s->moves[off].action==time_back)
 		setcooldown(s,s->move_cur,41);
+}
+int repeat_action(struct effect *e,struct player *p){
+	if(e->dest!=p->front)
+		return 0;
+	switch(p->action){
+		case ACT_MOVE0 ... ACT_MOVE7:
+		case ACT_UNIT0 ... ACT_UNIT5:
+		case ACT_NORMALATTACK:
+		case ACT_ABORT:
+			p->action=e->level;
+		default:
+			break;
+	}
+	return 0;
+}
+const struct effect_base repeat_effect[1]={{
+	.id="repeat",
+	.action=repeat_action,
+	.flag=EFFECT_NEGATIVE,
+}};
+void repeat(struct unit *s){
+	struct unit *t=gettarget(s);
+	int r;
+	if(hittest(t,s,1.8)){
+		attack(t,s,s->atk/4,DAMAGE_PHYSICAL,0,TYPE_NORMAL);
+		switch((r=t->owner->action)){
+			case ACT_MOVE0 ... ACT_MOVE7:
+			case ACT_NORMALATTACK:
+				if(effect(repeat_effect,t,s,r,4))
+					setcooldown(s,s->move_cur,9);
+			default:
+				break;
+		}
+	}
+}
+int silent_move(struct effect *e,struct unit *u,struct move *m){
+	if(u!=e->dest||(m->flag&(MOVE_NOCONTROL|MOVE_NORMALATTACK)))
+		return 0;
+	return -1;
+}
+const struct effect_base silent[1]={{
+	.id="silent",
+	.move=silent_move,
+	.flag=EFFECT_NEGATIVE|EFFECT_CONTROL
+}};
+void head_blow(struct unit *s){
+	struct unit *t=gettarget(s);
+	if(hittest(t,s,1.3)){
+		attack(t,s,0.9*s->atk,DAMAGE_PHYSICAL,0,TYPE_FIGHTING);
+		effect(silent,t,s,0,4);
+	}
+	setcooldown(s,s->move_cur,4);
+}
+
+void mecha_update_attr(struct effect *e,struct unit *u){
+	if(u==e->dest){
+		u->type0=TYPE_MACHINE;
+	}
+}
+const struct effect_base mecha_effect[1]={{
+	.id="mecha",
+	.inited=effect_update_attr,
+	.end=effect_update_attr,
+	.update_attr=mecha_update_attr
+}};
+void mecha(struct unit *s){
+	effect(mecha_effect,s,s,0,5);
+}
+void perish_kill_end(struct effect *e,struct unit *u){
+	if(u!=e->dest)
+		return;
+	e->round=-1;
+	report(e->dest->owner->field,MSG_UPDATE,e);
+}
+int perish_revive(struct effect *e,struct unit *u,unsigned long *hp){
+	if(u==e->dest)
+		return -1;
+	return 0;
+}
+const struct effect_base perish_song_effect[1]={{
+	.id="perish_song",
+	.kill_end=perish_kill_end,
+	.revive=perish_revive,
+	.flag=EFFECT_NEGATIVE|EFFECT_KEEP
+}};
+void perish_song(struct unit *s){
+	struct unit *t=gettarget(s);
+	effect(perish_song_effect,t,s,0,1);
+	effect(perish_song_effect,s,s,0,1);
+	if(hittest(t,s,1.2)){
+		attack(t,s,s->atk,DAMAGE_PHYSICAL,0,TYPE_NORMAL);
+		attack(t,s,0.16*(t->base->max_hp-t->hp),DAMAGE_REAL,0,TYPE_NORMAL);
+	}
+	setcooldown(s,s->move_cur,3);
+}
+
+int marsh_getprior(struct effect *e,struct player *p){
+	return -1;
+}
+const struct effect_base marsh[1]={{
+	.id="marsh",
+	.getprior=marsh_getprior,
+	.flag=EFFECT_ENV,
+}};
+void mud_shot(struct unit *s){
+	struct unit *t=gettarget(s);
+	if(hittest(t,s,1.4))
+		attack(t,s,1+t->hp/6,DAMAGE_REAL,0,TYPE_SOIL);
+	effect(marsh,NULL,s,0,6);
+	setcooldown(s,s->move_cur,5);
 }
 const struct move builtin_moves[]={
 	{
@@ -1656,6 +1766,42 @@ const struct move builtin_moves[]={
 		.prior=5,
 		.flag=MOVE_NOCONTROL,
 		.mlevel=MLEVEL_CONCEPTUAL
+	},
+	{
+		.id="repeat",
+		.action=repeat,
+		.type=TYPE_NORMAL,
+		.flag=0,
+		.mlevel=MLEVEL_REGULAR
+	},
+	{
+		.id="head_blow",
+		.action=head_blow,
+		.type=TYPE_FIGHTING,
+		.flag=0,
+		.mlevel=MLEVEL_REGULAR
+	},
+	{
+		.id="mecha",
+		.action=mecha,
+		.type=TYPE_MACHINE,
+		.flag=0,
+		.mlevel=MLEVEL_REGULAR
+	},
+	{
+		.id="perish_song",
+		.action=perish_song,
+		.type=TYPE_NORMAL,
+		.flag=0,
+		.mlevel=MLEVEL_REGULAR
+	},
+	{
+		.id="mud_shot",
+		.action=mud_shot,
+		.type=TYPE_SOIL,
+		.prior=0,
+		.flag=0,
+		.mlevel=MLEVEL_REGULAR
 	},
 	{NULL}
 };

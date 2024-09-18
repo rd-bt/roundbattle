@@ -390,6 +390,8 @@ struct effect_base {
 	void (*kill_end)(struct effect *e,struct unit *u);
 	int (*move)(struct effect *e,struct unit *u,struct move *m);
 	void (*move_end)(struct effect *e,struct unit *u,struct move *m);
+	int (*revive)(struct effect *e,struct unit *u,unsigned long *hp);
+	void (*revive_end)(struct effect *e,struct unit *u,unsigned long hp);
 	void (*roundend)(struct effect *e);
 	void (*roundstart)(struct effect *e);
 	void (*setcooldown)(struct unit *u,struct move *m,int *round);
@@ -530,8 +532,6 @@ struct effect *effect(const struct effect_base *base,struct unit *dest,struct un
 
 int effect_end(struct effect *e);
 
-int effect_end_in_roundend(struct effect *e);
-
 int effect_final(struct effect *e);
 
 void wipetrash(struct battle_field *f);
@@ -541,6 +541,8 @@ int purify(struct effect *e);
 int unit_wipeeffect(struct unit *u,int mask);
 
 int revive(struct unit *u,unsigned long hp);
+
+int revive_nonhookable(struct unit *u,unsigned long hp);
 
 int event(const struct event *ev,struct unit *src);
 

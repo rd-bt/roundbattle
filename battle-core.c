@@ -414,37 +414,7 @@ int effect_end(struct effect *e){
 	effect_free(e,f);
 	return 0;
 }
-int effect_end_in_roundend(struct effect *e){
-	struct battle_field *f;
-	if(e->intrash)
-		return -1;
-	f=NULL;
-	if(e->dest)
-		f=e->dest->owner->field;
-	else if(e->src)
-		f=e->src->owner->field;
-	if(!f)
-		return -1;
-	e->round=0;
-	if(e->round)
-		return -1;
 
-	if(e->prev){
-		e->prev->next=e->next;
-	}else {
-		f->effects=e->next;
-	}
-	if(e->next)
-		e->next->prev=e->prev;
-	if(!e->prev&&!e->next)
-		f->effects=NULL;
-	report(f,MSG_EFFECT_END,e);
-	if(e->base->end)
-		e->base->end(e);
-	//printf("FREE2 %p\n",e);
-	effect_free(e,f);
-	return 0;
-}
 int effect_final(struct effect *e){
 	struct battle_field *f;
 	if(e->intrash)
@@ -524,13 +494,34 @@ void effect_event_end(struct effect *e){
 	}
 	//printf("effect event %s end\n",e->base->id);
 }
-int revive(struct unit *u,unsigned long hp){
+int revive_nonhookable(struct unit *u,unsigned long hp){
 	if(u->state!=UNIT_FAILED||!hp)
 		return -1;
 	u->state=UNIT_NORMAL;
 	sethp(u,hp);
 	update_state(u);
 	update_attr(u);
+	for_each_effect(e,u->owner->field->effects){
+		if(e->base->revive_end)
+			e->base->revive_end(e,u,hp);
+	}
+	return 0;
+}
+int revive(struct unit *u,unsigned long hp){
+	if(u->state!=UNIT_FAILED||!hp)
+		return -1;
+	for_each_effect(e,u->owner->field->effects){
+		if(e->base->revive&&e->base->revive(e,u,&hp))
+			return -1;
+	}
+	u->state=UNIT_NORMAL;
+	sethp(u,hp);
+	update_state(u);
+	update_attr(u);
+	for_each_effect(e,u->owner->field->effects){
+		if(e->base->revive_end)
+			e->base->revive_end(e,u,hp);
+	}
 	return 0;
 }
 int event(const struct event *ev,struct unit *src){
@@ -585,6 +576,8 @@ void update_attr(struct unit *u){
 	u->physical_derate=u->base->physical_derate;
 	u->magical_derate=u->base->magical_derate;
 	u->level=u->base->level;
+	u->type0=u->base->type0;
+	u->type1=u->base->type1;
 	for_each_effect(e,u->owner->field->effects){
 		if(e->base->update_attr)
 			e->base->update_attr(e,u);
@@ -644,7 +637,7 @@ void unit_effect_round_decrease(struct unit *u,int round){
 			report(u->owner->field,MSG_UPDATE,v);
 		}
 		if(!v->round)
-			effect_end_in_roundend(v);
+			effect_end(v);
 	}
 }
 void effect_round_decrease(struct effect *effects,int round){
@@ -657,7 +650,7 @@ void effect_round_decrease(struct effect *effects,int round){
 			report((v->dest?v->dest:v->src)->owner->field,MSG_UPDATE,v);
 		}
 		if(!v->round)
-			effect_end_in_roundend(v);
+			effect_end(v);
 	}
 }
 struct effect *unit_findeffect(struct unit *u,const struct effect_base *base){
@@ -776,14 +769,12 @@ int canaction2(const struct player *p,int act){
 		case ACT_ABORT:
 			return 1;
 		default:
-			return -1;
+			return 0;
 	}
 }
 
 void player_action(struct player *p){
 	int r;
-	if(!canaction2(p,p->action))
-		return;
 	switch(p->action){
 		case ACT_MOVE0 ... ACT_MOVE7:
 			if((p->front->moves[p->action].mlevel&MLEVEL_FREEZING_ROARING)&&unit_hasnegative(p->front))
@@ -796,6 +787,8 @@ void player_action(struct player *p){
 			break;
 	}
 
+	if(!canaction2(p,p->action))
+		return;
 	switch(p->action){
 		case ACT_MOVE0 ... ACT_MOVE7:
 		case ACT_NORMALATTACK:
@@ -871,6 +864,8 @@ struct player *getprior(struct player *p,struct player *e){
 				break;
 			case 1:
 				return prior;
+			case 2:
+				return prior->enemy;
 			default:
 				prior=prior->enemy;
 				break;

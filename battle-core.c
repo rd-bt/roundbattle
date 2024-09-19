@@ -690,7 +690,7 @@ int unit_move(struct unit *u,struct move *m){
 	struct move *backup=u->move_cur;
 	if(!isalive(u->state))
 			return -1;
-	if(!(m->mlevel&MLEVEL_FREEZING_ROARING&&unit_hasnegative(u))){
+	if(!((m->mlevel&MLEVEL_FREEZING_ROARING)&&unit_hasnegative(u))){
 		for_each_effect(e,u->owner->field->effects){
 			if(e->base->move&&e->base->move(e,u,m))
 				return -1;
@@ -730,7 +730,7 @@ int canaction2(const struct player *p,int act){
 	switch(act){
 		case ACT_MOVE0 ... ACT_MOVE7:
 			m=p->front->moves+act;
-			if(!m->id||(m->cooldown&&!(m->mlevel&MLEVEL_FREEZING_ROARING&&unit_hasnegative(p->front))))
+			if(!m->id||(m->cooldown&&!((m->mlevel&MLEVEL_FREEZING_ROARING)&&unit_hasnegative(p->front))))
 				return 0;
 			switch(p->front->state){
 				case UNIT_CONTROLLED:

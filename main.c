@@ -3,14 +3,14 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
-const char *moves[]={"perish_song","head_blow","freezing_roaring","flamethrower","scorching_roaring","spi_fcrack","mud_shot","spi_shattering_slash",NULL};
+const char *moves[]={"escape","head_blow","freezing_roaring","flamethrower","interference","spi_fcrack","mud_shot","spi_shattering_slash",NULL};
 
 void reporter_term(const struct message *msg);
 int term_selector(const struct player *p);
 int main(){
 	struct player p1,p2;
-	struct unit_base bt={"tiger",6600,300,403,666,123,10,128,2,0,0,0,0,TYPE_ICE,TYPE_VOID,13,0};
-	struct unit_base bb={"bear",7500,203,437,332,100,130,128,2,0,0,0,0,TYPE_GRASS,TYPE_VOID,13,0};
+	struct unit_base bt={"tiger",6600,300,403,666,100,100,128,2,0,0,0,0,TYPE_ICE,TYPE_VOID,13,0};
+	struct unit_base bb={"bear",7500,203,437,332,100,100,128,2,0,0,0,0,TYPE_GRASS,TYPE_VOID,13,0};
 	int r;
 //	for(r=0;r<20;++r)
 //		printf("%d\n",test(0.5));

@@ -159,11 +159,12 @@ void name##_update_attr(struct effect *e,struct unit *u){\
 }\
 const struct effect_base name[1]={{\
 	.id=#name,\
-	.flag=EFFECT_ATTR,\
 	.init=attr_init,\
 	.inited=effect_update_attr,\
 	.end=effect_update_attr,\
-	.update_attr=name##_update_attr\
+	.update_attr=name##_update_attr,\
+	.flag=EFFECT_ATTR,\
+	.prior=64\
 }};
 effect_attr_d(DEF,def,(e->level>0?0.5:0.2)*u->def)
 effect_attr_d(CE,crit_effect,0.75)
@@ -509,7 +510,7 @@ void scorching_roaring(struct unit *s){
 		return;
 	}
 	t=s->osite;
-	attack(t,s,(0.55+0.2*n)*s->atk,DAMAGE_MAGICAL,AF_CRIT,TYPE_FIRE);
+	attack(t,s,(0.6+0.2*n)*s->atk,DAMAGE_MAGICAL,AF_CRIT,TYPE_FIRE);
 	heal(s,0.18*n*s->base->max_hp);
 
 	e=unit_findeffect(s,ATK);
@@ -544,11 +545,10 @@ void thunder_roaring(struct unit *s){
 		return;
 	}
 	t=s->osite;
-	dmg=attack(t,s,(0.55+0.2*n)*s->atk,DAMAGE_MAGICAL,AF_CRIT,TYPE_ELECTRIC);
+	dmg=attack(t,s,(0.6+0.2*n)*s->atk,DAMAGE_MAGICAL,AF_CRIT,TYPE_ELECTRIC);
 	for_each_unit(u,t->owner){
 		attack(t,s,0.15*dmg+n*0.06*u->base->max_hp,DAMAGE_REAL,0,TYPE_ELECTRIC);
 	}
-	heal(s,0.2*dmg);
 }
 
 void freezing_roaring(struct unit *s){
@@ -1261,7 +1261,9 @@ int repeat_action(struct effect *e,struct player *p){
 		case ACT_UNIT0 ... ACT_UNIT5:
 		case ACT_NORMALATTACK:
 		case ACT_ABORT:
+			effect_event(e);
 			p->action=e->level;
+			effect_event_end(e);
 		default:
 			break;
 	}
@@ -1300,7 +1302,7 @@ const struct effect_base silent[1]={{
 void head_blow(struct unit *s){
 	struct unit *t=gettarget(s);
 	if(hittest(t,s,1.3)){
-		attack(t,s,0.9*s->atk,DAMAGE_PHYSICAL,0,TYPE_FIGHTING);
+		attack(t,s,s->atk,DAMAGE_PHYSICAL,0,TYPE_FIGHTING);
 		effect(silent,t,s,0,4);
 	}
 	setcooldown(s,s->move_cur,4);
@@ -1327,8 +1329,11 @@ void perish_kill_end(struct effect *e,struct unit *u){
 	report(e->dest->owner->field,MSG_UPDATE,e);
 }
 int perish_revive(struct effect *e,struct unit *u,unsigned long *hp){
-	if(u==e->dest)
+	if(u==e->dest){
+		effect_event(e);
 		return -1;
+		effect_event_end(e);
+	}
 	return 0;
 }
 const struct effect_base perish_song_effect[1]={{
@@ -1349,6 +1354,8 @@ void perish_song(struct unit *s){
 }
 
 int marsh_getprior(struct effect *e,struct player *p){
+	effect_event(e);
+	effect_event_end(e);
 	return -1;
 }
 const struct effect_base marsh[1]={{
@@ -1362,6 +1369,104 @@ void mud_shot(struct unit *s){
 		attack(t,s,1+t->hp/6,DAMAGE_REAL,0,TYPE_SOIL);
 	effect(marsh,NULL,s,0,6);
 	setcooldown(s,s->move_cur,5);
+}
+void nether_roaring(struct unit *s){
+	struct unit *t;
+	struct effect *e;
+	long n,n1;
+	n=unit_hasnegative(s);
+	if(n<=0){
+		t=gettarget(s);
+		if(hittest(t,s,2.5)){
+			attack(t,s,0.75*s->atk,DAMAGE_PHYSICAL,0,TYPE_GHOST);
+			if(test(0.2)){
+				effect(ATK,s,s,1,-1);
+				effect(DEF,s,s,1,-1);
+				effect(SPEED,s,s,1,-1);
+				effect(HIT,s,s,1,-1);
+				effect(AVOID,s,s,1,-1);
+				effect(CE,s,s,1,-1);
+				effect(PDB,s,s,1,-1);
+				effect(MDB,s,s,1,-1);
+				effect(PDD,s,s,1,-1);
+				effect(MDD,s,s,1,-1);
+			}
+		}
+		e=unit_findeffect(t,ATK);
+		n=e?e->level:0;
+		e=unit_findeffect(s,ATK);
+		n1=e?e->level:0;
+		if(n>n1+1)
+			n=(n-n1)/2+1;
+		else
+			n=1;
+		effect(ATK,s,s,n,-1);
+		return;
+	}
+	t=s->osite;
+	attack(t,s,(0.6+0.2*n)*s->atk,DAMAGE_MAGICAL,AF_CRIT,TYPE_GHOST);
+	effect(AVOID,s,s,n+1,-1);
+}
+void tidal(struct unit *s){
+	struct unit *t=gettarget(s);
+	for_each_effect(e,s->owner->field->effects){
+		if(e->dest==t&&(e->base->flag&EFFECT_ATTR)&&e->level>0)
+			purify(e);
+	}
+	effect(PDB,s,s,1,-1);
+	effect(MDB,s,s,1,-1);
+	attack(t,s,0.85*s->atk,DAMAGE_PHYSICAL,0,TYPE_DEVINEWATER);
+}
+
+int rand_action(const struct player *p){
+	int n=0,c=0;
+	for(int i=ACT_MOVE0;i<ACT_ABORT;++i)
+		if(canaction2(p,i)){
+			c|=1<<i;
+			++n;
+		}
+	if(!n)
+		return ACT_ABORT;
+	n=randi()%n;
+	for(int i=ACT_MOVE0;i<ACT_ABORT;++i){
+		if((1<<i)&c){
+			if(!n)
+				return i;
+			--n;
+		}
+	}
+	__builtin_unreachable();
+}
+int interfered_action(struct effect *e,struct player *p){
+	if(e->dest!=p->front)
+		return 0;
+	switch(p->action){
+		case ACT_MOVE0 ... ACT_MOVE7:
+			if(p->front->moves[p->action].flag&MOVE_NOCONTROL)
+				break;
+		case ACT_UNIT0 ... ACT_UNIT5:
+		case ACT_NORMALATTACK:
+		case ACT_ABORT:
+			effect_event(e);
+			p->action=rand_action(p);
+			effect_event_end(e);
+		default:
+			break;
+	}
+	return 0;
+}
+const struct effect_base interfered[1]={{
+	.id="interfered",
+	.action=interfered_action,
+	.flag=EFFECT_NEGATIVE
+}};
+void interference(struct unit *s){
+	struct unit *t=gettarget(s);
+	if(hittest(t,s,1.8)){
+		attack(t,s,s->atk/4,DAMAGE_PHYSICAL,0,TYPE_BUG);
+		if(effect(interfered,t,s,0,4))
+			setcooldown(s,s->move_cur,9);
+	}
 }
 const struct move builtin_moves[]={
 	{
@@ -1800,6 +1905,27 @@ const struct move builtin_moves[]={
 		.action=mud_shot,
 		.type=TYPE_SOIL,
 		.prior=0,
+		.flag=0,
+		.mlevel=MLEVEL_REGULAR
+	},
+	{
+		.id="nether_roaring",
+		.action=nether_roaring,
+		.type=TYPE_GHOST,
+		.flag=0,
+		.mlevel=MLEVEL_REGULAR
+	},
+	{
+		.id="tidal",
+		.action=tidal,
+		.type=TYPE_DEVINEWATER,
+		.flag=0,
+		.mlevel=MLEVEL_REGULAR
+	},
+	{
+		.id="interference",
+		.action=interference,
+		.type=TYPE_BUG,
 		.flag=0,
 		.mlevel=MLEVEL_REGULAR
 	},

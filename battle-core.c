@@ -83,18 +83,25 @@ unsigned long attack(struct unit *dest,struct unit *src,unsigned long value,int 
 		}else
 			value*=2;
 	}
-	if(damage_type!=DAMAGE_REAL&&!(aflag&(AF_EFFECT|AF_WEAK))){
-		dest_type=dest->type0|dest->type1;
-		x=__builtin_popcount(dest_type&effect_types(type))
-		-__builtin_popcount(dest_type&weak_types(type));
-		if(x<0){
-			value/=(1-x);
-			aflag|=AF_WEAK;
-		}else if(x>0){
-			if(x>1&&(type&TYPES_DEVINE))
-				x=1;
-			value*=1+x;
-			aflag|=AF_EFFECT;
+	if(damage_type!=DAMAGE_REAL){
+		dest_type=(aflag&(AF_EFFECT|AF_WEAK));
+		if(dest_type){
+			if(dest_type==(AF_EFFECT|AF_WEAK)){
+				aflag&=~(AF_EFFECT|AF_WEAK);
+			}
+		}else {
+			dest_type=dest->type0|dest->type1;
+			x=__builtin_popcount(dest_type&effect_types(type))
+			-__builtin_popcount(dest_type&weak_types(type));
+			if(x<0){
+				value/=(1-x);
+				aflag|=AF_WEAK;
+			}else if(x>0){
+				if(x>1&&(type&TYPES_DEVINE))
+					x=1;
+				value*=1+x;
+				aflag|=AF_EFFECT;
+			}
 		}
 	}
 	if(!(aflag&AF_NODEF)&&damage_type!=DAMAGE_REAL){
@@ -778,7 +785,7 @@ void player_action(struct player *p){
 	switch(p->action){
 		case ACT_MOVE0 ... ACT_MOVE7:
 			if((p->front->moves[p->action].mlevel&MLEVEL_FREEZING_ROARING)&&unit_hasnegative(p->front))
-				break;
+				goto fr;
 		default:
 			for_each_effect(e,p->field->effects){
 				if(e->base->action&&e->base->action(e,p))
@@ -787,8 +794,14 @@ void player_action(struct player *p){
 			break;
 	}
 
-	if(!canaction2(p,p->action))
+	if(p->action==ACT_ABORT||!canaction2(p,p->action)){
+		for_each_effect(e,p->field->effects){
+			if(e->base->action_fail)
+				e->base->action_fail(e,p);
+		}
 		return;
+	}
+fr:
 	switch(p->action){
 		case ACT_MOVE0 ... ACT_MOVE7:
 		case ACT_NORMALATTACK:
@@ -814,7 +827,6 @@ void player_action(struct player *p){
 		default:
 			break;
 	}
-
 	for_each_effect(e,p->field->effects){
 		if(e->base->action_end)
 			e->base->action_end(e,p);
@@ -981,7 +993,7 @@ void history_add(struct battle_field *f){
 			f->ht=h;
 			f->ht_length=len;
 		}else {
-			h=realloc(f->rec,len*sizeof(struct history));
+			h=realloc(f->ht,len*sizeof(struct history));
 			if(h){
 				f->ht=h;
 				f->ht_length=len;

@@ -373,6 +373,7 @@ struct effect_base {
 	void (*end)(struct effect *);
 	int (*action)(struct effect *e,struct player *p);
 	void (*action_end)(struct effect *e,struct player *p);
+	void (*action_fail)(struct effect *e,struct player *p);
 	int (*attack)(struct effect *e,struct unit *dest,struct unit *src,unsigned long *value,int *damage_type,int *aflag,int *type);
 	void (*attack_end)(struct effect *e,struct unit *dest,struct unit *src,unsigned long value,int damage_type,int aflag,int type);
 	void (*cooldown_decrease)(struct effect *e,struct unit *u,struct move *m,int *round);

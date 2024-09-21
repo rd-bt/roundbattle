@@ -237,7 +237,6 @@ void double_slash(struct unit *s){
 void petrifying_ray(struct unit *s){
 	struct unit *t=gettarget(s);
 	if(hittest(t,s,1.3)){
-		//unit_abnormal(t,ABNORMAL_PETRIFIED,3);
 		effect(petrified,t,s,0,3);
 	}
 	setcooldown(s,s->move_cur,4);
@@ -245,7 +244,6 @@ void petrifying_ray(struct unit *s){
 void leech_seed(struct unit *s){
 	struct unit *t=gettarget(s);
 	if(hittest(t,s,1.3)){
-		//unit_abnormal(t,ABNORMAL_PARASITIZED,5);
 		effect(parasitized,t,s,0,5);
 	}
 	setcooldown(s,s->move_cur,4);
@@ -254,13 +252,10 @@ void soften(struct unit *s){
 	struct unit *t=gettarget(s);
 	if(hittest(t,s,1.0))
 		effect(ATK,t,s,-1,-1);
-		//unit_attr_set(t,ATTR_ATK,t->attrs.atk-1);
 }
 void iron_wall(struct unit *s){
 	effect(PDD,s,s,1,-1);
 	effect(MDD,s,s,1,-1);
-	//unit_attr_set(s,ATTR_PDERATE,s->attrs.physical_derate+1);
-	//unit_attr_set(s,ATTR_MDERATE,s->attrs.magical_derate+1);
 }
 void spi_blow(struct unit *s){
 	struct unit *t=gettarget(s);
@@ -281,13 +276,11 @@ void spi_shattering_slash(struct unit *s){
 	t=gettarget(s);
 	if(hittest(t,s,1.0)){
 		attack(t,s,0.5*s->atk,DAMAGE_PHYSICAL,0,TYPE_MACHINE);
-		//unit_abnormal(t,ABNORMAL_PARALYSED,3);
 		effect(paralysed,t,s,0,3);
 	}
 }
 void angry(struct unit *s){
 	effect(ATK,s,s,1,-1);
-	//unit_attr_set(s,ATTR_CRITEFFECT,s->attrs.crit_effect+2);
 }
 void spi_fcrack(struct unit *s){
 	struct unit *t=gettarget(s);
@@ -841,6 +834,9 @@ void bh_inited(struct effect *e){
 	effect(gravitational_potential,e->src,NULL,16,12);
 	effect(gravitational_potential,e->src->osite,NULL,16,12);
 }
+int bh_su(struct effect *e,struct unit *u){
+	return -1;
+}
 void bh_end(struct effect *e){
 	unsigned long gp0,gp1;
 	struct unit *s=e->src->owner->front;
@@ -870,6 +866,7 @@ void bh_end(struct effect *e){
 const struct effect_base black_hole[1]={{
 	.id="black_hole",
 	.inited=bh_inited,
+	.switchunit=bh_su,
 	.end=bh_end,
 	.flag=EFFECT_ENV
 }};
@@ -1109,8 +1106,7 @@ void heat_engine_init(struct unit *s){
 }
 
 void flamethrower(struct unit *s){
-	struct unit *t;
-	t=gettarget(s);
+	struct unit *t=gettarget(s);
 	if(hittest(t,s,1.0))
 		effect(burnt,t,s,0,5);
 }
@@ -1208,7 +1204,7 @@ const struct move force_vh_pm={
 };
 void vh_move_end(struct effect *e,struct unit *u,struct move *m){
 	struct move am;
-	if(e->round>1||e->active||e->dest!=u)
+	if(e->round>1||e->active||e->dest!=u||!isfront(u))
 		return;
 	effect_event(e);
 	memcpy(&am,&force_vh_pm,sizeof(struct move));
@@ -1271,6 +1267,7 @@ int repeat_action(struct effect *e,struct player *p){
 }
 const struct effect_base repeat_effect[1]={{
 	.id="repeat",
+	.init=abnormal_init,
 	.action=repeat_action,
 	.flag=EFFECT_NEGATIVE,
 }};
@@ -1296,6 +1293,7 @@ int silent_move(struct effect *e,struct unit *u,struct move *m){
 }
 const struct effect_base silent[1]={{
 	.id="silent",
+	.init=abnormal_init,
 	.move=silent_move,
 	.flag=EFFECT_NEGATIVE|EFFECT_CONTROL
 }};
@@ -1457,6 +1455,7 @@ int interfered_action(struct effect *e,struct player *p){
 }
 const struct effect_base interfered[1]={{
 	.id="interfered",
+	.init=abnormal_init,
 	.action=interfered_action,
 	.flag=EFFECT_NEGATIVE
 }};
@@ -1466,6 +1465,163 @@ void interference(struct unit *s){
 		attack(t,s,s->atk/4,DAMAGE_PHYSICAL,0,TYPE_BUG);
 		if(effect(interfered,t,s,0,4))
 			setcooldown(s,s->move_cur,9);
+	}
+}
+void anger_roaring(struct unit *s){
+	struct unit *t;
+	struct effect *e;
+	long n,n1;
+	n=unit_hasnegative(s);
+	if(n<=0){
+		t=gettarget(s);
+		if(hittest(t,s,2.5)){
+			attack(t,s,0.75*s->atk,DAMAGE_PHYSICAL,0,TYPE_FIGHTING);
+			if(test(0.2))
+				effect(silent,t,s,0,4);
+		}
+		e=unit_findeffect(t,ATK);
+		n=e?e->level:0;
+		e=unit_findeffect(s,ATK);
+		n1=e?e->level:0;
+		if(n>n1+1)
+			n=(n-n1)/2+1;
+		else
+			n=1;
+		effect(ATK,s,s,n,-1);
+		return;
+	}
+	t=s->osite;
+	attack(t,s,(0.6+0.2*n)*s->atk,DAMAGE_MAGICAL,AF_CRIT,TYPE_FIGHTING);
+	if((double)t->hp/t->base->max_hp<=0.15+n*0.03)
+		instant_death(t);
+	else
+		attack(t,s,(0.14+n*0.02)*t->base->max_hp,DAMAGE_REAL,0,TYPE_FIGHTING);
+}
+void poison_sting(struct unit *s){
+	struct unit *t=gettarget(s);
+	if(hittest(t,s,1.0)){
+		attack(t,s,0.8*s->atk,DAMAGE_PHYSICAL,0,TYPE_POISON);
+		if(test(0.35))
+			effect(poisoned,t,s,0,5);
+	}
+}
+void hypnosis(struct unit *s){
+	struct unit *t=gettarget(s);
+	if(hittest(t,s,1.3)){
+		effect(asleep,t,s,0,3);
+	}
+	setcooldown(s,s->move_cur,4);
+}
+void rest(struct unit *s){
+	;
+}
+void moonlight(struct unit *s){
+	for_each_effect(e,s->owner->field->effects){
+		if(e->dest!=s||!(e->base->flag&EFFECT_ATTR)||e->level>0)
+			continue;
+		purify(e);
+	}
+
+}
+void byebye(struct unit *s){
+	sethp(s,0);
+}
+void scent(struct unit *s){
+	for_each_effect(e,s->owner->field->effects){
+		if(e->dest!=s||!(e->base->flag&EFFECT_ABNORMAL))
+			continue;
+		purify(e);
+	}
+
+}
+void synthesis(struct unit *s){
+	struct unit *t=gettarget(s);
+	heal(s,((t->type0|t->type1)&TYPE_LIGHT?0.6:0.4)*s->base->max_hp);
+	setcooldown(s,s->move_cur,4);
+}
+void hail_pm(struct unit *s){
+	struct unit *t=gettarget(s);
+	attack(t,s,0.45*s->atk+t->base->max_hp/32.0,DAMAGE_PHYSICAL,0,TYPE_ICE);
+}
+const struct move hail_p={
+	.id="hail",
+	.action=hail_pm,
+	.type=TYPE_ICE,
+	.prior=0,
+	.flag=0,
+	.mlevel=MLEVEL_REGULAR
+};
+void hail_action_end(struct effect *e,struct player *p){
+	struct move am;
+	if(e->dest!=p->front)
+		return;
+	if(!e->active){
+		e->active=1;
+		return;
+	}
+	effect_event(e);
+	memcpy(&am,&hail_p,sizeof(struct move));
+	unit_move(e->dest,&am);
+	effect_event_end(e);
+}
+void hail_inited(struct effect *e){
+	e->active=0;
+}
+const struct effect_base hail_effect[1]={{
+	.id="hail",
+	.action_end=hail_action_end,
+	.action_fail=hail_action_end,
+	.flag=EFFECT_POSITIVE
+}};
+void hail(struct unit *s){
+	struct unit *t=gettarget(s);
+	if(hittest(t,s,1.0))
+		attack(t,s,0.45*s->atk+t->base->max_hp/32.0,DAMAGE_PHYSICAL,0,TYPE_ICE);
+	effect(hail_effect,s,s,0,5);
+}
+void clip3(struct unit *s){
+	struct unit *t=gettarget(s);
+	struct effect *e;
+	if(hittest(t,s,1.0)){
+		e=unit_findeffect(t,SPEED);
+		attack(t,s,0.8*s->atk,DAMAGE_PHYSICAL,e&&e->level<0?AF_CRIT:0,TYPE_NORMAL);
+	}
+}
+void mighty_wave_roundend(struct effect *e){
+	struct move *m;
+	struct unit *t;
+	int n=e->level;
+	m=getmove(t=e->dest->osite);
+	if(m&&m->cooldown>=0){
+		setcooldown(t,m,n+(m->cooldown?m->cooldown:1));
+	}
+	effect_end(e);
+}
+const struct effect_base mighty_wave_effect[1]={{
+	.id="mighty_wave",
+	.roundend=mighty_wave_roundend,
+	.flag=EFFECT_POSITIVE
+}};
+void mighty_wave(struct unit *s){
+	struct unit *t=gettarget(s);
+	int n=1;
+	for_each_effect(e,s->owner->field->effects){
+		if(e->dest!=s||!(e->base->flag&EFFECT_ABNORMAL))
+			continue;
+		purify(e);
+		++n;
+	}
+	if(hittest(t,s,1.2)){
+		attack(t,s,0.9*s->atk,DAMAGE_PHYSICAL,0,TYPE_WATER);
+	}
+	effect(mighty_wave_effect,s,s,n,1);
+	setcooldown(s,s->move_cur,3);
+}
+void cold_wind(struct unit *s){
+	struct unit *t=gettarget(s);
+	if(hittest(t,s,1.0)){
+		attack(t,s,0.5*s->atk,DAMAGE_PHYSICAL,0,TYPE_ICE);
+		effect(SPEED,t,s,-1,-1);
 	}
 }
 const struct move builtin_moves[]={
@@ -1926,6 +2082,90 @@ const struct move builtin_moves[]={
 		.id="interference",
 		.action=interference,
 		.type=TYPE_BUG,
+		.flag=0,
+		.mlevel=MLEVEL_REGULAR
+	},
+	{
+		.id="anger_roaring",
+		.action=anger_roaring,
+		.type=TYPE_FIGHTING,
+		.flag=0,
+		.mlevel=MLEVEL_REGULAR
+	},
+	{
+		.id="poison_sting",
+		.action=poison_sting,
+		.type=TYPE_POISON,
+		.flag=0,
+		.mlevel=MLEVEL_REGULAR
+	},
+	{
+		.id="hypnosis",
+		.action=hypnosis,
+		.type=TYPE_NORMAL,
+		.flag=0,
+		.mlevel=MLEVEL_REGULAR
+	},
+	{
+		.id="moonlight",
+		.action=moonlight,
+		.type=TYPE_LIGHT,
+		.flag=0,
+		.mlevel=MLEVEL_REGULAR
+	},
+	{
+		.id="byebye",
+		.action=byebye,
+		.type=TYPE_NORMAL,
+		.flag=0,
+		.mlevel=MLEVEL_REGULAR
+	},
+	{
+		.id="rest",
+		.action=rest,
+		.type=TYPE_NORMAL,
+		.flag=0,
+		.mlevel=MLEVEL_REGULAR
+	},
+	{
+		.id="scent",
+		.action=scent,
+		.type=TYPE_GRASS,
+		.flag=0,
+		.mlevel=MLEVEL_REGULAR
+	},
+	{
+		.id="synthesis",
+		.action=synthesis,
+		.type=TYPE_GRASS,
+		.flag=0,
+		.mlevel=MLEVEL_REGULAR
+	},
+	{
+		.id="hail",
+		.action=hail,
+		.type=TYPE_ICE,
+		.flag=0,
+		.mlevel=MLEVEL_REGULAR
+	},
+	{
+		.id="clip3",
+		.action=clip3,
+		.type=TYPE_NORMAL,
+		.flag=0,
+		.mlevel=MLEVEL_REGULAR
+	},
+	{
+		.id="mighty_wave",
+		.action=mighty_wave,
+		.type=TYPE_WATER,
+		.flag=0,
+		.mlevel=MLEVEL_REGULAR
+	},
+	{
+		.id="cold_wind",
+		.action=cold_wind,
+		.type=TYPE_ICE,
 		.flag=0,
 		.mlevel=MLEVEL_REGULAR
 	},

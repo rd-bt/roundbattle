@@ -141,13 +141,28 @@ void player_moveinit(struct player *p){
 	//fprintf(stderr,"---\n");
 }
 #define deadcheck do {\
+	int r0,r1,r2,r3;\
 	r0=!isalive(p->front->state);\
 	r1=!isalive(e->front->state);\
+	r2=r0?!player_hasunit(p):0;\
+	r3=r1?!player_hasunit(e):0;\
+	if(r2!=r3){\
+		ret=!!r0;\
+		goto out;\
+	}\
+	if(r2){\
+		if(p->front->speed==e->front->speed)\
+			ret=test(0.5);\
+		else\
+			ret=p->front->speed<e->front->speed?\
+			1:0;\
+		goto out;\
+	}\
 	if(r0){\
-		r0=!player_hasunit(p)||player_selectunit(p);\
+		r0=player_selectunit(p);\
 	}\
 	if(r1){\
-		r1=!player_hasunit(e)||player_selectunit(e);\
+		r1=player_selectunit(e);\
 	}\
 	if(r0||r1){\
 		if(r0&&r1){\
@@ -171,7 +186,7 @@ void player_moveinit(struct player *p){
 int battle(struct player *p,struct player *e,void (*reporter)(const struct message *)){
 	struct player *prior,*latter;
 	struct battle_field field;
-	int round=0,r0,r1,ret,stage=STAGE_INIT;
+	int round=0,ret,stage=STAGE_INIT;
 	e=p->enemy;
 	if(p==e)
 		return -1;

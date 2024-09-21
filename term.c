@@ -661,6 +661,7 @@ void print_unit(const struct unit *u){
 int term_selector(const struct player *p){
 	char buf[32];
 	ssize_t r;
+	static int dep=0;
 	if(!canaction2(p,cur)){
 		if(isalive(p->front->state)){
 			if(canaction2(p,ACT_NORMALATTACK)){
@@ -860,6 +861,14 @@ refrash:
 		case 'x':
 			frash(p->enemy,stdout,-1);
 			read(STDIN_FILENO,buf,31);
+			goto refrash;
+		case 'c':
+			if(!dep){
+				++dep;
+				term_selector(p->enemy);
+				--dep;
+			}
+			//read(STDIN_FILENO,buf,31);
 			goto refrash;
 	}
 	goto refrash;

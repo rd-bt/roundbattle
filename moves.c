@@ -1403,7 +1403,7 @@ void nether_roaring(struct unit *s){
 	}
 	t=s->osite;
 	attack(t,s,(0.6+0.2*n)*s->atk,DAMAGE_MAGICAL,AF_CRIT,TYPE_GHOST);
-	effect(AVOID,s,s,n+1,-1);
+	effect(AVOID,s,s,n*2,-1);
 }
 void tidal(struct unit *s){
 	struct unit *t=gettarget(s);
@@ -1623,6 +1623,58 @@ void cold_wind(struct unit *s){
 		attack(t,s,0.5*s->atk,DAMAGE_PHYSICAL,0,TYPE_ICE);
 		effect(SPEED,t,s,-1,-1);
 	}
+}
+int maple_init(struct effect *e,long level,int round){
+	level+=e->level;
+	if(level<=0)
+		return -1;
+	e->round=round;
+	e->level=level;
+	return 0;
+}
+const struct effect_base maple[1]={{
+	.id="maple",
+	.init=maple_init,
+	.flag=EFFECT_NEGATIVE
+}};
+void breach_missile(struct unit *s){
+	struct unit *t=gettarget(s);
+	struct effect *me;
+	int n=0;
+	for_each_effect(e,s->owner->field->effects){
+		if((e->base==DEF||e->base==PDD||e->base==MDD)&&e->level>0){
+				purify(e);
+				n+=e->level;
+		}
+	}
+	if(hittest(t,s,1.0)){
+		attack(t,s,0.75*s->atk,DAMAGE_PHYSICAL,0,TYPE_NORMAL);
+	}
+	me=effect(maple,t,s,n+1,-1);
+	if(me)
+		heal(s,40+me->level);
+}
+void piercing_missile(struct unit *s){
+	struct unit *t=gettarget(s);
+	struct effect *e=unit_findeffect(t,maple);
+	int n=e?e->level:0;
+	double dmg=40+0.05*s->atk+0.03*t->base->max_hp;
+	if(n){
+		attack(t,s,dmg*pow(1.15,n),DAMAGE_REAL,0,TYPE_NORMAL);
+		effect(maple,t,s,-n,-1);
+	}
+	else
+		attack(t,s,dmg,DAMAGE_REAL,0,TYPE_NORMAL);
+}
+void amuck(struct unit *s){
+	struct unit *t=gettarget(s);
+	struct effect *e=unit_findeffect(t,maple);
+	if(e){
+		attack(t,s,s->atk,DAMAGE_PHYSICAL,AF_CRIT,TYPE_NORMAL);
+		effect(maple,t,s,-1,-1);
+	}
+	else if(hittest(t,s,1.0))
+		attack(t,s,s->atk,DAMAGE_PHYSICAL,0,TYPE_NORMAL);
 }
 const struct move builtin_moves[]={
 	{
@@ -2124,7 +2176,7 @@ const struct move builtin_moves[]={
 		.id="rest",
 		.action=rest,
 		.type=TYPE_NORMAL,
-		.flag=0,
+		.flag=MOVE_NOCONTROL,
 		.mlevel=MLEVEL_REGULAR
 	},
 	{
@@ -2166,6 +2218,27 @@ const struct move builtin_moves[]={
 		.id="cold_wind",
 		.action=cold_wind,
 		.type=TYPE_ICE,
+		.flag=0,
+		.mlevel=MLEVEL_REGULAR
+	},
+	{
+		.id="breach_missile",
+		.action=breach_missile,
+		.type=TYPE_NORMAL,
+		.flag=0,
+		.mlevel=MLEVEL_REGULAR
+	},
+	{
+		.id="piercing_missile",
+		.action=piercing_missile,
+		.type=TYPE_NORMAL,
+		.flag=0,
+		.mlevel=MLEVEL_REGULAR
+	},
+	{
+		.id="amuck",
+		.action=amuck,
+		.type=TYPE_NORMAL,
 		.flag=0,
 		.mlevel=MLEVEL_REGULAR
 	},

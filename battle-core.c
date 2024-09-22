@@ -67,7 +67,7 @@ unsigned long attack(struct unit *dest,struct unit *src,unsigned long value,int 
 			return 0;
 	}
 	if(!isalive(dest->state))
-			return -1;
+			return 0;
 	for_each_effect(e,dest->owner->field->effects){
 		if(e->base->attack&&e->base->attack(e,dest,src,&value,&damage_type,&aflag,&type))
 			return 0;

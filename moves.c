@@ -1038,6 +1038,7 @@ void super_scissors(struct unit *s){
 				break;
 			memcpy(s->move_cur,mp,sizeof(struct move));
 			s->move_cur->mlevel&=MLEVEL_REGULAR;
+			report(s->owner->field,MSG_UPDATE,s->move_cur);
 		default:
 			break;
 	}
@@ -1226,13 +1227,19 @@ void force_vh(struct unit *s){
 	setcooldown(s,s->move_cur,2);
 }
 void back(struct player *p,const struct player *h){
+	struct unit *b;
 	for(int i=0;i<6&&p->units[i].base;++i){
 		if(p->units[i].state==UNIT_FREEZING_ROARINGED)
 			continue;
 		memcpy(p->units+i,h->units+i,offsetof(struct unit,owner));
+		report(p->field,MSG_UPDATE,p->units+i);
 	}
 	p->action=ACT_ABORT;
-	p->front=h->front;
+	if(p->front!=h->front){
+		b=p->front;
+		p->front=h->front;
+		report(p->field,MSG_SWITCH,p->front,b);
+	}
 }
 void time_back(struct unit *s){
 	struct battle_field *f=s->owner->field;
@@ -1642,7 +1649,7 @@ void breach_missile(struct unit *s){
 	struct effect *me;
 	int n=0;
 	for_each_effect(e,s->owner->field->effects){
-		if((e->base==DEF||e->base==PDD||e->base==MDD)&&e->level>0){
+		if(e->dest==t&&(e->base==DEF||e->base==PDD||e->base==MDD)&&e->level>0){
 				purify(e);
 				n+=e->level;
 		}
@@ -1675,6 +1682,77 @@ void amuck(struct unit *s){
 	}
 	else if(hittest(t,s,1.0))
 		attack(t,s,s->atk,DAMAGE_PHYSICAL,0,TYPE_NORMAL);
+}
+void reflex(struct unit *s){
+	struct battle_field *f=s->owner->field;
+	unsigned long dmg=0;
+	int round=*f->round;
+	for(const struct message *p=f->rec+f->rec_size-1;p>=f->rec;--p){
+		if(p->type!=MSG_DAMAGE
+		||damage_type_check(p->un.damage.damage_type)
+		||p->un.damage.dest!=s)
+			continue;
+		if(p->round!=round)
+			break;
+		dmg+=p->un.damage.value;
+	}
+	if(dmg){
+		attack(s->osite,s,1.5*dmg,DAMAGE_REAL,0,TYPE_VOID);
+		setcooldown(s,s->move_cur,2);
+	}
+}
+void physical_reflex(struct unit *s){
+	struct battle_field *f=s->owner->field;
+	unsigned long dmg=0;
+	int round=*f->round;
+	for(const struct message *p=f->rec+f->rec_size-1;p>=f->rec;--p){
+		if(p->type!=MSG_DAMAGE
+		||p->un.damage.damage_type!=DAMAGE_PHYSICAL
+		||p->un.damage.dest!=s)
+			continue;
+		if(p->round!=round)
+			break;
+		dmg+=p->un.damage.value;
+	}
+	if(dmg){
+		attack(s->osite,s,2*dmg,DAMAGE_REAL,0,TYPE_VOID);
+		setcooldown(s,s->move_cur,2);
+	}
+}
+void magical_reflex(struct unit *s){
+	struct battle_field *f=s->owner->field;
+	unsigned long dmg=0;
+	int round=*f->round;
+	for(const struct message *p=f->rec+f->rec_size-1;p>=f->rec;--p){
+		if(p->type!=MSG_DAMAGE
+		||p->un.damage.damage_type!=DAMAGE_MAGICAL
+		||p->un.damage.dest!=s)
+			continue;
+		if(p->round!=round)
+			break;
+		dmg+=p->un.damage.value;
+	}
+	if(dmg){
+		attack(s->osite,s,2*dmg,DAMAGE_REAL,0,TYPE_VOID);
+		setcooldown(s,s->move_cur,2);
+	}
+}
+int damage_reverse_attack(struct effect *e,struct unit *dest,struct unit *src,unsigned long *value,int *damage_type,int *aflag,int *type){
+	if(dest!=e->dest)
+		return 0;
+	effect_event(e);
+	heal(dest,*value);
+	effect_event_end(e);
+	return -1;
+}
+const struct effect_base damage_reverse_effect[1]={{
+	.id="damage_reverse",
+	.flag=EFFECT_POSITIVE,
+	.attack=damage_reverse_attack,
+}};
+void damage_reverse(struct unit *s){
+	effect(damage_reverse_effect,s,s,0,1);
+	setcooldown(s,s->move_cur,4);
 }
 const struct move builtin_moves[]={
 	{
@@ -1725,7 +1803,6 @@ const struct move builtin_moves[]={
 		.flag=0,
 		.mlevel=MLEVEL_REGULAR
 	},
-
 	{
 		.id="spi_exchange",
 		.action=spi_exchange,
@@ -2239,6 +2316,35 @@ const struct move builtin_moves[]={
 		.id="amuck",
 		.action=amuck,
 		.type=TYPE_NORMAL,
+		.flag=0,
+		.mlevel=MLEVEL_REGULAR
+	},
+	{
+		.id="reflex",
+		.action=reflex,
+		.type=TYPE_STEEL,
+		.prior=-6,
+		.mlevel=MLEVEL_REGULAR
+	},
+	{
+		.id="physical_reflex",
+		.action=physical_reflex,
+		.type=TYPE_STEEL,
+		.prior=-6,
+		.mlevel=MLEVEL_REGULAR
+	},
+	{
+		.id="magical_reflex",
+		.action=magical_reflex,
+		.type=TYPE_STEEL,
+		.prior=-6,
+		.mlevel=MLEVEL_REGULAR
+	},
+	{
+		.id="damage_reverse",
+		.action=damage_reverse,
+		.type=TYPE_GHOST,
+		.prior=4,
 		.flag=0,
 		.mlevel=MLEVEL_REGULAR
 	},

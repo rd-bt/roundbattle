@@ -4,8 +4,8 @@
 #include <string.h>
 int rand_selector(const struct player *p){
 	int n=0,c=0;
-	if(canaction2(p,0))
-	return 0;
+	//if(canaction2(p,0))
+	//return 0;
 	if(!isalive(p->front->state)){
 		/*for(int i=ACT_UNIT0;i<=ACT_UNIT5;++i)
 			if(canaction2(p,i)){

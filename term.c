@@ -272,7 +272,7 @@ void frash(const struct player *p,FILE *fp,int current){
 		e0=NULL;
 		e1=NULL;
 		for_each_effect(ep,f->effects){
-			if(ep->dest==p->front){
+			if(ep->dest==p->front&&ep->base->id){
 				if(cf0++<found0)
 					continue;
 				e0=ep;
@@ -281,7 +281,7 @@ void frash(const struct player *p,FILE *fp,int current){
 			}
 		}
 		for_each_effect(ep,f->effects){
-			if(ep->dest==e->front){
+			if(ep->dest==e->front&&ep->base->id){
 				if(cf1++<found1)
 					continue;
 				e1=ep;
@@ -325,7 +325,7 @@ void frash(const struct player *p,FILE *fp,int current){
 		++line;
 	}
 	for_each_effect(ep,f->effects){
-		if(ep->dest)
+		if(ep->dest||!ep->base->id)
 			continue;
 		peffect(ep);
 		if(ep->base->flag&EFFECT_ENV){
@@ -334,7 +334,7 @@ void frash(const struct player *p,FILE *fp,int current){
 		}else {
 			if(ep->inevent)
 				fputs(YELLOW,fp);
-			fprintf(fp,"global:%s\n",buf);
+			fprintf(fp,"%s:%s\n",ts("global"),buf);
 		}
 		fputs(WHITE,fp);
 		++line;
@@ -529,7 +529,7 @@ void reporter_term(const struct message *msg){
 		case MSG_EFFECT:
 			if(*msg->field->stage==STAGE_INIT)
 				break;
-			if(msg->un.e->dest){
+			if(msg->un.e->dest&&msg->un.e->base->id){
 				if(!isalive(msg->un.e->dest->state))
 					break;
 				buf[0]=0;
@@ -545,7 +545,7 @@ void reporter_term(const struct message *msg){
 			}
 			break;
 		case MSG_EFFECT_END:
-			if(msg->un.e->dest){
+			if(msg->un.e->dest&&msg->un.e->base->id){
 				if(!isalive(msg->un.e->dest->state))
 					break;
 				buf[0]=0;

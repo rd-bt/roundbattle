@@ -390,20 +390,17 @@ int avoid_hittest(struct effect *e,struct unit *dest,struct unit *src,double *hi
 		return -1;
 	effect_event(e);
 	effect_event_end(e);
-	effect_end(e);
 	return 0;
 }
 const struct effect_base avoid[1]={{
-	.id="avoid",
 	.hittest=avoid_hittest,
-	.flag=EFFECT_ISOLATED,
 	.prior=0
 }};
 void mosquito_bump(struct unit *s){
 	struct unit *t=gettarget(s);
 	if(hittest(t,s,1.1))
 		attack(t,s,0.9*s->atk,DAMAGE_PHYSICAL,0,TYPE_GHOST);
-	effect(avoid,s,s,0,5);
+	effect(avoid,s,s,0,1);
 	setcooldown(s,s->move_cur,2);
 }
 int frost_destroying_init(struct effect *e,long level,int round){
@@ -1132,20 +1129,22 @@ found:
 fail:
 	setcooldown(s,s->move_cur,4);
 }
-
-void star_move(struct unit *s){
+unsigned long damage_get_in_round(struct unit *s,int round,int damage_types){
 	struct battle_field *f=s->owner->field;
 	unsigned long dmg=0;
-	int round=*f->round;
 	for(const struct message *p=f->rec+f->rec_size-1;p>=f->rec;--p){
 		if(p->type!=MSG_DAMAGE
-		||damage_type_check(p->un.damage.damage_type)
+		||!(damage_types&(1<<p->un.damage.damage_type))
 		||p->un.damage.dest!=s)
 			continue;
 		if(p->round!=round)
 			break;
 		dmg+=p->un.damage.value;
 	}
+	return dmg;
+}
+void star_move(struct unit *s){
+	unsigned long dmg=damage_get_in_round(s,*s->owner->field->round,DAMAGE_ALL_FLAG);
 	if(dmg){
 		attack(s->osite,s,dmg,DAMAGE_REAL,0,TYPE_VOID);
 		heal(s,dmg);
@@ -1161,7 +1160,6 @@ struct unit *rebound_gettarget(struct effect *e,struct unit *u){
 	return NULL;
 }
 const struct effect_base rebound_effect[1]={{
-	.id="rebound",
 	.gettarget=rebound_gettarget,
 	.flag=EFFECT_POSITIVE
 }};
@@ -1200,7 +1198,7 @@ const struct move force_vh_pm={
 	.action=force_vh_p,
 	.type=TYPE_DRAGON,
 	.prior=0,
-	.flag=0,
+	.flag=MOVE_NOCONTROL,
 	.mlevel=MLEVEL_REGULAR
 };
 void vh_move_end(struct effect *e,struct unit *u,struct move *m){
@@ -1555,7 +1553,7 @@ const struct move hail_p={
 	.action=hail_pm,
 	.type=TYPE_ICE,
 	.prior=0,
-	.flag=0,
+	.flag=MOVE_NOCONTROL,
 	.mlevel=MLEVEL_REGULAR
 };
 void hail_action_end(struct effect *e,struct player *p){
@@ -1605,7 +1603,6 @@ void mighty_wave_roundend(struct effect *e){
 	effect_end(e);
 }
 const struct effect_base mighty_wave_effect[1]={{
-	.id="mighty_wave",
 	.roundend=mighty_wave_roundend,
 	.flag=EFFECT_POSITIVE
 }};
@@ -1659,7 +1656,7 @@ void breach_missile(struct unit *s){
 	}
 	me=effect(maple,t,s,n+1,-1);
 	if(me)
-		heal(s,40+me->level);
+		heal(s,10+me->level);
 }
 void piercing_missile(struct unit *s){
 	struct unit *t=gettarget(s);
@@ -1684,54 +1681,21 @@ void amuck(struct unit *s){
 		attack(t,s,s->atk,DAMAGE_PHYSICAL,0,TYPE_NORMAL);
 }
 void reflex(struct unit *s){
-	struct battle_field *f=s->owner->field;
-	unsigned long dmg=0;
-	int round=*f->round;
-	for(const struct message *p=f->rec+f->rec_size-1;p>=f->rec;--p){
-		if(p->type!=MSG_DAMAGE
-		||damage_type_check(p->un.damage.damage_type)
-		||p->un.damage.dest!=s)
-			continue;
-		if(p->round!=round)
-			break;
-		dmg+=p->un.damage.value;
-	}
+	unsigned long dmg=damage_get_in_round(s,*s->owner->field->round,DAMAGE_ALL_FLAG);
 	if(dmg){
 		attack(s->osite,s,1.5*dmg,DAMAGE_REAL,0,TYPE_VOID);
 		setcooldown(s,s->move_cur,2);
 	}
 }
 void physical_reflex(struct unit *s){
-	struct battle_field *f=s->owner->field;
-	unsigned long dmg=0;
-	int round=*f->round;
-	for(const struct message *p=f->rec+f->rec_size-1;p>=f->rec;--p){
-		if(p->type!=MSG_DAMAGE
-		||p->un.damage.damage_type!=DAMAGE_PHYSICAL
-		||p->un.damage.dest!=s)
-			continue;
-		if(p->round!=round)
-			break;
-		dmg+=p->un.damage.value;
-	}
+	unsigned long dmg=damage_get_in_round(s,*s->owner->field->round,DAMAGE_PHYSICAL_FLAG);
 	if(dmg){
 		attack(s->osite,s,2*dmg,DAMAGE_REAL,0,TYPE_VOID);
 		setcooldown(s,s->move_cur,2);
 	}
 }
 void magical_reflex(struct unit *s){
-	struct battle_field *f=s->owner->field;
-	unsigned long dmg=0;
-	int round=*f->round;
-	for(const struct message *p=f->rec+f->rec_size-1;p>=f->rec;--p){
-		if(p->type!=MSG_DAMAGE
-		||p->un.damage.damage_type!=DAMAGE_MAGICAL
-		||p->un.damage.dest!=s)
-			continue;
-		if(p->round!=round)
-			break;
-		dmg+=p->un.damage.value;
-	}
+	unsigned long dmg=damage_get_in_round(s,*s->owner->field->round,DAMAGE_MAGICAL_FLAG);
 	if(dmg){
 		attack(s->osite,s,2*dmg,DAMAGE_REAL,0,TYPE_VOID);
 		setcooldown(s,s->move_cur,2);
@@ -1753,6 +1717,109 @@ const struct effect_base damage_reverse_effect[1]={{
 void damage_reverse(struct unit *s){
 	effect(damage_reverse_effect,s,s,0,1);
 	setcooldown(s,s->move_cur,4);
+}
+extern const struct effect_base shield[1];
+int shield_damage(struct effect *e,struct unit *dest,struct unit *src,unsigned long *value,int *damage_type,int *aflag,int *type){
+	if(dest!=e->dest)
+		return 0;
+	if(*value>e->level){
+		*value-=e->level;
+		effect_end(e);
+		return 0;
+	}
+	effect(shield,dest,src,-(long)*value,-1);
+	return -1;
+}
+int shield_init(struct effect *e,long level,int round){
+	if(round&&level>0)
+		e->round=round;
+	if(level>0)
+		e->level=level;
+	else if(level<0){
+		level+=e->level;
+		if(level<=0)
+			return -1;
+		e->level=level;
+	}else
+		return -1;
+	return 0;
+}
+const struct effect_base shield[1]={{
+	.id="shield",
+	.flag=EFFECT_POSITIVE,
+	.init=shield_init,
+	.damage=shield_damage,
+}};
+void elbow_roundend(struct effect *e){
+	struct move *m;
+	struct unit *t;
+	int n=e->level;
+	m=getmove(t=e->dest->osite);
+	if(m&&m->cooldown>=0){
+		setcooldown(t,m,n+(m->cooldown?m->cooldown:1));
+	}else {
+		attack(t,e->dest,(0.3+0.1*n)*e->dest->atk,DAMAGE_REAL,0,TYPE_FIGHTING);
+	}
+	effect_end(e);
+}
+const struct effect_base elbow_effect[1]={{
+	.roundend=elbow_roundend,
+	.flag=EFFECT_POSITIVE
+}};
+void elbow(struct unit *s){
+	struct unit *t=gettarget(s);
+	struct effect *e;
+	int x;
+	unsigned long dmg=1.2*s->atk;
+	long l;
+	if(hittest(t,s,1.0))
+		attack(t,s,dmg,DAMAGE_PHYSICAL,0,TYPE_FIGHTING);
+	if(*s->owner->field->stage==STAGE_PRIOR){
+		if(!effect(silent,t,s,0,4)){
+			attack(t,s,dmg,DAMAGE_MAGICAL,0,TYPE_FIGHTING);
+			effect(avoid,s,s,0,1);
+		}
+	}else {
+		dmg=damage_get_in_round(s,*s->owner->field->round,DAMAGE_ALL_FLAG);
+		if(dmg){
+			attack(t,s,2*dmg,DAMAGE_REAL,0,TYPE_FIGHTING);
+		}
+	}
+	e=unit_findeffect(s,SPEED);
+	l=e?e->level:0;
+	if(l>0){
+		effect(SPEED,s,s,-2*l,-1);
+		heal(s,s->base->max_hp*(0.1+0.03*l));
+	}else if(l<0){
+		purify(e);
+		e=unit_findeffect(s,ATK);
+		if(e&&e->level<0){
+			l+=e->level;
+			purify(e);
+		}
+		effect(elbow_effect,s,s,1-l,1);
+	}else {
+		x=0;
+		e=unit_findeffect(t,ATK);
+		if(e&&e->level>0){
+			++x;
+			if(!purify(e))
+				l+=e->level;
+		}
+		e=unit_findeffect(t,DEF);
+		if(e&&e->level>0){
+			++x;
+			if(!purify(e))
+				l+=e->level;
+		}
+		if(l)
+			attack(t,s,(0.3+0.1*l)*s->atk,DAMAGE_REAL,0,TYPE_FIGHTING);
+		if(!x){
+			effect(ATK,s,s,1,-1);
+			effect(SPEED,s,s,1,-1);
+			effect(shield,s,s,0.1*s->base->max_hp+0.3*s->atk,3);
+		}
+	}
 }
 const struct move builtin_moves[]={
 	{
@@ -2345,6 +2412,13 @@ const struct move builtin_moves[]={
 		.action=damage_reverse,
 		.type=TYPE_GHOST,
 		.prior=4,
+		.flag=0,
+		.mlevel=MLEVEL_REGULAR
+	},
+	{
+		.id="elbow",
+		.action=elbow,
+		.type=TYPE_FIGHTING,
 		.flag=0,
 		.mlevel=MLEVEL_REGULAR
 	},

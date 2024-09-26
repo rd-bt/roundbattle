@@ -689,6 +689,7 @@ const struct effect_base blood_moon[1]={{
 	.inited=effect_update_attr_all,
 	.roundend=bm_roundend,
 	.update_attr=bm_update_attr,
+	.end=effect_update_attr_all,
 	.flag=EFFECT_ENV,
 	.prior=30
 }};
@@ -1541,7 +1542,7 @@ void scent(struct unit *s){
 }
 void synthesis(struct unit *s){
 	struct unit *t=gettarget(s);
-	heal(s,((t->type0|t->type1)&TYPE_LIGHT?0.6:0.4)*s->base->max_hp);
+	heal(s,((t->type0|t->type1)&TYPE_LIGHT?0.55:0.45)*s->base->max_hp);
 	setcooldown(s,s->move_cur,4);
 }
 void hail_pm(struct unit *s){
@@ -1724,7 +1725,7 @@ int shield_damage(struct effect *e,struct unit *dest,struct unit *src,unsigned l
 		return 0;
 	if(*value>e->level){
 		*value-=e->level;
-		effect_end(e);
+		effect(shield,dest,src,-e->level,-1);
 		return 0;
 	}
 	effect(shield,dest,src,-(long)*value,-1);
@@ -1737,28 +1738,69 @@ int shield_init(struct effect *e,long level,int round){
 		e->level=level;
 	else if(level<0){
 		level+=e->level;
-		if(level<=0)
-			return -1;
+		if(level<0)
+			level=0;
 		e->level=level;
 	}else
 		return -1;
 	return 0;
+}
+void shield_roundend(struct effect *e){
+	if(!e->level)
+		effect_end(e);
 }
 const struct effect_base shield[1]={{
 	.id="shield",
 	.flag=EFFECT_POSITIVE,
 	.init=shield_init,
 	.damage=shield_damage,
+	.roundend=shield_roundend
+}};
+int heal_weak_heal(struct effect *e,struct unit *dest,unsigned long *value){
+	double coef;
+	if(dest!=e->dest)
+		return 0;
+	effect_event(e);
+	coef=1-*(double *)e->data;
+	if(coef>0.0)
+		*value*=coef;
+	else
+		*value=0;
+	effect_event_end(e);
+	return 0;
+}
+const struct effect_base heal_weak[1]={{
+	.id="heal_weak",
+	.heal=heal_weak_heal,
+	.flag=EFFECT_NEGATIVE
+}};
+int heal_bonus_heal(struct effect *e,struct unit *dest,unsigned long *value){
+	double coef;
+	if(dest!=e->dest)
+		return 0;
+	effect_event(e);
+	coef=1+*(double *)e->data;
+	if(coef>1)
+		*value*=coef;
+	effect_event_end(e);
+	return 0;
+}
+const struct effect_base heal_bonus[1]={{
+	.id="heal_bonus",
+	.heal=heal_bonus_heal,
+	.flag=EFFECT_POSITIVE
 }};
 void elbow_roundend(struct effect *e){
 	struct move *m;
 	struct unit *t;
 	int n=e->level;
+	if(e->level<=0)
+		return;
 	m=getmove(t=e->dest->osite);
 	if(m&&m->cooldown>=0){
 		setcooldown(t,m,n+(m->cooldown?m->cooldown:1));
 	}else {
-		attack(t,e->dest,(0.3+0.1*n)*e->dest->atk,DAMAGE_REAL,0,TYPE_FIGHTING);
+		attack(t,e->dest,(0.3+0.1*n)*(e->dest->atk+0.075*t->hp),DAMAGE_REAL,0,TYPE_FIGHTING);
 	}
 	effect_end(e);
 }
@@ -1766,30 +1808,68 @@ const struct effect_base elbow_effect[1]={{
 	.roundend=elbow_roundend,
 	.flag=EFFECT_POSITIVE
 }};
+int elbow1_attack(struct effect *e,struct unit *dest,struct unit *src,unsigned long *value,int *damage_type,int *aflag,int *type){
+	if(dest==e->dest&&*dest->owner->field->stage==STAGE_ROUNDEND){
+		effect_event(e);
+		*value*=0.65;
+		effect_event_end(e);
+	}
+	return 0;
+}
+const struct effect_base elbow1[1]={{
+	.attack=elbow1_attack,
+	.flag=EFFECT_POSITIVE
+}};
+void elbow2_update_attr(struct effect *e,struct unit *u){
+	if(e->dest==u)
+		u->atk*=1.15;
+}
+const struct effect_base elbow2[1]={{
+	.inited=effect_update_attr,
+	.update_attr=elbow2_update_attr,
+	.end=effect_update_attr,
+	.flag=EFFECT_POSITIVE,
+	.prior=32
+}};
+void elbow3_update_attr(struct effect *e,struct unit *u){
+	if(e->dest==u)
+		u->def*=1.15;
+}
+const struct effect_base elbow3[1]={{
+	.inited=effect_update_attr,
+	.update_attr=elbow3_update_attr,
+	.end=effect_update_attr,
+	.flag=EFFECT_POSITIVE,
+	.prior=32
+}};
 void elbow(struct unit *s){
 	struct unit *t=gettarget(s);
 	struct effect *e;
 	int x;
-	unsigned long dmg=1.2*s->atk;
+	unsigned long dmg=1.05*s->atk;
 	long l;
+	double d0,d1;
 	if(hittest(t,s,1.0))
 		attack(t,s,dmg,DAMAGE_PHYSICAL,0,TYPE_FIGHTING);
+	else
+		attack(t,s,0.3*dmg,DAMAGE_REAL,0,TYPE_FIGHTING);
 	if(*s->owner->field->stage==STAGE_PRIOR){
-		if(!effect(silent,t,s,0,4)){
+		if(!effect(silent,t,s,0,2)){
 			attack(t,s,dmg,DAMAGE_MAGICAL,0,TYPE_FIGHTING);
 			effect(avoid,s,s,0,1);
 		}
 	}else {
 		dmg=damage_get_in_round(s,*s->owner->field->round,DAMAGE_ALL_FLAG);
 		if(dmg){
-			attack(t,s,2*dmg,DAMAGE_REAL,0,TYPE_FIGHTING);
+			attack(t,s,1.75*dmg,DAMAGE_REAL,0,TYPE_FIGHTING);
+			addhp(s,0.25*dmg);
 		}
 	}
 	e=unit_findeffect(s,SPEED);
 	l=e?e->level:0;
 	if(l>0){
 		effect(SPEED,s,s,-2*l,-1);
-		heal(s,s->base->max_hp*(0.1+0.03*l));
+		heal(s,s->base->max_hp*(0.07+0.05*l));
 	}else if(l<0){
 		purify(e);
 		e=unit_findeffect(s,ATK);
@@ -1803,13 +1883,13 @@ void elbow(struct unit *s){
 		e=unit_findeffect(t,ATK);
 		if(e&&e->level>0){
 			++x;
-			if(!purify(e))
+			if(purify(e))
 				l+=e->level;
 		}
 		e=unit_findeffect(t,DEF);
 		if(e&&e->level>0){
 			++x;
-			if(!purify(e))
+			if(purify(e))
 				l+=e->level;
 		}
 		if(l)
@@ -1817,9 +1897,43 @@ void elbow(struct unit *s){
 		if(!x){
 			effect(ATK,s,s,1,-1);
 			effect(SPEED,s,s,1,-1);
-			effect(shield,s,s,0.1*s->base->max_hp+0.3*s->atk,3);
+			effect(shield,s,s,0.08*s->base->max_hp+0.25*s->atk,3);
 		}
 	}
+	d0=(double)s->hp/(double)s->base->max_hp;
+	d1=(double)t->hp/(double)t->base->max_hp;
+	if(d0<=d1){
+		e=effect(heal_bonus,s,s,0,2);
+		if(e)
+			*(double *)e->data=0.3+(d1-d0);
+		effect(elbow1,s,s,0,1);
+	}else {
+		e=effect(heal_weak,t,s,0,2);
+		if(e)
+			*(double *)e->data=0.35+0.4*(1-d0);
+	}
+	e=unit_findeffect3(s,NULL,EFFECT_ABNORMAL);
+	if(e){
+		if(e->base==cursed||e->base==radiated){
+			heal(s,0.15*s->base->max_hp);
+		}else if(e->base==poisoned){
+			attack(t,s,0.4*s->atk,DAMAGE_PHYSICAL,0,TYPE_FIGHTING);
+		}else if(e->base==burnt){
+			attack(t,s,0.4*s->atk,DAMAGE_MAGICAL,0,TYPE_FIGHTING);
+		}else if(e->base==parasitized){
+			attack(t,s,0.2*s->atk,DAMAGE_PHYSICAL,0,TYPE_FIGHTING);
+			attack(t,s,0.2*s->atk,DAMAGE_MAGICAL,0,TYPE_FIGHTING);
+		}else
+			goto no_abnormal;
+	}else {
+no_abnormal:
+			attack(t,s,0.1*s->atk,DAMAGE_REAL,0,TYPE_FIGHTING);
+	}
+	if((x=s->moves->cooldown)<=0||setcooldown(s,s->moves,x-1)>=x)
+		effect(s->speed>t->speed?elbow2:elbow3,s,s,0,2);
+}
+void speed_up(struct unit *s){
+	effect(SPEED,s,s,2,-1);
 }
 const struct move builtin_moves[]={
 	{
@@ -2419,6 +2533,13 @@ const struct move builtin_moves[]={
 		.id="elbow",
 		.action=elbow,
 		.type=TYPE_FIGHTING,
+		.flag=0,
+		.mlevel=MLEVEL_REGULAR
+	},
+	{
+		.id="speed_up",
+		.action=speed_up,
+		.type=TYPE_NORMAL,
 		.flag=0,
 		.mlevel=MLEVEL_REGULAR
 	},

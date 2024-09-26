@@ -660,9 +660,16 @@ void effect_round_decrease(struct effect *effects,int round){
 			effect_end(v);
 	}
 }
-struct effect *unit_findeffect(struct unit *u,const struct effect_base *base){
+struct effect *unit_findeffect(const struct unit *u,const struct effect_base *base){
 	for_each_effect(e,u->owner->field->effects){
 		if(e->base==base&&e->dest==u)
+			return e;
+	}
+	return NULL;
+}
+struct effect *unit_findeffect3(const struct unit *u,const struct effect_base *base,int flag){
+	for_each_effect(e,u->owner->field->effects){
+		if((!base||(e->base==base&&e->dest==u))&&(e->base->flag&flag))
 			return e;
 	}
 	return NULL;

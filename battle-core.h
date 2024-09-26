@@ -578,7 +578,9 @@ void effect_round_decrease(struct effect *effects,int round);
 
 int setcooldown(struct unit *u,struct move *m,int round);
 
-struct effect *unit_findeffect(struct unit *u,const struct effect_base *base);
+struct effect *unit_findeffect(const struct unit *u,const struct effect_base *base);
+
+struct effect *unit_findeffect3(const struct unit *u,const struct effect_base *base,int flag);
 
 int effect_isnegative(const struct effect *e);
 

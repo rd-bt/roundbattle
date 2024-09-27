@@ -390,9 +390,82 @@ struct effect *effect(const struct effect_base *base,struct unit *dest,struct un
 		base->inited(ep);
 	for_each_effect(e,f->effects){
 		if(e->base->effect_end)
-			e->base->effect_end(e,base,dest,src,level,round);
+			e->base->effect_end(e,ep,dest,src,level,round);
 	}
 	return ep;
+}
+int effect_reinit(struct effect *ep,struct unit *src,long level,int round){
+	struct battle_field *f=NULL;
+	if(ep->dest)
+		f=ep->dest->owner->field;
+	else if(ep->src)
+		f=ep->src->owner->field;
+	if(!f)
+		return -1;
+	for_each_effect(e,f->effects){
+		if(e->base->effect&&e->base->effect(e,ep->base,ep->dest,src,&level,&round))
+			return -1;
+	}
+	ep->src1=src;
+	if(ep->base->init){
+		if(ep->base->init(ep,level,round)){
+			effect_final(ep);
+			return -1;
+		}
+	}else {
+		ep->level=level;
+		ep->round=round;
+	}
+	report(f,MSG_EFFECT,ep,level,round);
+	if(ep->base->inited)
+		ep->base->inited(ep);
+	for_each_effect(e,f->effects){
+		if(e->base->effect_end)
+			e->base->effect_end(e,ep,ep->dest,src,level,round);
+	}
+	return 0;
+}
+int effect_setlevel(struct effect *e,long level){
+	struct battle_field *f=NULL;
+	if(e->dest)
+		f=e->dest->owner->field;
+	else if(e->src)
+		f=e->src->owner->field;
+	if(!f)
+		return -1;
+	if(level==e->level)
+		return 0;
+	e->level=level;
+	report(f,MSG_EFFECT,e,level,e->round);
+	return 0;
+}
+int effect_addlevel(struct effect *e,long level){
+	struct battle_field *f=NULL;
+	if(e->dest)
+		f=e->dest->owner->field;
+	else if(e->src)
+		f=e->src->owner->field;
+	if(!f)
+		return -1;
+	if(!level)
+		return 0;
+	e->level+=level;
+	report(f,MSG_EFFECT,e,level,e->round);
+	return 0;
+}
+int effect_setround(struct effect *e,int round){
+	struct battle_field *f=NULL;
+	if(e->dest)
+		f=e->dest->owner->field;
+	else if(e->src)
+		f=e->src->owner->field;
+	if(!f)
+		return -1;
+	if(round==e->round)
+		return 0;
+	e->round=round;
+	report(f,MSG_EFFECT,e,e->level,round);
+	return 0;
 }
 int effect_end(struct effect *e){
 	struct battle_field *f;

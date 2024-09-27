@@ -187,6 +187,12 @@
 		_u->owner->front==_u;\
 }\
 )
+#define unit_effect_level(u,E) (\
+{\
+		struct effect *_e=unit_findeffect((u),(E));\
+		_e?_e->level:0l;\
+}\
+)
 #define effect_types(t) (\
 {\
 		int _r;\
@@ -385,7 +391,7 @@ struct effect_base {
 	int (*damage)(struct effect *e,struct unit *dest,struct unit *src,unsigned long *value,int *damage_type,int *aflag,int *type);
 	void (*damage_end)(struct effect *e,struct unit *dest,struct unit *src,unsigned long value,int damage_type,int aflag,int type);
 	int (*effect)(struct effect *e,const struct effect_base *base,struct unit *dest,struct unit *src,long *level,int *round);
-	void (*effect_end)(struct effect *e,const struct effect_base *base,struct unit *dest,struct unit *src,long level,int round);
+	void (*effect_end)(struct effect *e,struct effect *base,struct unit *dest,struct unit *src,long level,int round);
 	struct unit *(*gettarget)(struct effect *e,struct unit *u);
 	int (*getprior)(struct effect *e,struct player *p);
 	int (*heal)(struct effect *e,struct unit *dest,unsigned long *value);
@@ -535,6 +541,14 @@ unsigned long addhp(struct unit *dest,long hp);
 long setspi(struct unit *dest,long spi);
 
 struct effect *effect(const struct effect_base *base,struct unit *dest,struct unit *src,long level,int round);
+
+int effect_reinit(struct effect *ep,struct unit *src,long level,int round);
+
+int effect_setlevel(struct effect *e,long level);
+
+int effect_addlevel(struct effect *e,long level);
+
+int effect_setround(struct effect *e,int round);
 
 int effect_end(struct effect *e);
 

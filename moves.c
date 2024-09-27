@@ -409,7 +409,7 @@ int frost_destroying_init(struct effect *e,long level,int round){
 	return 0;
 }
 void frost_destroying_cd(struct effect *e,struct unit *u,struct move *m,int *round){
-	if(e->dest!=u||round<=0||
+	if(e->dest!=u||*round<=0||
 		*e->dest->owner->field->stage!=STAGE_ROUNDEND)
 		return;
 	if(m->cooldown>0&&test(0.5)){
@@ -429,8 +429,9 @@ int frost_destroying_damage(struct effect *e,struct unit *dest,struct unit *src,
 void frost_destroying_move_end(struct effect *e,struct unit *u,struct move *m){
 	if(e->dest==u&&m->cooldown>=0){
 		effect_event(e);
-		++m->cooldown;
-		report(u->owner->field,MSG_UPDATE,m);
+		setcooldown(u,m,m->cooldown+1);
+		//++m->cooldown;
+		//report(u->owner->field,MSG_UPDATE,m);
 		effect_event_end(e);
 	}
 }
@@ -808,19 +809,21 @@ int gp_init(struct effect *e,long level,int round){
 		level=0;
 	if(level>16)
 		level=16;
-	if(!e->level)
+	if(!e->round&&round>=0)
 		e->round=round;
 	e->level=level;
 	return 0;
 }
+//const struct effect_base gravitational_potential[1];
 void gp_damage_end(struct effect *e,struct unit *dest,struct unit *src,unsigned long value,int damage_type,int aflag,int type){
 	if(dest!=e->dest||(damage_type!=DAMAGE_PHYSICAL&&damage_type!=DAMAGE_MAGICAL))
 		return;
-	if(e->level>3){
-		e->level-=damage_type==DAMAGE_PHYSICAL?3:2;
-		report(e->dest->owner->field,MSG_UPDATE,e);
-	}else
-		effect_end(e);
+	//if(e->level>3){
+	effect_reinit(e,NULL,damage_type==DAMAGE_PHYSICAL?-3:-2,-1);
+		//e->level-=damage_type==DAMAGE_PHYSICAL?3:2;
+		//report(e->dest->owner->field,MSG_UPDATE,e);
+	//}else
+	//	effect_end(e);
 }
 const struct effect_base gravitational_potential[1]={{
 	.id="gravitational_potential",
@@ -1089,8 +1092,9 @@ void heat_engine_move_end(struct effect *e,struct unit *u,struct move *m){
 	){
 		effect_event(e);
 		setspi(u,u->spi-2);
-		++ep->round;
-		report(u->owner->field,MSG_UPDATE,ep);
+		effect_setround(ep,ep->round+1);
+		//++ep->round;
+		//report(u->owner->field,MSG_UPDATE,ep);
 		ep->base->roundend(ep);
 		effect_event_end(e);
 	}
@@ -1277,19 +1281,24 @@ const struct effect_base repeat_effect[1]={{
 	.action=repeat_action,
 	.flag=EFFECT_NEGATIVE,
 }};
+int do_repeat(struct unit *s,struct unit *t,int round){
+	int r;
+	switch((r=t->owner->action)){
+		case ACT_MOVE0 ... ACT_MOVE7:
+		case ACT_NORMALATTACK:
+			if(effect(repeat_effect,t,s,r,round))
+				return 0;
+		default:
+			break;
+	}
+	return -1;
+}
 void repeat(struct unit *s){
 	struct unit *t=gettarget(s);
-	int r;
 	if(hittest(t,s,1.8)){
 		attack(t,s,s->atk/4,DAMAGE_PHYSICAL,0,TYPE_NORMAL);
-		switch((r=t->owner->action)){
-			case ACT_MOVE0 ... ACT_MOVE7:
-			case ACT_NORMALATTACK:
-				if(effect(repeat_effect,t,s,r,4))
-					setcooldown(s,s->move_cur,9);
-			default:
-				break;
-		}
+		if(!do_repeat(s,t,4))
+			setcooldown(s,s->move_cur,9);
 	}
 }
 int silent_move(struct effect *e,struct unit *u,struct move *m){
@@ -1329,8 +1338,9 @@ void mecha(struct unit *s){
 void perish_kill_end(struct effect *e,struct unit *u){
 	if(u!=e->dest)
 		return;
-	e->round=-1;
-	report(e->dest->owner->field,MSG_UPDATE,e);
+	effect_setround(e,-1);
+	//e->round=-1;
+	//report(e->dest->owner->field,MSG_UPDATE,e);
 }
 int perish_revive(struct effect *e,struct unit *u,unsigned long *hp){
 	if(u==e->dest){
@@ -1854,7 +1864,7 @@ void elbow(struct unit *s){
 	else
 		attack(t,s,0.3*dmg,DAMAGE_REAL,0,TYPE_FIGHTING);
 	if(*s->owner->field->stage==STAGE_PRIOR){
-		if(!effect(silent,t,s,0,2)){
+		if(!effect(silent,t,s,0,1)){
 			attack(t,s,dmg,DAMAGE_MAGICAL,0,TYPE_FIGHTING);
 			effect(avoid,s,s,0,1);
 		}
@@ -1931,6 +1941,12 @@ no_abnormal:
 	}
 	if((x=s->moves->cooldown)<=0||setcooldown(s,s->moves,x-1)>=x)
 		effect(s->speed>t->speed?elbow2:elbow3,s,s,0,2);
+	if(t->owner==s->owner->enemy){
+		if(unit_effect_level(t,PDD)-unit_effect_level(s,PDD)>2)
+			effect(frost_destroying,t,s,0,2);
+		if(unit_effect_level(t,MDD)-unit_effect_level(s,MDD)>2)
+			do_repeat(s,t,2);
+	}
 }
 void speed_up(struct unit *s){
 	effect(SPEED,s,s,2,-1);

@@ -1819,9 +1819,13 @@ const struct effect_base elbow_effect[1]={{
 	.flag=EFFECT_POSITIVE
 }};
 int elbow1_attack(struct effect *e,struct unit *dest,struct unit *src,unsigned long *value,int *damage_type,int *aflag,int *type){
+	double coef;
 	if(dest==e->dest&&*dest->owner->field->stage==STAGE_ROUNDEND){
+		coef=1-*(double *)e->data;
+		if(coef<0.1)
+			coef=0.1;
 		effect_event(e);
-		*value*=0.65;
+		*value*=coef;
 		effect_event_end(e);
 	}
 	return 0;
@@ -1851,6 +1855,19 @@ const struct effect_base elbow3[1]={{
 	.end=effect_update_attr,
 	.flag=EFFECT_POSITIVE,
 	.prior=32
+}};
+int mana_init(struct effect *e,long level,int round){
+	level+=e->level;
+	if(level<=0)
+		level=0;
+	e->round=-1;
+	e->level=level;
+	return 0;
+}
+const struct effect_base mana[1]={{
+	.id="mana",
+	.init=mana_init,
+	.flag=EFFECT_POSITIVE|EFFECT_UNPURIFIABLE|EFFECT_KEEP
 }};
 void elbow(struct unit *s){
 	struct unit *t=gettarget(s);
@@ -1915,12 +1932,14 @@ void elbow(struct unit *s){
 	if(d0<=d1){
 		e=effect(heal_bonus,s,s,0,2);
 		if(e)
-			*(double *)e->data=0.3+(d1-d0);
-		effect(elbow1,s,s,0,1);
+			*(double *)e->data=0.3+(1-d0);
+		e=effect(elbow1,s,s,0,1);
+		if(e)
+			*(double *)e->data=0.3*(2-d0);
 	}else {
 		e=effect(heal_weak,t,s,0,2);
 		if(e)
-			*(double *)e->data=0.35+0.4*(1-d0);
+			*(double *)e->data=0.35+0.2*d1;
 	}
 	e=unit_findeffect3(s,NULL,EFFECT_ABNORMAL);
 	if(e){
@@ -1947,9 +1966,36 @@ no_abnormal:
 		if(unit_effect_level(t,MDD)-unit_effect_level(s,MDD)>2)
 			do_repeat(s,t,2);
 	}
+	e=unit_findeffect(t,mana);
+	if(e&&e->level>=unit_effect_level(s,mana)+20){
+		effect_reinit(e,s,-10,-1);
+		effect(mana,s,s,10,-1);
+	}
 }
 void speed_up(struct unit *s){
 	effect(SPEED,s,s,2,-1);
+}
+void peanut_powder(struct unit *s){
+	struct unit *t=gettarget(s);
+	if(hittest(t,s,1.0))
+		attack(t,s,1.05*s->atk,DAMAGE_MAGICAL,0,TYPE_POISON);
+}
+void mana_gather(struct unit *s){
+	effect(mana,s,s,10+randi()%21,-1);
+}
+void fury_swipes(struct unit *s){
+	struct unit *t=gettarget(s);
+	struct effect *e;
+	int i;
+	e=unit_findeffect(s,mana);
+	if(e&&e->level>=8){
+		effect_reinit(e,s,-8,-1);
+		i=4+randi()%5;
+	}else
+		i=2+randi()%4;
+	for(;i>0;--i)
+		if(hittest(t,s,1.0))
+			attack(t,s,0.2*s->atk,DAMAGE_PHYSICAL,0,TYPE_NORMAL);
 }
 const struct move builtin_moves[]={
 	{
@@ -2555,6 +2601,27 @@ const struct move builtin_moves[]={
 	{
 		.id="speed_up",
 		.action=speed_up,
+		.type=TYPE_NORMAL,
+		.flag=0,
+		.mlevel=MLEVEL_REGULAR
+	},
+	{
+		.id="peanut_powder",
+		.action=peanut_powder,
+		.type=TYPE_POISON,
+		.flag=0,
+		.mlevel=MLEVEL_REGULAR
+	},
+	{
+		.id="mana_gather",
+		.action=mana_gather,
+		.type=TYPE_NORMAL,
+		.flag=0,
+		.mlevel=MLEVEL_REGULAR
+	},
+	{
+		.id="fury_swipes",
+		.action=fury_swipes,
 		.type=TYPE_NORMAL,
 		.flag=0,
 		.mlevel=MLEVEL_REGULAR

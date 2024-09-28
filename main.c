@@ -3,7 +3,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
-const char *moves[]={"mud_shot","defend","breach_missile","piercing_missile","iron_wall","flamethrower","collapse","elbow",NULL};
+const char *moves[]={"mud_shot","defend","fury_swipes","piercing_missile","iron_wall","flamethrower","mana_gather","elbow",NULL};
 
 void reporter_term(const struct message *msg);
 int term_selector(const struct player *p);

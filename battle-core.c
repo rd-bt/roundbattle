@@ -105,12 +105,10 @@ unsigned long attack(struct unit *dest,struct unit *src,unsigned long value,int 
 		}
 	}
 	if(!(aflag&AF_NODEF)&&damage_type!=DAMAGE_REAL){
-		x=512+dest->def;
-		if(src)x+=dest->level-src->level;
-		if(x<=0)
-			value*=1-dest->def;
-		else
-			value=value*512/x;
+		x=dest->def;
+		if(src)
+			x+=dest->level-src->level;
+		value*=def_coef(x);
 	}
 	switch(damage_type){
 		case DAMAGE_REAL:
@@ -362,7 +360,6 @@ struct effect *effect(const struct effect_base *base,struct unit *dest,struct un
 		ep=malloc(sizeof(struct effect));
 		if(!ep)
 			return NULL;
-		//printf("MALLOC %p\n",ep);
 		memset(ep,0,sizeof(struct effect));
 		new=1;
 		ep->base=base;
@@ -381,7 +378,6 @@ struct effect *effect(const struct effect_base *base,struct unit *dest,struct un
 		ep->round=round;
 	}
 	report(f,MSG_EFFECT,ep,level,round);
-//if(!strcmp(base->id,"damage_recuring"))abort();
 	if(new){
 		effect_insert(ep,f);
 	}

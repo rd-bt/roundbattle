@@ -3,7 +3,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
-const char *moves[]={"mud_shot","defend","fury_swipes","piercing_missile","iron_wall","flamethrower","mana_gather","elbow",NULL};
+const char *moves[]={"steel_flywheel","defend","petrifying_ray","piercing_missile","breach_missile","spoony_spell","burn_boat","double_slash",NULL};
 
 void reporter_term(const struct message *msg);
 int term_selector(const struct player *p);
@@ -30,10 +30,10 @@ int main(){
 		memcpy(bb.moves+r,get_builtin_move_by_id(moves[r]),sizeof(struct move));
 	for(r=0;moves[r];++r)
 		memcpy(bt.moves+r,get_builtin_move_by_id(moves[r]),sizeof(struct move));
-	memcpy(bb.pmoves,get_builtin_move_by_id("thorns"),sizeof(struct move));
+	memcpy(bb.pmoves,get_builtin_move_by_id("moon_elf_shield"),sizeof(struct move));
 	memcpy(bb.pmoves+1,get_builtin_move_by_id("primordial_breath"),sizeof(struct move));
-	memcpy(bt.pmoves,get_builtin_move_by_id("myriad"),sizeof(struct move));
-	memcpy(bt.pmoves+1,get_builtin_move_by_id("heat_engine"),sizeof(struct move));
+	memcpy(bt.pmoves,get_builtin_move_by_id("moon_elf_shield"),sizeof(struct move));
+	memcpy(bt.pmoves+1,get_builtin_move_by_id("anti_def_by_def"),sizeof(struct move));
 	p1.units->base=&bt;
 	(p1.units+1)->base=&bt;
 	p2.units->base=&bb;

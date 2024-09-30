@@ -193,6 +193,16 @@
 		_e?_e->level:0l;\
 }\
 )
+#define def_coef(d) (\
+{\
+		int _d=(d);\
+		int _x=512+(_d);\
+		_x<=0?\
+			1.0-_d\
+		:\
+			512.0/_x;\
+}\
+)
 #define effect_types(t) (\
 {\
 		int _r;\
@@ -391,7 +401,7 @@ struct effect_base {
 	int (*damage)(struct effect *e,struct unit *dest,struct unit *src,unsigned long *value,int *damage_type,int *aflag,int *type);
 	void (*damage_end)(struct effect *e,struct unit *dest,struct unit *src,unsigned long value,int damage_type,int aflag,int type);
 	int (*effect)(struct effect *e,const struct effect_base *base,struct unit *dest,struct unit *src,long *level,int *round);
-	void (*effect_end)(struct effect *e,struct effect *base,struct unit *dest,struct unit *src,long level,int round);
+	void (*effect_end)(struct effect *e,struct effect *ep,struct unit *dest,struct unit *src,long level,int round);
 	struct unit *(*gettarget)(struct effect *e,struct unit *u);
 	int (*getprior)(struct effect *e,struct player *p);
 	int (*heal)(struct effect *e,struct unit *dest,unsigned long *value);

@@ -1888,8 +1888,12 @@ const struct effect_base elbow2[1]={{
 	.prior=32
 }};
 void elbow3_update_attr(struct effect *e,struct unit *u){
-	if(e->dest==u)
-		u->def*=1.15;
+	if(e->dest==u){
+		if(u->def>=u->base->def)
+			u->def*=1.15;
+		else
+			u->def+=u->base->def*0.15;
+	}
 }
 const struct effect_base elbow3[1]={{
 	.inited=effect_update_attr,
@@ -2136,9 +2140,14 @@ void moon_elf_shield_p(struct unit *s){
 	effect(moon_elf_shield,s,s,0,-1);
 }
 int adbd_attack(struct effect *e,struct unit *dest,struct unit *src,unsigned long *value,int *damage_type,int *aflag,int *type){
+	long pdef;
 	if(src==e->dest&&*damage_type!=DAMAGE_REAL&&!(*aflag&AF_NODEF)){
-		*value*=def_coef(dest->def-(long)(0.35*src->def)+dest->level-src->level);
-		*aflag|=AF_NODEF;
+		pdef=src->def;
+		if(pdef>2){
+			pdef*=0.35;
+			*value*=def_coef(dest->def-pdef+dest->level-src->level);
+			*aflag|=AF_NODEF;
+		}
 	}
 	return 0;
 }
@@ -2229,6 +2238,20 @@ const struct effect_base burn_boat_effect[1]={{
 }};
 void burn_boat_p(struct unit *s){
 	effect(burn_boat_effect,s,s,0,-1);
+}
+void dartle(struct unit *s){
+	struct unit *t=gettarget(s);
+	if(hittest(t,s,1.0)){
+		attack(t,s,1.5*s->atk,DAMAGE_PHYSICAL,0,TYPE_NORMAL);
+		effect(DEF,s,s,-1,-1);
+	}
+}
+void electric_arc(struct unit *s){
+	struct unit *t=gettarget(s);
+	if(hittest(t,s,1.0)){
+		attack(t,s,0.43*s->atk,DAMAGE_PHYSICAL,AF_NOFLOAT,TYPE_ELECTRIC);
+		attack(t,s,0.43*s->atk,DAMAGE_MAGICAL,AF_NOFLOAT,TYPE_ELECTRIC);
+	}
 }
 const struct move builtin_moves[]={
 	{
@@ -2883,6 +2906,20 @@ const struct move builtin_moves[]={
 		.action=burn_boat,
 		.init=burn_boat_p,
 		.type=TYPE_FIGHTING,
+		.flag=0,
+		.mlevel=MLEVEL_REGULAR
+	},
+	{
+		.id="dartle",
+		.action=dartle,
+		.type=TYPE_NORMAL,
+		.flag=0,
+		.mlevel=MLEVEL_REGULAR
+	},
+	{
+		.id="electric_arc",
+		.action=electric_arc,
+		.type=TYPE_ELECTRIC,
 		.flag=0,
 		.mlevel=MLEVEL_REGULAR
 	},

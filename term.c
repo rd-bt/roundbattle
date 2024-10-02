@@ -497,6 +497,7 @@ static const char *dtco[3]={YELLOW,RED,CYAN};
 void reporter_term(const struct message *msg){
 	struct player *p=msg->field->p;
 	char buf[128];
+	char buf1[128];
 	int r;
 	if(*msg->field->stage==STAGE_BATTLE_END&&msg->type!=MSG_BATTLE_END)
 		return;
@@ -512,18 +513,17 @@ void reporter_term(const struct message *msg){
 				wmf(msg->un.damage.dest->owner==p?0:1,"%s -%lu",ts("total"),msg->un.damage.value);
 			}else {
 				buf[0]=0;
+				buf1[0]=0;
+				if(msg->un.damage.dest!=msg->un.damage.dest->owner->front){
+					snprintf(buf1,128,"[%ld]%s ",msg->un.damage.dest-msg->un.damage.dest->owner->units,msg->un.damage.dest->base->id);
+				}
 				if(msg->un.damage.aflag&AF_CRIT)
 					strcat(buf," C");
 				if(msg->un.damage.aflag&AF_EFFECT)
 					strcat(buf," E");
 				if(msg->un.damage.aflag&AF_WEAK)
 					strcat(buf," W");
-				if(msg->un.damage.dest!=msg->un.damage.dest->owner->front){
-					strcat(buf," (");
-					strcat(buf,msg->un.damage.dest->base->id);
-					strcat(buf,")");
-				}
-				wmf(msg->un.damage.dest->owner==p?0:1,"%s-%lu%s" WHITE,dtco[msg->un.damage.damage_type],msg->un.damage.value,buf);
+				wmf(msg->un.damage.dest->owner==p?0:1,"%s%s-%lu%s" WHITE,buf1,dtco[msg->un.damage.damage_type],msg->un.damage.value,buf);
 			}
 			goto delay;
 		case MSG_EFFECT:
@@ -535,12 +535,13 @@ void reporter_term(const struct message *msg){
 				buf[0]=0;
 				buf[127]=0;
 				r=0;
+				buf1[0]=0;
 				if(msg->un.e->dest!=msg->un.e->dest->owner->front){
-					r=snprintf(buf,127," (%s)",msg->un.e->dest->base->id);
+					snprintf(buf1,128,"[%ld]%s ",msg->un.e->dest-msg->un.e->dest->owner->units,msg->un.e->dest->base->id);
 				}
 				if(msg->un.e_init.level)
 					snprintf(buf+r,127-r," %+ld",msg->un.e_init.level);
-				wmf(msg->un.e->dest->owner==p?0:1,"%s %s%s",ts("effect"),e2s(msg->un.e->base->id),buf);
+				wmf(msg->un.e->dest->owner==p?0:1,"%s" YELLOW "%s%s" WHITE,buf1,e2s(msg->un.e->base->id),buf);
 				goto delay;
 			}
 			break;
@@ -549,12 +550,11 @@ void reporter_term(const struct message *msg){
 				if(!isalive(msg->un.e->dest->state))
 					break;
 				buf[0]=0;
+				buf1[0]=0;
 				if(msg->un.e->dest!=msg->un.e->dest->owner->front){
-					strcat(buf," (");
-					strcat(buf,msg->un.e->dest->base->id);
-					strcat(buf,")");
+					snprintf(buf1,128,"[%ld]%s ",msg->un.e->dest-msg->un.e->dest->owner->units,msg->un.e->dest->base->id);
 				}
-				wmf(msg->un.e->dest->owner==p?0:1,"%s%s %s",e2s(msg->un.e->base->id),buf,ts("end"));
+				wmf(msg->un.e->dest->owner==p?0:1,"%s" YELLOW "%s%s" WHITE " %s",buf1,e2s(msg->un.e->base->id),buf,ts("end"));
 				goto delay;
 			}
 			break;
@@ -571,27 +571,25 @@ void reporter_term(const struct message *msg){
 			break;
 		case MSG_HEAL:
 			buf[0]=0;
+			buf1[0]=0;
 			if(msg->un.heal.dest!=msg->un.heal.dest->owner->front){
-				strcat(buf," (");
-				strcat(buf,msg->un.heal.dest->base->id);
-				strcat(buf,")");
+				snprintf(buf1,128,"[%ld]%s ",msg->un.heal.dest-msg->un.heal.dest->owner->units,msg->un.heal.dest->base->id);
 			}
-			wmf(msg->un.heal.dest->owner==p?0:1,GREEN "+%lu%s" WHITE,msg->un.heal.value,buf);
+			wmf(msg->un.heal.dest->owner==p?0:1,"%s" GREEN "+%lu%s" WHITE,buf1,msg->un.heal.value,buf);
 			goto delay;
 		case MSG_HPMOD:
 			buf[0]=0;
+			buf1[0]=0;
 			if(msg->un.hpmod.dest!=msg->un.hpmod.dest->owner->front){
-				strcat(buf," (");
-				strcat(buf,msg->un.hpmod.dest->base->id);
-				strcat(buf,")");
+				snprintf(buf1,128,"[%ld]%s ",msg->un.hpmod.dest-msg->un.hpmod.dest->owner->units,msg->un.hpmod.dest->base->id);
 			}
-			wmf(msg->un.hpmod.dest->owner==p?0:1,"%+ld%s",msg->un.hpmod.value,buf);
+			wmf(msg->un.hpmod.dest->owner==p?0:1,"%s%+ld%s",buf1,msg->un.hpmod.value,buf);
 			goto delay;
 		case MSG_MISS:
 			wmf(msg->un.u2.dest->owner==p?0:1,ts("miss"));
 			goto delay;
 		case MSG_MOVE:
-			wmf(msg->un.move.u->owner==p?0:1,"%s",move_ts(msg->un.move.m->id));
+			wmf(msg->un.move.u->owner==p?0:1,CYAN "%s" WHITE,move_ts(msg->un.move.m->id));
 			goto delay;
 		case MSG_ROUND:
 			break;
@@ -600,12 +598,11 @@ void reporter_term(const struct message *msg){
 			break;
 		case MSG_SPIMOD:
 			buf[0]=0;
+			buf1[0]=0;
 			if(msg->un.spimod.dest!=msg->un.spimod.dest->owner->front){
-				strcat(buf," (");
-				strcat(buf,msg->un.spimod.dest->base->id);
-				strcat(buf,")");
+				snprintf(buf1,128,"[%ld]%s ",msg->un.spimod.dest-msg->un.spimod.dest->owner->units,msg->un.spimod.dest->base->id);
 			}
-			wmf(msg->un.spimod.dest->owner==p?0:1,"%+ld spi%s",msg->un.spimod.value,buf);
+			wmf(msg->un.spimod.dest->owner==p?0:1,"%s%+ld spi%s",buf1,msg->un.spimod.value,buf);
 			goto delay;
 		case MSG_SWITCH:
 			wmf(msg->un.u2.dest->owner==p?0:1,"%s[%ld]",msg->un.u2.dest->base->id,msg->un.u2.dest-msg->un.u2.dest->owner->units);

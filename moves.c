@@ -181,13 +181,11 @@ const struct effect_base name[1]={{\
 	.id=#name,\
 	.init=attr_init,\
 	.inited=effect_update_attr,\
-	.end=effect_update_attr,\
 	.update_attr=name##_update_attr,\
-	.flag=EFFECT_ATTR,\
+	.flag=EFFECT_ATTR|EFFECT_KEEP,\
 	.prior=64\
 }};
 effect_attr(ATK,atk)
-//effect_attr(DEF,def)
 effect_attr(SPEED,speed)
 effect_attr(HIT,hit)
 effect_attr(AVOID,avoid)
@@ -200,9 +198,8 @@ const struct effect_base name[1]={{\
 	.id=#name,\
 	.init=attr_init,\
 	.inited=effect_update_attr,\
-	.end=effect_update_attr,\
 	.update_attr=name##_update_attr,\
-	.flag=EFFECT_ATTR,\
+	.flag=EFFECT_ATTR|EFFECT_KEEP,\
 	.prior=64\
 }};
 effect_attr_d(DEF,def,(e->level>0?0.5:0.2)*u->def)
@@ -380,7 +377,7 @@ void rfdisillusionfr_action(const struct event *ev,struct unit *src){
 	for_each_unit(u,p){
 		if(u!=p->front&&!unit_findeffect(u,alkali_fire_seal))
 			continue;
-		attack(u,src,def*u->base->max_hp/2048,DAMAGE_REAL,0,TYPE_ALKALIFIRE);
+		attack(u,src,def*u->base->max_hp/4096,DAMAGE_REAL,0,TYPE_ALKALIFIRE);
 	}
 }
 const struct event rfdisillusionfr[1]={{
@@ -396,7 +393,7 @@ void metal_bomb_inited(struct effect *e){
 }
 void metal_bomb_end(struct effect *e){
 	effect_event(e);
-	attack(e->dest,e->src,1.35*e->src->atk,DAMAGE_PHYSICAL,0,TYPE_ALKALIFIRE);
+	attack(e->dest,e->src,1.15*e->src->atk,DAMAGE_PHYSICAL,0,TYPE_ALKALIFIRE);
 	if(unit_findeffect(e->dest,alkali_fire_seal))
 		event(rfdisillusionfr,e->src);
 	else
@@ -484,7 +481,7 @@ const struct effect_base frost_destroying[1]={{
 	.prior=-18
 }};
 
-void primordial_breath_damage_end(struct effect *e,struct unit *dest,struct unit *src,unsigned long value,int damage_type,int aflag,int type){
+void primordial_breath_attack_end(struct effect *e,struct unit *dest,struct unit *src,unsigned long value,int damage_type,int aflag,int type){
 	if(e->dest==src&&type==TYPE_ICE&&damage_type==DAMAGE_PHYSICAL&&dest->owner==e->dest->owner->enemy&&!(aflag&AF_CRIT)&&value*2<=dest->base->max_hp){
 		effect_event(e);
 		if(unit_findeffect(dest,frost_destroying)){
@@ -496,7 +493,7 @@ void primordial_breath_damage_end(struct effect *e,struct unit *dest,struct unit
 }
 const struct effect_base primordial_breath[1]={{
 	.id="primordial_breath",
-	.damage_end=primordial_breath_damage_end,
+	.attack_end=primordial_breath_attack_end,
 	.flag=EFFECT_POSITIVE|EFFECT_UNPURIFIABLE|EFFECT_KEEP,
 	.prior=32
 }};
@@ -729,7 +726,6 @@ const struct effect_base blood_moon[1]={{
 	.inited=effect_update_attr_all,
 	.roundend=bm_roundend,
 	.update_attr=bm_update_attr,
-	.end=effect_update_attr_all,
 	.flag=EFFECT_ENV,
 	.prior=30
 }};
@@ -920,8 +916,11 @@ void collapse(struct unit *s){
 	effect(black_hole,NULL,s,0,4);
 	setcooldown(s,s->move_cur,9);
 }
+int duckcheck(const struct unit *u){
+	return !strcmp(u->base->id,"giant_mouth_duck");
+}
 int cyce_damage(struct effect *e,struct unit *dest,struct unit *src,unsigned long *value,int *damage_type,int *aflag,int *type){
-	if(dest==e->src&&(*aflag&AF_IDEATH)){
+	if((*aflag&AF_IDEATH)&&duckcheck(dest)){
 		effect_event(e);
 		effect_event_end(e);
 		return 1;
@@ -929,38 +928,52 @@ int cyce_damage(struct effect *e,struct unit *dest,struct unit *src,unsigned lon
 		return 0;
 }
 int cyce_hittest(struct effect *e,struct unit *dest,struct unit *src,double *hit_rate){
-	if(dest==e->src){
+	if(duckcheck(dest)){
 		effect_event(e);
 		effect_event_end(e);
 		return 0;
-	}
-	else if(src==e->src){
+	}else if(duckcheck(src)){
 		effect_event(e);
 		effect_event_end(e);
 		return 1;
-	}
-	else
+	}else
 		return -1;
+}
+void cyce_trydamage(struct unit *u){
+	if(!duckcheck(u))
+		attack(u,NULL,u->base->max_hp/9,DAMAGE_REAL,0,TYPE_MACHINE);
+}
+void cyce_roundend(struct effect *e){
+	struct player *p;
+	effect_event(e);
+	p=e->src->owner;
+	cyce_trydamage(p->front);
+	cyce_trydamage(p->enemy->front);
+	effect_event_end(e);
 }
 const struct effect_base cycle_eden[1]={{
 	.id="cycle_eden",
 	.damage=cyce_damage,
 	.hittest=cyce_hittest,
+	.roundend=cyce_roundend,
 	.flag=EFFECT_ENV
 }};
 void cycle_erode(struct unit *s){
 	struct unit *t;
-	int plv=test(0.5)?2:1;
+	int plv;
+	if(!duckcheck(s))
+		return;
+	plv=test(0.5)?2:1;
 	t=gettarget(s);
 	if(effect(PDD,t,s,-plv,-1))
 		effect(PDD,s,s,plv,-1);
-	attack(t,s,1.05*s->atk,DAMAGE_PHYSICAL,0,TYPE_MACHINE);
+	attack(t,s,0.8*s->atk,DAMAGE_PHYSICAL,0,TYPE_MACHINE);
 	effect(cycle_eden,NULL,s,0,4);
-	setcooldown(s,s->move_cur,16);
+	setcooldown(s,s->move_cur,8);
 }
 void cycle_erode_init(struct unit *s){
 	struct unit *t;
-	if(!isfront(s))
+	if(!isfront(s)||!duckcheck(s))
 		return;
 	t=s->osite;
 	attack(t,s,1.3*s->atk,DAMAGE_PHYSICAL,0,TYPE_MACHINE);
@@ -1368,7 +1381,6 @@ void mecha_update_attr(struct effect *e,struct unit *u){
 const struct effect_base mecha_effect[1]={{
 	.id="mecha",
 	.inited=effect_update_attr,
-	.end=effect_update_attr,
 	.update_attr=mecha_update_attr
 }};
 void mecha(struct unit *s){
@@ -1466,9 +1478,7 @@ void tidal(struct unit *s){
 		if(e->dest==t&&(e->base->flag&EFFECT_ATTR)&&e->level>0)
 			purify(e);
 	}
-	effect(PDB,s,s,1,-1);
-	effect(MDB,s,s,1,-1);
-	attack(t,s,0.85*s->atk,DAMAGE_PHYSICAL,0,TYPE_DEVINEWATER);
+	attack(t,s,s->atk,DAMAGE_PHYSICAL,0,TYPE_DEVINEWATER);
 }
 
 int rand_action(const struct player *p){
@@ -1883,7 +1893,6 @@ void elbow2_update_attr(struct effect *e,struct unit *u){
 const struct effect_base elbow2[1]={{
 	.inited=effect_update_attr,
 	.update_attr=elbow2_update_attr,
-	.end=effect_update_attr,
 	.flag=EFFECT_POSITIVE,
 	.prior=32
 }};
@@ -1898,7 +1907,6 @@ void elbow3_update_attr(struct effect *e,struct unit *u){
 const struct effect_base elbow3[1]={{
 	.inited=effect_update_attr,
 	.update_attr=elbow3_update_attr,
-	.end=effect_update_attr,
 	.flag=EFFECT_POSITIVE,
 	.prior=32
 }};
@@ -2252,6 +2260,11 @@ void electric_arc(struct unit *s){
 		attack(t,s,0.43*s->atk,DAMAGE_PHYSICAL,AF_NOFLOAT,TYPE_ELECTRIC);
 		attack(t,s,0.43*s->atk,DAMAGE_MAGICAL,AF_NOFLOAT,TYPE_ELECTRIC);
 	}
+}
+void metal_syncretize(struct unit *s){
+	struct unit *t=gettarget(s);
+	attack(t,s,s->atk,DAMAGE_PHYSICAL,0,TYPE_ALKALIFIRE);
+	effect(PDB,s,s,1,-1);
 }
 const struct move builtin_moves[]={
 	{
@@ -2920,6 +2933,14 @@ const struct move builtin_moves[]={
 		.id="electric_arc",
 		.action=electric_arc,
 		.type=TYPE_ELECTRIC,
+		.flag=0,
+		.mlevel=MLEVEL_REGULAR
+	},
+	{
+		.id="metal_syncretize",
+		.action=metal_syncretize,
+		.type=TYPE_ALKALIFIRE,
+		.prior=0,
 		.flag=0,
 		.mlevel=MLEVEL_REGULAR
 	},

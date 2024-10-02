@@ -147,15 +147,14 @@ void player_moveinit(struct player *p){
 	r2=r0?!player_hasunit(p):0;\
 	r3=r1?!player_hasunit(e):0;\
 	if(r2!=r3){\
-		ret=!!r0;\
+		ret=!r3;\
 		goto out;\
 	}\
 	if(r2){\
 		if(p->front->speed==e->front->speed)\
 			ret=test(0.5);\
 		else\
-			ret=p->front->speed<e->front->speed?\
-			1:0;\
+			ret=p->front->speed<e->front->speed;\
 		goto out;\
 	}\
 	if(r0){\
@@ -169,8 +168,7 @@ void player_moveinit(struct player *p){
 			if(p->front->speed==e->front->speed)\
 				ret=test(0.5);\
 			else\
-				ret=p->front->speed<e->front->speed?\
-				1:0;\
+				ret=p->front->speed<e->front->speed;\
 			goto out;\
 		}\
 		if(r0){\

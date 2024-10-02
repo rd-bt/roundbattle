@@ -55,9 +55,9 @@ unsigned long damage(struct unit *dest,struct unit *src,unsigned long value,int 
 }
 unsigned long attack(struct unit *dest,struct unit *src,unsigned long value,int damage_type,int aflag,int type){
 	long x;
-	unsigned long ret,value_backup,aflag_backup;
+	unsigned long value_backup;
 	double derate;
-	int dest_type;
+	int dest_type,aflag_backup;
 	switch(damage_type){
 		case DAMAGE_REAL:
 		case DAMAGE_PHYSICAL:
@@ -130,12 +130,16 @@ unsigned long attack(struct unit *dest,struct unit *src,unsigned long value,int 
 no_derate:
 	if(!(aflag&AF_NOFLOAT)&&damage_type!=DAMAGE_REAL)
 		value+=(0.1*rand01()-0.05)*value;
-	ret=damage(dest,src,value,damage_type,aflag,type);
+	value=damage(dest,src,value,damage_type,aflag,type);
 	for_each_effect(e,dest->owner->field->effects){
 		if(e->base->attack_end)
-			e->base->attack_end(e,dest,src,value_backup,damage_type,aflag_backup,type);
+			e->base->attack_end(e,dest,src,value,damage_type,aflag,type);
 	}
-	return ret;
+	for_each_effect(e,dest->owner->field->effects){
+		if(e->base->attack_end0)
+			e->base->attack_end0(e,dest,src,value_backup,damage_type,aflag_backup,type);
+	}
+	return value;
 }
 
 int hittest(struct unit *dest,struct unit *src,double hit_rate){
@@ -204,7 +208,6 @@ void normal_attack(struct unit *src){
 	am.flag=MOVE_NORMALATTACK;
 	am.unused=0;
 	unit_move(src,&am);
-	//report(dest->owner->field,MSG_NORMALATTACK,dest,src);
 }
 unsigned long heal(struct unit *dest,unsigned long value){
 	unsigned long hp;
@@ -218,7 +221,6 @@ unsigned long heal(struct unit *dest,unsigned long value){
 	if(hp>dest->base->max_hp)
 		hp=dest->base->max_hp;
 	dest->hp=hp;
-	//printf("%s heals %lu hp,current hp:%lu\n",dest->base->id,value,hp);
 	report(dest->owner->field,MSG_HEAL,dest,value);
 	for_each_effect(e,dest->owner->field->effects){
 		if(e->base->heal_end)
@@ -246,13 +248,12 @@ unsigned long sethp(struct unit *dest,unsigned long hp){
 }
 
 unsigned long addhp(struct unit *dest,long hp){
-	long ohp,rhp;
+	long rhp;
 	if(!hp)
 		return 0;
 	if(!isalive(dest->state))
-			return 0;
-	ohp=(long)dest->hp;
-	rhp=hp+ohp;
+		return 0;
+	rhp=hp+(long)dest->hp;
 	if(hp<0&&rhp<0)
 		rhp=0;
 	if((unsigned long)rhp>dest->base->max_hp)
@@ -483,6 +484,7 @@ int effect_end(struct effect *e){
 		e->next->prev=e->prev;
 	if(!e->prev&&!e->next)
 		f->effects=NULL;
+	update_attr_all(f);
 	report(f,MSG_EFFECT_END,e);
 	if(e->base->end)
 		e->base->end(e);

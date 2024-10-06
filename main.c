@@ -1,50 +1,36 @@
 #include "battle.h"
 #include "moves.h"
+#include "info.h"
+#include "utils.h"
+#include "player_data.h"
+#include "menu.h"
+#include "locale.h"
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#include <ncurses.h>
+#include <assert.h>
 const char *moves[]={"cycle_erode","defend","razor_carrot","piercing_missile","breach_missile","flamethrower","urgently_repair","metal_syncretize",NULL};
 
-void reporter_term(const struct message *msg);
-int term_selector(const struct player *p);
 int main(){
-	struct player p1,p2;
-	struct unit_base bt={"giant_mouth_duck",1900,300,403,666,100,100,128,2,0,0,0,0,TYPE_ICE,TYPE_VOID,150,0};
-	struct unit_base bb={"bear",2100,203,437,332,100,100,128,2,0,0,0,0,TYPE_GRASS,TYPE_VOID,150,0};
-	int r;
-//	for(r=0;r<20;++r)
-//		printf("%d\n",test(0.5));
-//	return 0;
+	struct player_data p1;
+	//size_t r;
+	assert(!pdata_load(&p1));
+	main_menu(&p1);
+	/*scr();
+	writemove(p1.ui);
+	endwin();
+	assert(!pdata_fake(&p2,"icefield_tiger",250));
 	srand48(time(NULL));
-	memset(&p1,0,sizeof(p1));
-	memset(&p2,0,sizeof(p2));
-	p1.enemy=&p2;
-	p2.enemy=&p1;
-	p1.selector=term_selector;
-	p2.selector=rand_selector;
-	for(r=0;r<8;++r){
-		bt.moves[r].id=NULL;
-		bb.moves[r].id=NULL;
+	tm_init();
+	r=pbattle(&p1,&p2,term_selector,rand_selector,reporter_term);
+	if(r<0){
+//error:
+		puts("cannot battle");
+	}else {
+			if(r==0)puts("tiger wins");
+		else puts("bear wins");
 	}
-	for(r=0;moves[r];++r)
-		memcpy(bb.moves+r,get_builtin_move_by_id(moves[r]),sizeof(struct move));
-	for(r=0;moves[r];++r)
-		memcpy(bt.moves+r,get_builtin_move_by_id(moves[r]),sizeof(struct move));
-	memcpy(bb.pmoves,get_builtin_move_by_id("thorns"),sizeof(struct move));
-	memcpy(bb.pmoves+1,get_builtin_move_by_id("primordial_breath"),sizeof(struct move));
-	memcpy(bt.pmoves,get_builtin_move_by_id("moon_elf_shield"),sizeof(struct move));
-	memcpy(bt.pmoves+1,get_builtin_move_by_id("anti_def_by_def"),sizeof(struct move));
-	p1.units->base=&bt;
-	(p1.units+1)->base=&bt;
-	p2.units->base=&bb;
-	(p2.units+1)->base=&bb;
-	(p2.units+2)->base=&bb;
-	(p2.units+3)->base=&bb;
-	(p2.units+4)->base=&bb;
-	(p2.units+5)->base=&bb;
-	r=battle(&p1,&p2,reporter_term);
-	if(r<0)puts("cannot battle");
-	else if(r==0)puts("tiger wins");
-	else puts("bear wins");
+	tm_end();*/
 	return 0;
 }

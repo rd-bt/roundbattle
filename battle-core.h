@@ -141,6 +141,8 @@
 #define EFFECT_UNPURIFIABLE 64
 #define EFFECT_ISOLATED 128
 #define EFFECT_KEEP 256
+#define EFFECT_NONHOOKABLE 512
+#define EFFECT_PASSIVE (EFFECT_POSITIVE|EFFECT_UNPURIFIABLE|EFFECT_KEEP|EFFECT_NONHOOKABLE)
 
 #define STAGE_INIT 0
 #define STAGE_ROUNDSTART 1
@@ -148,7 +150,30 @@
 #define STAGE_LATTER 3
 #define STAGE_ROUNDEND 4
 #define STAGE_BATTLE_END 5
-
+#define limit(x,inf,sup) (\
+{\
+		__auto_type _inf=(inf);\
+		__auto_type _sup=(sup);\
+		__auto_type _x=(x);\
+		if(_x>_sup)\
+			_x=_sup;\
+		if(_x<_inf)\
+			_x=_inf;\
+		_x;\
+}\
+)
+#define limit_ring(x,inf,sup) (\
+{\
+		__auto_type _inf=(inf);\
+		__auto_type _sup=(sup);\
+		__auto_type _x=(x);\
+		if(_x>_sup)\
+			_x=_inf;\
+		if(_x<_inf)\
+			_x=_sup;\
+		_x;\
+}\
+)
 #define isalive(s) (\
 {\
 		int _r;\
@@ -338,7 +363,7 @@
 }\
 )
 #define for_each_effect(_var,_ehead) for(struct effect *_var=(_ehead),*_next=_var?_var->next:NULL;_next=_var?_var->next:NULL,_var;_var=_var->intrash?_next:_var->next)
-#define for_each_unit(_var,_player) for(struct unit *_var=(_player)->units,*_p0=_var+6;_var<_p0&&_var->base;++_var)
+#define for_each_unit(_var,_player) for(struct unit *_var=(_player)->units,*_p0=_var+6;_var<_p0;++_var)if(_var->base)
 #define osite owner->enemy->front
 enum {
 	MSG_ACTION=0,
@@ -366,6 +391,7 @@ struct unit;
 struct player;
 struct battle_field;
 struct effect;
+struct message;
 struct move {
 	const char *id;
 	void (*action)(struct unit *);
@@ -382,10 +408,8 @@ struct unit_base {
 	double crit_effect,
 		physical_bonus,magical_bonus,
 		physical_derate,magical_derate;
-	int type0,type1;
-	unsigned int level,unused;
+	int type0,type1,level,unused;
 	struct move moves[8];
-	struct move pmoves[2];
 };
 struct effect_base {
 	const char *id;
@@ -452,9 +476,8 @@ struct unit {
 	double crit_effect,
 		physical_bonus,magical_bonus,
 		physical_derate,magical_derate;
-	int type0,type1,level,state;
+	int type0,type1,state,level;
 	struct move moves[8];
-	struct move pmoves[2];
 	struct player *owner;
 	struct move *move_cur;
 };
@@ -462,6 +485,7 @@ struct unit {
 struct player {
 	struct unit units[6];
 	int (*selector)(const struct player *);
+	void (*reporter)(const struct message *msg,const struct player *p);
 	struct unit *front;
 	struct player *enemy;
 	struct battle_field *field;
@@ -518,7 +542,6 @@ struct message {
 struct battle_field {
 	struct player *p,*e;
 	struct effect *effects,*trash;
-	void (*reporter)(const struct message *msg);
 	struct message *rec;
 	size_t rec_size,rec_length;
 	struct history *ht;

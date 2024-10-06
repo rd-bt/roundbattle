@@ -130,6 +130,8 @@ unsigned long attack(struct unit *dest,struct unit *src,unsigned long value,int 
 no_derate:
 	if(!(aflag&AF_NOFLOAT)&&damage_type!=DAMAGE_REAL)
 		value+=(0.1*rand01()-0.05)*value;
+	if(!value)
+		value=1;
 	value=damage(dest,src,value,damage_type,aflag,type);
 	for_each_effect(e,dest->owner->field->effects){
 		if(e->base->attack_end)
@@ -347,7 +349,7 @@ struct effect *effect(const struct effect_base *base,struct unit *dest,struct un
 		f=src->owner->field;
 	if(!f||(dest&&!isalive(dest->state)))
 		return NULL;
-	for_each_effect(e,f->effects){
+	if(!(base->flag&EFFECT_NONHOOKABLE))for_each_effect(e,f->effects){
 		if(e->base->effect&&e->base->effect(e,base,dest,src,&level,&round))
 			return NULL;
 	}
@@ -399,7 +401,7 @@ int effect_reinit(struct effect *ep,struct unit *src,long level,int round){
 		f=ep->src->owner->field;
 	if(!f)
 		return -1;
-	for_each_effect(e,f->effects){
+	if(!(ep->base->flag&EFFECT_NONHOOKABLE))for_each_effect(e,f->effects){
 		if(e->base->effect&&e->base->effect(e,ep->base,ep->dest,src,&level,&round))
 			return -1;
 	}
@@ -529,7 +531,6 @@ void wipetrash(struct battle_field *f){
 	if(!(e=f->trash))
 		return;
 	for(e=f->trash;;e=p){
-		//printf("WIPE %s %p prev:%p next:%p intrash:%u\n",e->base->id,e,e->prev,e->next,e->intrash);
 		p=e->next;
 		free(e);
 		if(!p)
@@ -626,7 +627,7 @@ void unit_cooldown_decrease(struct unit *u,int round){
 	int r,r1;
 	for(r=0;r<8;++r){
 		if(!u->moves[r].id)
-			break;
+			continue;
 		r1=u->moves[r].cooldown;
 		if(!r1||r1<0)
 			continue;
@@ -771,16 +772,18 @@ int unit_hasnegative(const struct unit *u){
 		}
 	return r;
 }
+static int iffr(const struct unit *u,const struct move *m){
+	return m->id&&(m->mlevel&MLEVEL_FREEZING_ROARING)&&unit_hasnegative(u);
+}
 int unit_move(struct unit *u,struct move *m){
 	struct move *backup=u->move_cur;
-	if(!isalive(u->state))
+	if(!isalive(u->state)||!m->action)
 			return -1;
-	if(!((m->mlevel&MLEVEL_FREEZING_ROARING)&&unit_hasnegative(u))){
+	if(!iffr(u,m))
 		for_each_effect(e,u->owner->field->effects){
 			if(e->base->move&&e->base->move(e,u,m))
 				return -1;
 		}
-	}
 	u->move_cur=m;
 	report(u->owner->field,MSG_MOVE,u,m);
 	m->action(u);
@@ -812,23 +815,27 @@ int switchunit(struct unit *to){
 }
 int canaction2(const struct player *p,int act){
 	struct move *m;
+	int fr;
 	switch(act){
 		case ACT_MOVE0 ... ACT_MOVE7:
 			m=p->front->moves+act;
-			if(!m->id||(m->cooldown&&!((m->mlevel&MLEVEL_FREEZING_ROARING)&&unit_hasnegative(p->front))))
+			if(!m->id||!m->action)
 				return 0;
+			fr=iffr(p->front,m);
 			switch(p->front->state){
 				case UNIT_CONTROLLED:
-					if(m->flag&MOVE_NOCONTROL)
-						return 1;
+					if(!(m->flag&MOVE_NOCONTROL)&&!fr)
+						return 0;
 				case UNIT_SUPPRESSED:
-					if((m->mlevel&MLEVEL_FREEZING_ROARING)&&unit_hasnegative(p->front))
-						return 1;
+					if(!fr)
+						return 0;
+				default:
+					if(m->cooldown&&!fr)
+						return 0;
+					return 1;
 				case UNIT_FAILED:
 				case UNIT_FREEZING_ROARINGED:
 					return 0;
-				default:
-					return 1;
 			}
 		case ACT_NORMALATTACK:
 			switch(p->front->state){
@@ -862,7 +869,7 @@ void player_action(struct player *p){
 	int r;
 	switch(p->action){
 		case ACT_MOVE0 ... ACT_MOVE7:
-			if((p->front->moves[p->action].mlevel&MLEVEL_FREEZING_ROARING)&&unit_hasnegative(p->front))
+			if(iffr(p->front,p->front->moves+p->action))
 				goto fr;
 		default:
 			for_each_effect(e,p->field->effects){
@@ -915,10 +922,13 @@ struct player *getprior(struct player *p,struct player *e){
 	int pp,pe,frp=0,fre=0;
 	switch(p->action){
 		case ACT_MOVE0 ... ACT_MOVE7:
-			pp=p->front->moves[p->action].getprior?
-				p->front->moves[p->action].getprior(p->front):
-				p->front->moves[p->action].prior;
-			if((p->front->moves[p->action].mlevel&MLEVEL_FREEZING_ROARING)&&unit_hasnegative(p->front))
+			if(!p->front->moves[p->action].id)
+				pp=0;
+			else
+				pp=p->front->moves[p->action].getprior?
+					p->front->moves[p->action].getprior(p->front):
+					p->front->moves[p->action].prior;
+			if(iffr(p->front,p->front->moves+p->action))
 				frp=1;
 			break;
 		default:
@@ -927,10 +937,13 @@ struct player *getprior(struct player *p,struct player *e){
 	}
 	switch(e->action){
 		case ACT_MOVE0 ... ACT_MOVE7:
-			pe=e->front->moves[e->action].getprior?
-				e->front->moves[e->action].getprior(e->front):
-				e->front->moves[e->action].prior;
-			if((e->front->moves[e->action].mlevel&MLEVEL_FREEZING_ROARING)&&unit_hasnegative(e->front))
+			if(!e->front->moves[e->action].id)
+				pe=0;
+			else
+				pe=e->front->moves[e->action].getprior?
+					e->front->moves[e->action].getprior(e->front):
+					e->front->moves[e->action].prior;
+			if(iffr(e->front,e->front->moves+e->action))
 				fre=1;
 			break;
 		default:
@@ -964,7 +977,7 @@ struct player *getprior(struct player *p,struct player *e){
 	return prior;
 }
 void report(struct battle_field *f,int type,...){
-	void (*rr)(const struct message *)=f->reporter;
+	void (*rr)(const struct message *,const struct player *);
 	struct message msg;
 	va_list ap;
 	memset(&msg,0,sizeof(struct message));
@@ -1033,8 +1046,10 @@ void report(struct battle_field *f,int type,...){
 			break;
 	}
 	va_end(ap);
-	if(rr)
-		rr(&msg);
+	if((rr=f->p->reporter))
+		rr(&msg,f->p);
+	if((rr=f->e->reporter))
+		rr(&msg,f->e);
 	if(msg.type==MSG_UPDATE)
 		return;
 	if(f->rec_size>=f->rec_length){

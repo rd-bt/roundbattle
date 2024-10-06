@@ -85,7 +85,7 @@ abnormal_damage(burnt,10,TYPE_FIRE,.attack=burnt_attack COMMA)
 void parasitized_roundend(struct effect *e){
 	effect_event(e);
 	heal(e->dest->osite,
-		attack(e->dest,NULL,e->dest->base->max_hp/10,DAMAGE_REAL,0,TYPE_GRASS)
+		attack(e->dest,NULL,e->dest->base->max_hp/10,DAMAGE_REAL,0,TYPE_GRASS)/2
 	);
 	effect_event_end(e);
 }
@@ -494,7 +494,7 @@ void primordial_breath_attack_end(struct effect *e,struct unit *dest,struct unit
 const struct effect_base primordial_breath[1]={{
 	.id="primordial_breath",
 	.attack_end=primordial_breath_attack_end,
-	.flag=EFFECT_POSITIVE|EFFECT_UNPURIFIABLE|EFFECT_KEEP,
+	.flag=EFFECT_PASSIVE,
 	.prior=32
 }};
 void primordial_breath_init(struct unit *s){
@@ -616,11 +616,14 @@ void freezing_roaring(struct unit *s){
 		t->owner->action=ACT_ABORT;
 	report(s->owner->field,MSG_FAIL,t);
 	unit_wipeeffect(t,0);
-	for(struct move *mp=s->moves,*endp=mp+8;mp<endp&&mp->id;++mp)
+	for(struct move *mp=s->moves,*endp=mp+8;mp<endp;++mp){
+		if(!mp->id)
+			continue;
 		if(mp->cooldown){
 			mp->cooldown=0;
 			report(s->owner->field,MSG_UPDATE,mp);
 		}
+	}
 }
 
 void triple_cutter(struct unit *s){
@@ -650,7 +653,7 @@ void thorns_damage_end(struct effect *e,struct unit *dest,struct unit *src,unsig
 const struct effect_base thorns[1]={{
 	.id="thorns",
 	.damage_end=thorns_damage_end,
-	.flag=EFFECT_POSITIVE|EFFECT_UNPURIFIABLE|EFFECT_KEEP,
+	.flag=EFFECT_PASSIVE,
 }};
 void thorns_init(struct unit *s){
 	effect(thorns,s,s,0,-1);
@@ -675,7 +678,7 @@ void combo_attack_end(struct effect *e,struct unit *dest,struct unit *src,unsign
 const struct effect_base combo[1]={{
 	.id="combo",
 	.attack_end=combo_attack_end,
-	.flag=EFFECT_POSITIVE|EFFECT_UNPURIFIABLE|EFFECT_KEEP
+	.flag=EFFECT_PASSIVE
 }};
 void combo_init(struct unit *s){
 	effect(combo,s,s,20,-1);
@@ -700,7 +703,7 @@ void hitback_attack_end(struct effect *e,struct unit *dest,struct unit *src,unsi
 const struct effect_base hitback[1]={{
 	.id="hitback",
 	.attack_end=hitback_attack_end,
-	.flag=EFFECT_POSITIVE|EFFECT_UNPURIFIABLE|EFFECT_KEEP
+	.flag=EFFECT_PASSIVE
 }};
 void hitback_init(struct unit *s){
 	effect(hitback,s,s,20,-1);
@@ -759,7 +762,7 @@ const struct effect_base myriad[1]={{
 	.id="myriad",
 	.damage_end=myriad_damage_end,
 	.roundend=myriad_roundend,
-	.flag=EFFECT_POSITIVE|EFFECT_UNPURIFIABLE|EFFECT_KEEP
+	.flag=EFFECT_PASSIVE
 }};
 void myriad_init(struct unit *s){
 	effect(myriad,s,s,0,-1);
@@ -1012,7 +1015,7 @@ const struct effect_base absolutely_immortal_effect[1]={{
 	.id="absolutely_immortal",
 	.damage=absolutely_immortal_damage,
 	.kill=absolutely_immortal_kill,
-	.flag=EFFECT_POSITIVE|EFFECT_UNPURIFIABLE,
+	.flag=EFFECT_POSITIVE|EFFECT_UNPURIFIABLE|EFFECT_NONHOOKABLE,
 	.prior=-128
 }};
 void absolutely_immortal(struct unit *s){
@@ -1154,7 +1157,7 @@ void heat_engine_move_end(struct effect *e,struct unit *u,struct move *m){
 const struct effect_base heat_engine[1]={{
 	.id="heat_engine",
 	.move_end=heat_engine_move_end,
-	.flag=EFFECT_POSITIVE|EFFECT_UNPURIFIABLE|EFFECT_KEEP
+	.flag=EFFECT_PASSIVE
 }};
 void heat_engine_init(struct unit *s){
 	effect(heat_engine,s,s,0,-1);
@@ -1640,9 +1643,12 @@ const struct effect_base hail_effect[1]={{
 }};
 void hail(struct unit *s){
 	struct unit *t=gettarget(s);
+	struct effect *e;
 	if(hittest(t,s,1.0))
 		attack(t,s,0.45*s->atk+t->base->max_hp/32.0,DAMAGE_PHYSICAL,0,TYPE_ICE);
-	effect(hail_effect,s,s,0,5);
+	e=effect(hail_effect,s,s,0,5);
+	if(e)
+		e->active=0;
 }
 void clip3(struct unit *s){
 	struct unit *t=gettarget(s);
@@ -1688,6 +1694,12 @@ void cold_wind(struct unit *s){
 		effect(SPEED,t,s,-1,-1);
 	}
 }
+void entangle(struct unit *s){
+	struct unit *t=gettarget(s);
+	if(hittest(t,s,1.0)){
+		effect(SPEED,t,s,-2,-1);
+	}
+}
 int maple_init(struct effect *e,long level,int round){
 	level+=e->level;
 	if(level<=0)
@@ -1725,7 +1737,7 @@ void piercing_missile(struct unit *s){
 	double dmg=40+0.05*s->atk+0.03*t->base->max_hp;
 	if(n){
 		attack(t,s,dmg*pow(1.15,n),DAMAGE_REAL,0,TYPE_NORMAL);
-		effect(maple,t,s,-n,-1);
+		effect_reinit(e,s,-n,-1);
 	}
 	else
 		attack(t,s,dmg,DAMAGE_REAL,0,TYPE_NORMAL);
@@ -2139,7 +2151,7 @@ void moon_elf_shield_effect_end(struct effect *e,struct effect *ep,struct unit *
 }
 const struct effect_base moon_elf_shield[1]={{
 	.id="moon_elf_shield",
-	.flag=EFFECT_POSITIVE|EFFECT_UNPURIFIABLE|EFFECT_KEEP,
+	.flag=EFFECT_PASSIVE,
 	.init=moon_elf_shield_init,
 	.damage=moon_elf_shield_damage,
 	.effect_end=moon_elf_shield_effect_end,
@@ -2161,7 +2173,7 @@ int adbd_attack(struct effect *e,struct unit *dest,struct unit *src,unsigned lon
 }
 const struct effect_base anti_def_by_def[1]={{
 	.id="anti_def_by_def",
-	.flag=EFFECT_POSITIVE|EFFECT_UNPURIFIABLE|EFFECT_KEEP,
+	.flag=EFFECT_PASSIVE,
 	.attack=adbd_attack,
 }};
 void anti_def_by_def_p(struct unit *s){
@@ -2238,7 +2250,7 @@ void burn_boat_roundstart(struct effect *e){
 }
 const struct effect_base burn_boat_effect[1]={{
 	.id="burn_boat",
-	.flag=EFFECT_POSITIVE|EFFECT_UNPURIFIABLE|EFFECT_KEEP,
+	.flag=EFFECT_PASSIVE,
 	.damage=burn_boat_damage,
 	.effect=burn_boat_effect1,
 	.kill=burn_boat_kill,
@@ -2265,6 +2277,32 @@ void metal_syncretize(struct unit *s){
 	struct unit *t=gettarget(s);
 	attack(t,s,s->atk,DAMAGE_PHYSICAL,0,TYPE_ALKALIFIRE);
 	effect(PDB,s,s,1,-1);
+}
+int uniform_base_damage(struct effect *e,struct unit *dest,struct unit *src,unsigned long *value,int *damage_type,int *aflag,int *type){
+	unsigned long dmg,x;
+	if(dest!=e->dest)
+		return 0;
+	dmg=*value;
+	if(!(dmg&(dmg-1)))
+		return 0;
+	effect_event(e);
+	x=0;
+	do {
+		dmg>>=1;
+		++x;
+	}while(dmg&(dmg-1));
+	*value=dmg<<x;
+	effect_event_end(e);
+	return 0;
+}
+const struct effect_base uniform_base_effect[1]={{
+	.id="uniform_base",
+	.flag=EFFECT_PASSIVE,
+	.damage=uniform_base_damage,
+	.prior=-26
+}};
+void uniform_base(struct unit *s){
+	effect(uniform_base_effect,s,s,0,-1);
 }
 const struct move builtin_moves[]={
 	{
@@ -2941,6 +2979,20 @@ const struct move builtin_moves[]={
 		.action=metal_syncretize,
 		.type=TYPE_ALKALIFIRE,
 		.prior=0,
+		.flag=0,
+		.mlevel=MLEVEL_REGULAR
+	},
+	{
+		.id="entangle",
+		.action=entangle,
+		.type=TYPE_GRASS,
+		.flag=0,
+		.mlevel=MLEVEL_REGULAR
+	},
+	{
+		.id="uniform_base",
+		.init=uniform_base,
+		.type=TYPE_NORMAL,
 		.flag=0,
 		.mlevel=MLEVEL_REGULAR
 	},

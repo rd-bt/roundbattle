@@ -1,5 +1,6 @@
 #include "battle.h"
 #include "moves.h"
+#include "locale.h"
 #include "strmap.h"
 #include <stdlib.h>
 #include <stdio.h>
@@ -12,7 +13,6 @@
 #include <sys/types.h>
 #include <unistd.h>
 #include <alloca.h>
-#include <assert.h>
 #include <stdarg.h>
 #define RED "\033[91m"
 #define GREEN "\033[92m"
@@ -28,91 +28,7 @@
 #define azero(a) memset((a),0,sizeof(a))
 #define REC_SIZE 64
 static char rec[REC_SIZE][129];
-static const char *types_string[21]={"void_type","grass","fire","water","steel","light","fighting","wind","poison","rock","electric","ghost","ice","bug","machine","soil","dragon","normal","devine_grass","alkali_fire","devine_water"};
-static struct strmap *loc=NULL;
 
-#include "readall.c"
-void load_locale(void){
-	ssize_t r;
-	char *buf,*p,*p1,*p2;
-	int fd;
-	fd=open("zh_CN.lang",O_RDONLY);
-	assert(fd>=0);
-	buf=readall(fd,&r);
-	close(fd);
-	assert(buf);
-	for(p=buf;*p;){
-		p1=strchr(p,'\n');
-		if(!p1)
-			p1=p+strlen(p);
-		switch(*p){
-			case '#':
-				if(!*p1)
-					goto end;
-				p=p1+1;
-				break;
-			case '\n':
-				++p;
-				continue;
-			default:
-				break;
-		}
-		p2=memchr(p,'=',p1-p);
-		if(p2&&p2>p&&p1>p2+1){
-			loc=strmap_add(loc,p,p2-p,p2+1,p1-p2-1);
-		}
-		if(*p1)
-			p=p1+1;
-		else
-			goto end;
-	}
-end:
-	free(buf);
-}
-const char *locale(const char *id){
-	if(!loc){
-		load_locale();
-	}
-	return strmap_find(loc,id,strlen(id));
-}
-
-const char *ts(const char *id){
-	const char *p;
-	p=locale(id);
-	if(!p)
-		return id;
-	return p;
-}
-const char *type_ts(const char *id){
-	char *buf;
-	const char *p;
-	size_t l;
-	l=strlen(id);
-	buf=alloca(l+11);
-	sprintf(buf,"type.%s.name",id);
-	p=locale(buf);
-	if(!p)
-		return id;
-	return p;
-}
-const char *e2s(const char *id){
-	char *buf;
-	const char *p;
-	size_t l;
-	l=strlen(id);
-	buf=alloca(l+13);
-	sprintf(buf,"effect.%s.name",id);
-	p=locale(buf);
-	if(!p)
-		return id;
-	return p;
-}
-const char *type2str(int type){
-	unsigned int index=type?__builtin_ctz(type)+1:0;
-	if(index>=21)
-		return type_ts("unknown");
-	return type_ts(types_string[index]);
-}
 size_t strrlen(const char *s){
 	size_t r=0;
 	while(*s){
@@ -161,31 +77,6 @@ void wmf(int who,const char *fmt,...){
 	va_end(ap);
 }
 
-const char *move_ts(const char *id){
-	char *buf;
-	const char *p;
-	size_t l;
-	l=strlen(id);
-	buf=alloca(l+11);
-	sprintf(buf,"move.%s.name",id);
-	p=locale(buf);
-	if(!p)
-		return id;
-	return p;
-}
-
-const char *move_desc(const char *id){
-	char *buf;
-	const char *p;
-	size_t l;
-	l=strlen(id);
-	buf=alloca(l+11);
-	sprintf(buf,"move.%s.desc",id);
-	p=locale(buf);
-	if(!p)
-		return id;
-	return p;
-}
 static const char *sstr[5]={"normal","controlled","spuuressed","failed","freezing_roaringed"};
 void frash(const struct player *p,FILE *fp,int current){
 	struct player *e=p->enemy;
@@ -194,7 +85,7 @@ void frash(const struct player *p,FILE *fp,int current){
 	unsigned short s,n,s1,line=0;
 	struct winsize ws;
 	char *buf;
-	size_t buflen;
+	size_t buflen,sr;
 	int r,r1,c;
 	int found0=0,found1=0,cf0,cf1;
 	fputs("\033c",fp);
@@ -235,18 +126,26 @@ void frash(const struct player *p,FILE *fp,int current){
 #define print_attr(...) \
 	s1=ws.ws_col;\
 	u=p->front;\
-	r=snprintf(buf,buflen,__VA_ARGS__);\
-	s1-=strrlen(buf);\
-	fputs(buf,fp);\
+	snprintf(buf,buflen,__VA_ARGS__);\
+	sr=strrlen(buf);\
+	if(s1>=sr){\
+		s1-=sr;\
+		fputs(buf,fp);\
+	}\
 	u=e->front;\
-	r=snprintf(buf,buflen,__VA_ARGS__);\
-	s1-=strrlen(buf);\
-	putn(' ',s1);\
+	snprintf(buf,buflen,__VA_ARGS__);\
+	sr=strrlen(buf);\
+	if(s1>=sr){\
+		s1-=sr;\
+		putn(' ',s1);\
+	}else\
+		fputc('\n',fp);\
 	fputs(buf,fp);\
 	fputc('\n',fp);\
 	++line
-	print_attr("(%s%s%s) %s[%ld] %lu/%lu %.2lf%%",type2str(u->type0),u->type1?"/":"",u->type1?type2str(u->type1):"",u->base->id,u-u->owner->units,u->hp,u->base->max_hp,100.0*u->hp/u->base->max_hp);
-	print_attr("%s:%u %s:%lu %s:%ld",ts("level"),u->level,ts("atk"),u->atk,ts("def"),u->def);
+	print_attr("%s%s%s [%ld]%s",type2str(u->type0),u->type1?"/":"",u->type1?type2str(u->type1):"",u-u->owner->units,unit_ts(u->base->id));
+	print_attr("%lu/%lu %.2lf%%",u->hp,u->base->max_hp,100.0*u->hp/u->base->max_hp);
+	print_attr("%s:%d %s:%lu %s:%ld",ts("level"),u->level,ts("atk"),u->atk,ts("def"),u->def);
 	print_attr("%s:%lu %s:%lu %s:%lu",ts("speed"),u->speed,ts("hit"),u->hit,ts("avoid"),u->avoid);
 	if(p->front->crit_effect!=2.0||e->front->crit_effect!=2.0){
 		print_attr("%s:%.2lf%%",ts("crit_effect"),100*u->crit_effect);
@@ -409,7 +308,7 @@ void frash(const struct player *p,FILE *fp,int current){
 		r=snprintf(buf,buflen,"(%s)%s",type2str(u->moves[i].type),move_ts(u->moves[i].id));
 		if(u->moves[i].cooldown)
 			r1=u->moves[i].cooldown<0?snprintf(buf+r,buflen-r,"[inf]"):snprintf(buf+r,buflen-r,"[%d]",u->moves[i].cooldown);
-		else if(!c){
+		else if(!c&&u->moves[i].action){
 				strncpy(buf+r,"[X]",buflen-r);
 		}
 no_move:
@@ -427,7 +326,7 @@ no_move:
 					c=0;
 					goto no_unit;
 				}
-				r=snprintf(buf,buflen,"(%s%s%s)%s %lu/%lu",type2str(p->units[i].type0),p->units[i].type1?"/":"",p->units[i].type1?type2str(p->units[i].type1):"",p->units[i].base->id,p->units[i].hp,p->units[i].base->max_hp);
+				r=snprintf(buf,buflen,"(%s%s%s)%s %lu/%lu",type2str(p->units[i].type0),p->units[i].type1?"/":"",p->units[i].type1?type2str(p->units[i].type1):"",unit_ts(p->units[i].base->id),p->units[i].hp,p->units[i].base->max_hp);
 				c=canaction2(p,i+ACT_UNIT0);
 				switch(p->units[i].state){
 					case UNIT_NORMAL:
@@ -469,11 +368,16 @@ no_unit:
 		fputc('\n',fp);
 	}
 	fflush(fp);
+	if(*f->stage==STAGE_BATTLE_END){
+		usleep(500000);
+		azero(rec);
+	}
 }
 static struct termios tm0;
-void __attribute__((constructor)) tm_init(void){
+int tm_set=0;
+void tm_init(void){
 	struct termios tm;
-	if(tcgetattr(STDIN_FILENO,&tm)<0)
+	if(tm_set||tcgetattr(STDIN_FILENO,&tm)<0)
 		goto fail;
 	memcpy(&tm0,&tm,sizeof(struct termios));
 	tm.c_lflag&=~(ICANON|ECHO);
@@ -481,21 +385,21 @@ void __attribute__((constructor)) tm_init(void){
 	tm.c_cc[VTIME]=0;
 	if(tcsetattr(STDIN_FILENO,TCSANOW,&tm)<0)
 		goto fail;
+	tm_set=1;
 	return;
 fail:
 	fputs("CANNOT SET TERMINAL\n",stderr);
 	abort();
 }
-void __attribute__((destructor)) tm_end(void){
-	tcsetattr(STDIN_FILENO,TCSANOW,&tm0);
-	if(loc)
-		strmap_free(loc);
+void tm_end(void){
+	if(tm_set)
+		tcsetattr(STDIN_FILENO,TCSANOW,&tm0);
+	tm_set=0;
 }
 static int cur=ACT_NORMALATTACK;
 //static const int dtc[3]={'R','P','M'};
 static const char *dtco[3]={YELLOW,RED,CYAN};
-void reporter_term(const struct message *msg){
-	struct player *p=msg->field->p;
+void reporter_term(const struct message *msg,const struct player *p){
 	char buf[128];
 	char buf1[128];
 	int r;
@@ -515,7 +419,7 @@ void reporter_term(const struct message *msg){
 				buf[0]=0;
 				buf1[0]=0;
 				if(msg->un.damage.dest!=msg->un.damage.dest->owner->front){
-					snprintf(buf1,128,"[%ld]%s ",msg->un.damage.dest-msg->un.damage.dest->owner->units,msg->un.damage.dest->base->id);
+					snprintf(buf1,128,"[%ld]%s ",msg->un.damage.dest-msg->un.damage.dest->owner->units,unit_ts(msg->un.damage.dest->base->id));
 				}
 				if(msg->un.damage.aflag&AF_CRIT)
 					strcat(buf," C");
@@ -537,7 +441,7 @@ void reporter_term(const struct message *msg){
 				r=0;
 				buf1[0]=0;
 				if(msg->un.e->dest!=msg->un.e->dest->owner->front){
-					snprintf(buf1,128,"[%ld]%s ",msg->un.e->dest-msg->un.e->dest->owner->units,msg->un.e->dest->base->id);
+					snprintf(buf1,128,"[%ld]%s ",msg->un.e->dest-msg->un.e->dest->owner->units,unit_ts(msg->un.e->dest->base->id));
 				}
 				if(msg->un.e_init.level)
 					snprintf(buf+r,127-r," %+ld",msg->un.e_init.level);
@@ -552,7 +456,7 @@ void reporter_term(const struct message *msg){
 				buf[0]=0;
 				buf1[0]=0;
 				if(msg->un.e->dest!=msg->un.e->dest->owner->front){
-					snprintf(buf1,128,"[%ld]%s ",msg->un.e->dest-msg->un.e->dest->owner->units,msg->un.e->dest->base->id);
+					snprintf(buf1,128,"[%ld]%s ",msg->un.e->dest-msg->un.e->dest->owner->units,unit_ts(msg->un.e->dest->base->id));
 				}
 				wmf(msg->un.e->dest->owner==p?0:1,"%s" YELLOW "%s%s" WHITE " %s",buf1,e2s(msg->un.e->base->id),buf,ts("end"));
 				goto delay;
@@ -573,7 +477,7 @@ void reporter_term(const struct message *msg){
 			buf[0]=0;
 			buf1[0]=0;
 			if(msg->un.heal.dest!=msg->un.heal.dest->owner->front){
-				snprintf(buf1,128,"[%ld]%s ",msg->un.heal.dest-msg->un.heal.dest->owner->units,msg->un.heal.dest->base->id);
+				snprintf(buf1,128,"[%ld]%s ",msg->un.heal.dest-msg->un.heal.dest->owner->units,unit_ts(msg->un.heal.dest->base->id));
 			}
 			wmf(msg->un.heal.dest->owner==p?0:1,"%s" GREEN "+%lu%s" WHITE,buf1,msg->un.heal.value,buf);
 			goto delay;
@@ -581,7 +485,7 @@ void reporter_term(const struct message *msg){
 			buf[0]=0;
 			buf1[0]=0;
 			if(msg->un.hpmod.dest!=msg->un.hpmod.dest->owner->front){
-				snprintf(buf1,128,"[%ld]%s ",msg->un.hpmod.dest-msg->un.hpmod.dest->owner->units,msg->un.hpmod.dest->base->id);
+				snprintf(buf1,128,"[%ld]%s ",msg->un.hpmod.dest-msg->un.hpmod.dest->owner->units,unit_ts(msg->un.hpmod.dest->base->id));
 			}
 			wmf(msg->un.hpmod.dest->owner==p?0:1,"%s%+ld%s",buf1,msg->un.hpmod.value,buf);
 			goto delay;
@@ -600,12 +504,12 @@ void reporter_term(const struct message *msg){
 			buf[0]=0;
 			buf1[0]=0;
 			if(msg->un.spimod.dest!=msg->un.spimod.dest->owner->front){
-				snprintf(buf1,128,"[%ld]%s ",msg->un.spimod.dest-msg->un.spimod.dest->owner->units,msg->un.spimod.dest->base->id);
+				snprintf(buf1,128,"[%ld]%s ",msg->un.spimod.dest-msg->un.spimod.dest->owner->units,unit_ts(msg->un.spimod.dest->base->id));
 			}
 			wmf(msg->un.spimod.dest->owner==p?0:1,"%s%+ld spi%s",buf1,msg->un.spimod.value,buf);
 			goto delay;
 		case MSG_SWITCH:
-			wmf(msg->un.u2.dest->owner==p?0:1,"%s[%ld]",msg->un.u2.dest->base->id,msg->un.u2.dest-msg->un.u2.dest->owner->units);
+			wmf(msg->un.u2.dest->owner==p?0:1,"[%ld]%s",msg->un.u2.dest-msg->un.u2.dest->owner->units,unit_ts(msg->un.u2.dest->base->id));
 			break;
 		default:
 			break;
@@ -614,12 +518,12 @@ void reporter_term(const struct message *msg){
 	return;
 delay:
 	frash(msg->field->p,stdout,-1);
-	usleep(250000);
+	usleep(200000);
 }
 void print_unit(const struct unit *u){
 	int neg;
-	fprintf(stdout,"(%s%s%s) %s[%ld] %lu/%lu %.2lf%% %s\n",type2str(u->type0),u->type1?"/":"",u->type1?type2str(u->type1):"",u->base->id,u-u->owner->units,u->hp,u->base->max_hp,100.0*u->hp/u->base->max_hp,sstr[u->state]);
-	fprintf(stdout,"%s:%u %s:%lu %s:%ld\n",ts("level"),u->level,ts("atk"),u->atk,ts("def"),u->def);
+	fprintf(stdout,"(%s%s%s) %s[%ld] %lu/%lu %.2lf%% %s\n",type2str(u->type0),u->type1?"/":"",u->type1?type2str(u->type1):"",unit_ts(u->base->id),u-u->owner->units,u->hp,u->base->max_hp,100.0*u->hp/u->base->max_hp,sstr[u->state]);
+	fprintf(stdout,"%s:%d %s:%lu %s:%ld\n",ts("level"),u->level,ts("atk"),u->atk,ts("def"),u->def);
 	fprintf(stdout,"%s:%lu %s:%lu %s:%lu\n",ts("speed"),u->speed,ts("hit"),u->hit,ts("avoid"),u->avoid);
 	if(u->crit_effect!=2.0){
 		fprintf(stdout,"%s:%.2lf%%\n",ts("crit_effect"),100*u->crit_effect);

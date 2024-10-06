@@ -64,7 +64,6 @@ void unit_fillattr(struct unit *u){
 	u->state=UNIT_NORMAL;
 	u->level=u->base->level;
 	memcpy(u->moves,u->base->moves,8*sizeof(struct move));
-	memcpy(u->pmoves,u->base->pmoves,2*sizeof(struct move));
 	u->move_cur=NULL;
 }
 void player_fillattr(struct player *p){
@@ -122,13 +121,6 @@ int player_selectunit(struct player *p){
 }
 void player_moveinit(struct player *p){
 	for_each_unit(u,p){
-		for(int i=0;i<2;++i){
-			if(!u->pmoves[i].id)
-				break;
-			if(!u->pmoves[i].init)
-				continue;
-			u->pmoves[i].init(u);
-		}
 		for(int i=0;i<8;++i){
 			if(!u->moves[i].id)
 				break;
@@ -181,11 +173,10 @@ void player_moveinit(struct player *p){
 		}\
 	}\
 }while(0)
-int battle(struct player *p,struct player *e,void (*reporter)(const struct message *)){
+int battle(struct player *p,struct player *e){
 	struct player *prior,*latter;
 	struct battle_field field;
 	int round=0,ret,stage=STAGE_INIT;
-	e=p->enemy;
 	if(p==e)
 		return -1;
 	if(!p->units->base||!e->units->base){
@@ -199,7 +190,6 @@ int battle(struct player *p,struct player *e,void (*reporter)(const struct messa
 	field.trash=NULL;
 	field.round=&round;
 	field.stage=&stage;
-	field.reporter=reporter;
 	field.rec=NULL;
 	field.rec_size=0;
 	field.rec_length=0;

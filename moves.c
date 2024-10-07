@@ -582,6 +582,7 @@ void thunder_roaring(struct unit *s){
 void freezing_roaring(struct unit *s){
 	struct unit *t;
 	long n,n1;
+	struct move *mp;
 	n=unit_hasnegative(s);
 	if(!n||!(s->move_cur->mlevel&MLEVEL_FREEZING_ROARING)){
 		struct effect *e;
@@ -617,13 +618,18 @@ void freezing_roaring(struct unit *s){
 		t->owner->action=ACT_ABORT;
 	report(s->owner->field,MSG_FAIL,t);
 	unit_wipeeffect(t,0);
-	for(struct move *mp=s->moves,*endp=mp+8;mp<endp;++mp){
-		if(!mp->id)
-			continue;
-		if(mp->cooldown){
-			mp->cooldown=0;
-			report(s->owner->field,MSG_UPDATE,mp);
-		}
+	//for(mp=s->moves,*endp=mp+8;mp<endp;++mp){
+	//	if(!mp->id)
+	//		continue;
+	//	if(mp->cooldown){
+	//		mp->cooldown=0;
+	//		report(s->owner->field,MSG_UPDATE,mp);
+	//	}
+	//}
+	mp=s->move_cur;
+	if(mp->cooldown){
+		mp->cooldown=0;
+		report(s->owner->field,MSG_UPDATE,mp);
 	}
 }
 

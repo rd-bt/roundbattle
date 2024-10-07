@@ -17,6 +17,8 @@ struct unit_info {
 	const char *moves[8];
 	int level,unused;
 };
+unsigned long xp_require_evo(const struct unit_info *info);
 unsigned long xp_require(const struct unit_info *info);
+unsigned long xp_require2(const struct species *spec,int level);
 int mkbase(const struct unit_info *info,struct unit_base *out);
 #endif

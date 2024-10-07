@@ -276,7 +276,7 @@ void units_menu(struct player_data *pd){
 	int cur=0,hcur=0;
 	struct unit_base ub;
 	const char *p;
-	int r,r1;
+	ssize_t r,r1,r2;
 	//char buf[512];
 st:
 	clear();
@@ -321,16 +321,17 @@ st:
 		p=pd->ui[cur].moves[i];
 		printw("%d:(%s)%s\n",i,type2str(move_type(p)),move_ts(p));
 	}
-	move(LINES-3,0);
+	move(LINES-4,0);
 	printw("%s:%lu",ts("xp"),pd->xp);
 	r=xp_require(pd->ui+cur);
 	if(pd->ui[cur].level<150)
-		printw(" %s:%d",ts("xp_require"),r);
-	r1=pd->ui[cur].spec->evolve_level;
-	if(r1){
-		printw(" %s:%d (%s)",ts("evolve_level"),r1,unit_ts(pd->ui[cur].spec[1].max.id));
+		printw(" %s:%zd",ts("xp_require"),r);
+	if(pd->ui[cur].spec->flag&UF_EVOLVABLE){
+		printw("\n%s:%zd (%s)",ts("evolve_level"),r1=pd->ui[cur].spec->evolve_level,unit_ts(pd->ui[cur].spec[1].max.id));
+		if(pd->ui[cur].level>=r1)
+			printw(" %s:%zd",ts("xp_for_evolve"),r2=xp_require_evo(pd->ui+cur));
 	}else
-		printw(" %s",ts("unevolvable"));
+		printw("\n%s",ts("unevolvable"));
 	addch('\n');
 	move(LINES-2,0);
 	pwc(hcur==0,"%s",ts("move"));
@@ -340,7 +341,7 @@ st:
 	else
 		pwc(hcur==1,"%s",ts("level_up"));
 	addch('\t');
-	if(!r1||pd->ui[cur].level<r1)
+	if(!r1||!(pd->ui[cur].spec->flag&UF_EVOLVABLE)||pd->ui[cur].level<r1||pd->xp<r2)
 		pwcr(hcur==2,"%s",ts("evolve"));
 	else
 		pwc(hcur==2,"%s",ts("evolve"));
@@ -430,6 +431,9 @@ st:
 					r=(pd->ui+cur)->spec->evolve_level;
 					if(!r||(pd->ui+cur)->level<r)
 						goto st;
+					if(pd->xp<r2)
+						goto st;
+					pd->xp-=r2;
 					++(pd->ui+cur)->spec;
 					goto st;
 				default:
@@ -661,6 +665,12 @@ st:
 			);
 	if(p->max_spi!=128)
 		printw("%s:%ld\n",ts("max_spi"),p->max_spi);
+	printw("%s:%d\n",ts("base_xp"),builtin_species[cur].xp_type);
+	if(builtin_species[cur].flag&UF_EVOLVABLE){
+		printw("%s:%d (%s)",ts("evolve_level"),builtin_species[cur].evolve_level,unit_ts(builtin_species[cur+1].max.id));
+	}else
+		printw("%s",ts("unevolvable"));
+	addch('\n');
 	refresh();
 	switch(getch()){
 		case KEY_DOWN:

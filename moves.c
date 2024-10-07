@@ -247,6 +247,7 @@ void health_exchange(struct unit *s){
 	unsigned long b=t->hp;
 	sethp(t,s->hp);
 	sethp(s,b);
+	setcooldown(s,s->move_cur,5);
 }
 void spi_exchange(struct unit *s){
 	struct unit *t=s->osite;
@@ -762,7 +763,8 @@ const struct effect_base kaleido[1]={{
 	.id="kaleido",
 	.damage_end=kaleido_damage_end,
 	.roundend=kaleido_roundend,
-	.flag=EFFECT_PASSIVE
+	.flag=EFFECT_PASSIVE,
+	.prior=-128,
 }};
 void kaleido_init(struct unit *s){
 	effect(kaleido,s,s,0,-1);
@@ -2351,6 +2353,33 @@ void spatially_shatter(struct unit *s){
 	if(!e)
 		effect(spatially_shatter_effect,s,s,a,2);
 }
+void health_reset(struct unit *s){
+	struct unit *t=s->osite;
+	sethp(s,s->base->max_hp);
+	sethp(t,t->base->max_hp);
+	setcooldown(s,s->move_cur,21);
+}
+void soil_loosening(struct unit *s){
+	struct unit *t=gettarget(s);
+	if(!hittest(t,s,1.0))
+		return;
+	attack(t,s,0.8*s->atk,DAMAGE_PHYSICAL,0,TYPE_SOIL);
+	if((t->type0|t->type1)&TYPE_SOIL)
+		effect(DEF,t,s,-1,-1);
+}
+void flash(struct unit *s){
+	struct unit *t=gettarget(s);
+	if(hittest(t,s,1.0))
+		effect(HIT,t,s,-1,-1);
+}
+void harden(struct unit *s){
+	if(test(0.5))
+		effect(DEF,s,s,1,-1);
+}
+void blow_down(struct unit *s){
+	struct unit *t=gettarget(s);
+	attack(t,s,0.9*s->atk,DAMAGE_PHYSICAL,0,TYPE_WIND);
+}
 const struct move builtin_moves[]={
 	{
 		.id="steel_flywheel",
@@ -2475,8 +2504,8 @@ const struct move builtin_moves[]={
 	{
 		.id="angry",
 		.action=angry,
-		.type=TYPE_NORMAL,
-		.prior=1,
+		.type=TYPE_FIGHTING,
+		.prior=0,
 		.flag=0,
 		.mlevel=MLEVEL_REGULAR
 	},
@@ -2565,7 +2594,7 @@ const struct move builtin_moves[]={
 	{
 		.id="thorns",
 		.init=thorns_init,
-		.type=TYPE_ICE,
+		.type=TYPE_NORMAL,
 		.flag=0,
 		.mlevel=MLEVEL_REGULAR
 	},
@@ -3039,7 +3068,7 @@ const struct move builtin_moves[]={
 	{
 		.id="uniform_base",
 		.init=uniform_base,
-		.type=TYPE_NORMAL,
+		.type=TYPE_MACHINE,
 		.flag=0,
 		.mlevel=MLEVEL_REGULAR
 	},
@@ -3051,14 +3080,58 @@ const struct move builtin_moves[]={
 		.flag=0,
 		.mlevel=MLEVEL_CONCEPTUAL
 	},
-	{NULL}
+	{
+		.id="health_reset",
+		.action=health_reset,
+		.type=TYPE_GHOST,
+		.prior=0,
+		.flag=0,
+		.mlevel=MLEVEL_REGULAR
+	},
+	{
+		.id="soil_loosening",
+		.action=soil_loosening,
+		.type=TYPE_SOIL,
+		.prior=0,
+		.flag=0,
+		.mlevel=MLEVEL_REGULAR
+	},
+	{
+		.id="flash",
+		.action=flash,
+		.type=TYPE_LIGHT,
+		.prior=0,
+		.flag=0,
+		.mlevel=MLEVEL_REGULAR
+	},
+	{
+		.id="harden",
+		.action=harden,
+		.type=TYPE_BUG,
+		.prior=0,
+		.flag=0,
+		.mlevel=MLEVEL_REGULAR
+	},
+	{
+		.id="blow_down",
+		.action=blow_down,
+		.type=TYPE_WIND,
+		.prior=0,
+		.flag=0,
+		.mlevel=MLEVEL_REGULAR
+	},
+	{.id=NULL}
 };
 const size_t builtin_moves_size=sizeof(builtin_moves)/sizeof(builtin_moves[0])-1;
 const struct move *get_builtin_move_by_id(const char *id){
 	unsigned long i;
 	for(i=0;builtin_moves[i].id;++i){
+//	fprintf(stderr,"strcmp starting\n");
+//	fprintf(stderr,"strcmpp(%p)\n",id);
+//	fprintf(stderr,"strcmps(%s)\n",id);
 		if(!strcmp(id,builtin_moves[i].id))
 			return builtin_moves+i;
+//	fprintf(stderr,"strcmp ending\n");
 	}
 	return NULL;
 }

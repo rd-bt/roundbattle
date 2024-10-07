@@ -14,6 +14,7 @@ int pdata_fake(struct player_data *p,const char *id,int level){
 	ui_create(p->ui,id,level);
 	return 0;
 }
+//#include <stdio.h>
 int pbattle(const struct player_data *p,
 		const struct player_data *e,
 		int (*selector_p)(const struct player *),

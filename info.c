@@ -2,8 +2,18 @@
 #include "moves.h"
 #include <string.h>
 #include <math.h>
+unsigned long xp_require_evo(const struct unit_info *info){
+	int b=info->spec->xp_type,a=(info->spec+1)->xp_type;
+//	double sum;
+	if(b>=a)
+		return 0;
+	return (a-b)*(pow(1.056,info->level+1)-1.056)/0.056;
+}
 unsigned long xp_require(const struct unit_info *info){
 	return info->spec->xp_type*pow(1.056,info->level);
+}
+unsigned long xp_require2(const struct species *spec,int level){
+	return spec->xp_type*pow(1.056,level);
 }
 int mkbase(const struct unit_info *info,struct unit_base *out){
 	const struct unit_base *max=&info->spec->max;

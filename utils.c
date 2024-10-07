@@ -9,7 +9,7 @@ int ui_create(struct unit_info *ui,const char *id,int level){
 	memset(ui,0,sizeof(struct unit_info));
 	ui->spec=spec;
 	ui->level=level;
-	for(int i=150,r=0;i>=0&&r<8;--i){
+	for(int i=level,r=0;i>=0&&r<8;--i){
 		if(!(p=spec->moves[i]))
 			continue;
 		ui->moves[r++]=p;

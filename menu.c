@@ -6,6 +6,7 @@
 #include <limits.h>
 #include <assert.h>
 #include <alloca.h>
+#include <stdlib.h>
 void reporter_term(const struct message *msg,const struct player *p);
 int term_selector(const struct player *p);
 void tm_init(void);
@@ -148,17 +149,18 @@ st:
 	refresh();
 	switch(x=getch()){
 		case KEY_DOWN:
-			++cur;
+			if(cur==r-1&&s[0])
+				cur=r;
+			else if(cur>=r)
+				cur=cur<r+7&&s[cur-r]?cur+1:0;
+			else
+				cur=limit_ring(cur+1,0,(ssize_t)(r-1));
 			goto st;
 		case KEY_UP:
-			if(!cur){
-				for(i=0;i<=150&&i<=ui->level;++i)
-					if(ui->spec->moves[i])
-						++cur;
-				if(cur)
-					--cur;
-			}else
+			if(cur>=r)
 				--cur;
+			else
+				cur=limit_ring(cur-1,0,(ssize_t)(r-1));
 			goto st;
 		case '\n':
 			if(ri>=0){
@@ -525,6 +527,316 @@ struct mm_option {
 	const char *name;
 	void (*submenu)(struct player_data *);
 };
+void listmove(const struct species *spec){
+	size_t i,r;
+	ssize_t cur=0,ri,shift=0,s,n;
+	int types[151],nline;
+	const struct move *m;
+	for(i=0,r=0;i<=150;++i){
+		if(!spec->moves[i]){
+			continue;
+		}
+		m=get_builtin_move_by_id(spec->moves[i]);
+		if(m){
+			types[i]=m->type;
+		}
+		++r;
+	}
+	if(!r)
+		return;
+	n=r;
+st:
+	nline=LINES/2;
+	clear();
+	move(0,0);
+	if(cur<shift){
+		shift=cur;
+	}else if(cur>shift+(nline-1)){
+		shift=cur-(nline-1);
+	}
+	s=shift;
+	r=0;
+	for(i=0;i<=150;++i){
+		if(!spec->moves[i])
+			continue;
+		if(s){
+			--s;
+			continue;
+		}
+		if(r+shift==cur){
+			attron(COLOR_PAIR(1));
+			ri=i;
+		}
+		printw("%zu:(%s)%s\n",i,type2str(types[i]),move_ts(spec->moves[i]));
+		if(r+shift==cur)
+			attroff(COLOR_PAIR(1));
+		++r;
+		if(r==nline)
+			break;
+
+	}
+	attron(COLOR_PAIR(1));
+	for(i=COLS;i>0;--i){
+		addch('=');
+	}
+	attroff(COLOR_PAIR(1));
+	printw("%s\n",move_desc(spec->moves[ri]));
+	refresh();
+	switch(getch()){
+		case KEY_DOWN:
+			cur=limit_ring(cur+1,0,n-1);
+			goto st;
+		case KEY_UP:
+			cur=limit_ring(cur-1,0,n-1);
+			goto st;
+		case '\n':
+		case 'q':
+			return;
+		default:
+			goto st;
+	}
+}
+void wp_menu(struct player_data *pd){
+	ssize_t cur=0,shift=0;
+	const struct unit_base *p;
+	const char *cp;
+	int nline;
+st:
+	nline=LINES/2;
+	clear();
+	move(0,0);
+	if(cur<shift){
+		shift=cur;
+	}else if(cur>shift+(nline-1)){
+		shift=cur-(nline-1);
+	}
+	for(ssize_t i=shift;i-shift<nline&&i<builtin_species_size;++i){
+		p=&builtin_species[i].max;
+		if(i==cur)
+			attron(COLOR_PAIR(1));
+		printw("%zu:%s",i,unit_ts(p->id));
+		printw(" %s:%s",ts("type"),type2str(p->type0));
+		if(p->type1)
+			printw("/%s",type2str(p->type1));
+		switch(builtin_species[i].type){
+			case UTYPE_WILD:
+				cp="wild";
+				break;
+			case UTYPE_PLOT:
+				cp="plot_character";
+				break;
+			default:
+				cp="unknown";
+				break;
+		}
+		printw(" %s:%s",ts("unit_type"),ts(cp));
+		addch('\n');
+		if(i==cur)
+			attroff(COLOR_PAIR(1));
+	}
+	attron(COLOR_PAIR(1));
+	for(int i=COLS;i>0;--i){
+		addch('=');
+	}
+	attroff(COLOR_PAIR(1));
+	p=&builtin_species[cur].max;
+	printw("%s:\n",ts("attribute_on_max_level"));
+	printw("%s:%s",ts("type"),type2str(p->type0));
+	if(p->type1)
+		printw("/%s",type2str(p->type1));
+	addch('\n');
+	printw("%s:%d\t%s:%lu\n%s:%lu\t%s:%ld\n%s:%lu\t%s:%lu\n%s:%lu\t%s:%.2lf%%\n%s:%.2lf%%\t%s:%.2lf%%\n%s:%.2lf%%\t%s:%.2lf%%\n",
+			ts("level"),p->level,
+			ts("max_hp"),p->max_hp,
+			ts("atk"),p->atk,
+			ts("def"),p->def,
+			ts("speed"),p->speed,
+			ts("hit"),p->hit,
+			ts("avoid"),p->avoid,
+			ts("crit_effect"),p->crit_effect,
+			ts("physical_bonus"),p->physical_bonus,
+			ts("magical_bonus"),p->magical_bonus,
+			ts("physical_derate"),p->physical_derate,
+			ts("magical_derate"),p->magical_derate
+			);
+	if(p->max_spi!=128)
+		printw("%s:%ld\n",ts("max_spi"),p->max_spi);
+	refresh();
+	switch(getch()){
+		case KEY_DOWN:
+			cur=limit_ring(cur+1,0,(ssize_t)(builtin_species_size-1));
+			goto st;
+		case KEY_UP:
+			cur=limit_ring(cur-1,0,(ssize_t)(builtin_species_size-1));
+			goto st;
+		case '\n':
+			listmove(builtin_species+cur);
+			goto st;
+		case 'q':
+			return;
+		default:
+			goto st;
+	}
+}
+struct unit_level {
+	const char *id;
+	int level,unused;
+};
+void move_unit_menu(struct player_data *pd,const char *id){
+	ssize_t cur=0,shift=0,n=0;
+	const char *const *cp;
+	struct unit_level *ulp,*ulp1;
+	for(size_t i=0;i<builtin_species_size;++i){
+		cp=builtin_species[i].moves;
+		for(int j=0;j<=150;++j){
+			if(cp[j]&&!strcmp(cp[j],id)){
+				++n;
+				break;
+			}
+		}
+	}
+	if(!n)
+		return;
+	ulp=malloc(n*sizeof(struct unit_level));
+	assert(ulp);
+	ulp1=ulp;
+	for(size_t i=0;i<builtin_species_size;++i){
+		cp=builtin_species[i].moves;
+		for(int j=0;j<=150;++j){
+			if(cp[j]&&!strcmp(cp[j],id)){
+				ulp1->id=builtin_species[i].max.id;
+				ulp1->level=j;
+				++ulp1;
+				break;
+			}
+		}
+	}
+st:
+	clear();
+	move(0,0);
+	if(cur<shift){
+		shift=cur;
+	}else if(cur>shift+(LINES-1)){
+		shift=cur-(LINES-1);
+	}
+	for(ssize_t i=shift;i-shift<LINES&&i<n;++i){
+		if(i==cur)
+			attron(COLOR_PAIR(1));
+		printw("%zd:%s %s:%d\n",i,unit_ts(ulp[i].id),ts("level"),ulp[i].level);
+		if(i==cur)
+			attroff(COLOR_PAIR(1));
+	}
+	refresh();
+	switch(getch()){
+		case KEY_DOWN:
+			cur=limit_ring(cur+1,0,n-1);
+			goto st;
+		case KEY_UP:
+			cur=limit_ring(cur-1,0,n-1);
+			goto st;
+		case '\n':
+		case 'q':
+			free(ulp);
+			return;
+		default:
+			goto st;
+	}
+}
+void move_menu(struct player_data *pd){
+	ssize_t cur=0,shift=0;
+	const struct move *p;
+	int nline;
+st:
+	nline=LINES/2;
+	clear();
+	move(0,0);
+	if(cur<shift){
+		shift=cur;
+	}else if(cur>shift+(nline-1)){
+		shift=cur-(nline-1);
+	}
+	for(ssize_t i=shift;i-shift<nline&&i<builtin_moves_size;++i){
+		p=builtin_moves+i;
+		if(i==cur)
+			attron(COLOR_PAIR(1));
+		printw("%zu:%s",i,move_ts(p->id));
+		printw(" %s:%s",ts("type"),type2str(p->type));
+		addch('\n');
+		if(i==cur)
+			attroff(COLOR_PAIR(1));
+	}
+	attron(COLOR_PAIR(1));
+	for(int i=COLS;i>0;--i){
+		addch('=');
+	}
+	attroff(COLOR_PAIR(1));
+	printw("%s\n",move_desc(builtin_moves[cur].id));
+	refresh();
+	switch(getch()){
+		case KEY_DOWN:
+			cur=limit_ring(cur+1,0,(ssize_t)(builtin_moves_size-1));
+			goto st;
+		case KEY_UP:
+			cur=limit_ring(cur-1,0,(ssize_t)(builtin_moves_size-1));
+			goto st;
+		case '\n':
+			move_unit_menu(pd,builtin_moves[cur].id);
+			goto st;
+		case 'q':
+			return;
+		default:
+			goto st;
+	}
+}
+const struct mm_option list_ops[]={
+	{
+		.name="wild_and_plot_character",
+		.submenu=wp_menu,
+	},
+	{
+		.name="move",
+		.submenu=move_menu,
+	},
+	{
+		.name="exit",
+		.submenu=NULL,
+	},
+	{NULL}
+};
+const size_t list_ops_size=sizeof(list_ops)/sizeof(list_ops[0])-1;
+void list_menu(struct player_data *pd){
+	int cur=0;
+st:
+	clear();
+	move(0,0);
+	for(int i=0;list_ops[i].name;++i){
+		if(i==cur)
+			attron(COLOR_PAIR(1));
+		printw("%s\n",ts(list_ops[i].name));
+		if(i==cur)
+			attroff(COLOR_PAIR(1));
+	}
+	move(LINES-1,0);
+	printw("q:cancel");
+	refresh();
+	switch(getch()){
+		case KEY_DOWN:
+			cur=limit_ring(cur+1,0,(ssize_t)(list_ops_size-1));
+			goto st;
+		case KEY_UP:
+			cur=limit_ring(cur-1,0,(ssize_t)(list_ops_size-1));
+			goto st;
+		case '\n':
+			if(!list_ops[cur].submenu)
+				return;
+			list_ops[cur].submenu(pd);
+			goto st;
+		case 'q':
+			return;
+		default:
+			goto st;
+	}
+}
 const struct mm_option mmop[]={
 	{
 		.name="units_on_battling",
@@ -533,6 +845,10 @@ const struct mm_option mmop[]={
 	{
 		.name="endless_challenge",
 		.submenu=endless_menu,
+	},
+	{
+		.name="list",
+		.submenu=list_menu,
 	},
 	{
 		.name="exit",
@@ -565,12 +881,10 @@ st:
 	refresh();
 	switch(getch()){
 		case KEY_DOWN:
-			if(cur<mmop_size-1)
-				++cur;
+			cur=limit_ring(cur+1,0,(ssize_t)(mmop_size-1));
 			goto st;
 		case KEY_UP:
-			if(cur>0)
-				--cur;
+			cur=limit_ring(cur-1,0,(ssize_t)(mmop_size-1));
 			goto st;
 		case '\n':
 			if(!mmop[cur].submenu)

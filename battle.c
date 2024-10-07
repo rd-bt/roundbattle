@@ -5,7 +5,7 @@
 int rand_selector(const struct player *p){
 	int n=0,c=0;
 	//if(canaction2(p,0))
-	//return 4;
+	//return 0;
 	if(!isalive(p->front->state)){
 		/*for(int i=ACT_UNIT0;i<=ACT_UNIT5;++i)
 			if(canaction2(p,i)){
@@ -240,7 +240,10 @@ int battle(struct player *p,struct player *e){
 		stage=STAGE_PRIOR;
 		player_action(prior);
 		deadcheck;
+		player_update_state(prior);
 		player_update_state(latter);
+		if(!canaction(latter))
+			latter->action=ACT_ABORT;
 		stage=STAGE_LATTER;
 		player_action(latter);
 		deadcheck;

@@ -5,7 +5,6 @@
 #define UTYPE_UNKNOWN 0
 #define UTYPE_PLOT 1
 #define UTYPE_WILD 2
-#define UTYPE_BOSS 3
 #define UF_EVOLVABLE 1
 #define UF_CANSELECTTYPE 2
 struct species {

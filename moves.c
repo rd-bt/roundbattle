@@ -741,14 +741,14 @@ void thermobaric(struct unit *s){
 	setcooldown(s,s->move_cur,6);
 }
 
-void myriad_damage_end(struct effect *e,struct unit *dest,struct unit *src,unsigned long value,int damage_type,int aflag,int type){
+void kaleido_damage_end(struct effect *e,struct unit *dest,struct unit *src,unsigned long value,int damage_type,int aflag,int type){
 	if(src!=e->dest||dest->owner!=src->owner->enemy||damage_type!=DAMAGE_PHYSICAL||value<3)
 		return;
 	effect_event(e);
 	attack(dest,src,0.35*value,DAMAGE_MAGICAL,0,TYPE_DEVINEGRASS);	
 	effect_event_end(e);
 }
-void myriad_roundend(struct effect *e){
+void kaleido_roundend(struct effect *e){
 	long v=(long)e->dest->base->max_hp-(long)e->dest->hp;
 	if(!v)
 		return;
@@ -758,14 +758,14 @@ void myriad_roundend(struct effect *e){
 	heal(e->dest,v*4/25);
 	effect_event_end(e);
 }
-const struct effect_base myriad[1]={{
-	.id="myriad",
-	.damage_end=myriad_damage_end,
-	.roundend=myriad_roundend,
+const struct effect_base kaleido[1]={{
+	.id="kaleido",
+	.damage_end=kaleido_damage_end,
+	.roundend=kaleido_roundend,
 	.flag=EFFECT_PASSIVE
 }};
-void myriad_init(struct unit *s){
-	effect(myriad,s,s,0,-1);
+void kaleido_init(struct unit *s){
+	effect(kaleido,s,s,0,-1);
 }
 int hot_damage(struct effect *e,struct unit *dest,struct unit *src,unsigned long *value,int *damage_type,int *aflag,int *type){
 	if(!(*type&(TYPE_FIRE|TYPE_ICE))||!(*damage_type&(DAMAGE_PHYSICAL|DAMAGE_MAGICAL)))
@@ -2304,6 +2304,53 @@ const struct effect_base uniform_base_effect[1]={{
 void uniform_base(struct unit *s){
 	effect(uniform_base_effect,s,s,0,-1);
 }
+void spatially_shatter_pm(struct unit *s){
+	struct unit *t=s->osite;
+	unsigned dmg=0.875*t->base->max_hp;
+	attack(t,s,s->atk>dmg?s->atk:dmg,DAMAGE_REAL,0,TYPE_DRAGON);
+}
+const struct move spatially_shatter_p={
+	.id="spatially_shatter",
+	.action=spatially_shatter_pm,
+	.type=TYPE_DRAGON,
+	.prior=0,
+	.flag=MOVE_NOCONTROL,
+	.mlevel=MLEVEL_CONCEPTUAL
+};
+void spatially_shatter_action_end(struct effect *e,struct player *p){
+	struct move am;
+	if(!e->active||p!=e->dest->owner->enemy||p->action!=e->level)
+		return;
+	effect_event(e);
+	memcpy(&am,&spatially_shatter_p,sizeof(struct move));
+	unit_move(e->dest,&am);
+	effect_event_end(e);
+	effect_end(e);
+}
+void spatially_shatter_roundstart(struct effect *e){
+	e->active=1;
+}
+const struct effect_base spatially_shatter_effect[1]={{
+	.id="spatially_shatter",
+	.action_end=spatially_shatter_action_end,
+	.roundstart=spatially_shatter_roundstart,
+	.flag=EFFECT_POSITIVE
+}};
+void spatially_shatter(struct unit *s){
+	struct unit *t=gettarget(s);
+	struct effect *e;
+	int a;
+	if(hittest(t,s,1.0))
+		attack(t,s,s->atk,DAMAGE_PHYSICAL,0,TYPE_DRAGON);
+	else
+		attack(t,s,s->atk/2,DAMAGE_MAGICAL,0,TYPE_DRAGON);
+	a=s->owner->enemy->action;
+	if(a==ACT_ABORT)
+		return;
+	e=unit_findeffect(s,spatially_shatter_effect);
+	if(!e)
+		effect(spatially_shatter_effect,s,s,a,2);
+}
 const struct move builtin_moves[]={
 	{
 		.id="steel_flywheel",
@@ -2544,8 +2591,8 @@ const struct move builtin_moves[]={
 		.mlevel=MLEVEL_REGULAR
 	},
 	{
-		.id="myriad",
-		.init=myriad_init,
+		.id="kaleido",
+		.init=kaleido_init,
 		.type=TYPE_DEVINEGRASS,
 		.flag=0,
 		.mlevel=MLEVEL_REGULAR
@@ -2671,7 +2718,7 @@ const struct move builtin_moves[]={
 	{
 		.id="time_back_locally",
 		.action=time_back_locally,
-		.type=TYPE_LIGHT,
+		.type=TYPE_DRAGON,
 		.prior=5,
 		.flag=MOVE_NOCONTROL,
 		.mlevel=MLEVEL_CONCEPTUAL
@@ -2702,7 +2749,7 @@ const struct move builtin_moves[]={
 	{
 		.id="time_back",
 		.action=time_back,
-		.type=TYPE_LIGHT,
+		.type=TYPE_DRAGON,
 		.prior=5,
 		.flag=MOVE_NOCONTROL,
 		.mlevel=MLEVEL_CONCEPTUAL
@@ -2995,6 +3042,14 @@ const struct move builtin_moves[]={
 		.type=TYPE_NORMAL,
 		.flag=0,
 		.mlevel=MLEVEL_REGULAR
+	},
+	{
+		.id="spatially_shatter",
+		.action=spatially_shatter,
+		.type=TYPE_DRAGON,
+		.prior=0,
+		.flag=0,
+		.mlevel=MLEVEL_CONCEPTUAL
 	},
 	{NULL}
 };

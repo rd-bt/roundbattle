@@ -1360,8 +1360,8 @@ void repeat(struct unit *s){
 	struct unit *t=gettarget(s);
 	if(hittest(t,s,1.8)){
 		attack(t,s,s->atk/4,DAMAGE_PHYSICAL,0,TYPE_NORMAL);
-		if(!do_repeat(s,t,4))
-			setcooldown(s,s->move_cur,9);
+		if(!do_repeat(s,t,3))
+			setcooldown(s,s->move_cur,5);
 	}
 }
 /*int silent_move(struct effect *e,struct unit *u,struct move *m){

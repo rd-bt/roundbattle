@@ -669,7 +669,7 @@ st:
 			);
 	if(p->max_spi!=128)
 		printw("%s:%ld\n",ts("max_spi"),p->max_spi);
-	printw("%s:%d\n",ts("base_xp"),builtin_species[cur].xp_type);
+	printw("%s:%d %s:%lu\n",ts("base_xp"),builtin_species[cur].xp_type,ts("xp_from_1_to_max_level"),xp_require_fromto(builtin_species+cur,1,150));
 	if(builtin_species[cur].flag&UF_EVOLVABLE){
 		printw("%s:%d (%s)",ts("evolve_level"),builtin_species[cur].evolve_level,unit_ts(builtin_species[cur+1].max.id));
 	}else

@@ -676,6 +676,7 @@ void update_state(struct unit *u){
 	if(!isalive(u->state))
 		return;
 	r=UNIT_NORMAL;
+	u->blockade=0;
 	for_each_effect(e,u->owner->field->effects){
 		if(e->base->update_state){
 			e->base->update_state(e,u,&r);
@@ -777,9 +778,20 @@ static int iffr(const struct unit *u,const struct move *m){
 }
 int unit_move(struct unit *u,struct move *m){
 	struct move *backup=u->move_cur;
-	if(!isalive(u->state)||!m->action)
+	int fr=iffr(u,m);
+	switch(u->state){
+		case UNIT_FAILED:
+		case UNIT_FREEZING_ROARINGED:
 			return -1;
-	if(!iffr(u,m))
+		case UNIT_SUPPRESSED:
+			if(!fr)
+				return -1;
+		default:
+			if(!m->action)
+				return -1;
+			break;
+	}
+	if(!fr)
 		for_each_effect(e,u->owner->field->effects){
 			if(e->base->move&&e->base->move(e,u,m))
 				return -1;
@@ -815,7 +827,7 @@ int switchunit(struct unit *to){
 }
 int canaction2(const struct player *p,int act){
 	struct move *m;
-	int fr;
+	int fr,blockade=!!((1<<act)&p->front->blockade);
 	switch(act){
 		case ACT_MOVE0 ... ACT_MOVE7:
 			m=p->front->moves+act;
@@ -830,7 +842,7 @@ int canaction2(const struct player *p,int act){
 					if(!fr)
 						return 0;
 				default:
-					if(m->cooldown&&!fr)
+					if((m->cooldown||blockade)&&!fr)
 						return 0;
 					return 1;
 				case UNIT_FAILED:
@@ -845,6 +857,8 @@ int canaction2(const struct player *p,int act){
 				case UNIT_FREEZING_ROARINGED:
 					return 0;
 				default:
+					if(blockade)
+						return 0;
 					return 1;
 			}
 		case ACT_UNIT0 ... ACT_UNIT5:
@@ -855,10 +869,14 @@ int canaction2(const struct player *p,int act){
 				case UNIT_SUPPRESSED:
 					return 0;
 				default:
+					if(blockade)
+						return 0;
+				case UNIT_FAILED:
+				case UNIT_FREEZING_ROARINGED:
 					return 1;
 			}
-		case ACT_GIVEUP:
 		case ACT_ABORT:
+		case ACT_GIVEUP:
 			return 1;
 		default:
 			return 0;

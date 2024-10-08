@@ -476,7 +476,7 @@ struct unit {
 	double crit_effect,
 		physical_bonus,magical_bonus,
 		physical_derate,magical_derate;
-	int type0,type1,state,level;
+	int type0,type1,state,level,blockade,unused;
 	struct move moves[8];
 	struct player *owner;
 	struct move *move_cur;
@@ -546,7 +546,8 @@ struct battle_field {
 	size_t rec_size,rec_length;
 	struct history *ht;
 	size_t ht_size,ht_length;
-	const volatile int *round,*stage;
+	const volatile int *round;
+	const volatile int *stage;
 };
 int unit_kill(struct unit *up);
 

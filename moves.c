@@ -1364,15 +1364,44 @@ void repeat(struct unit *s){
 			setcooldown(s,s->move_cur,9);
 	}
 }
-int silent_move(struct effect *e,struct unit *u,struct move *m){
+/*int silent_move(struct effect *e,struct unit *u,struct move *m){
 	if(u!=e->dest||(m->flag&(MOVE_NOCONTROL|MOVE_NORMALATTACK)))
 		return 0;
 	return -1;
+}*/
+void silent_update_state(struct effect *e,struct unit *u,int *state){
+	struct move *mp;
+	if(e->dest!=u)
+		return;
+	mp=u->moves;
+	for(int i=0;i<8;++i){
+		if(!mp[i].id||(mp[i].flag&(MOVE_NOCONTROL|MOVE_NORMALATTACK)))
+			continue;
+		u->blockade|=1<<i;
+	}
 }
 const struct effect_base silent[1]={{
 	.id="silent",
 	.init=abnormal_init,
-	.move=silent_move,
+	.update_state=silent_update_state,
+	.flag=EFFECT_NEGATIVE|EFFECT_CONTROL
+}};
+void disarmed_update_state(struct effect *e,struct unit *u,int *state){
+	struct move *mp;
+	if(e->dest!=u)
+		return;
+	mp=u->moves;
+	for(int i=0;i<8;++i){
+		if(!mp[i].id||(mp[i].flag&MOVE_NOCONTROL)||!(mp[i].flag&MOVE_NORMALATTACK))
+			continue;
+		u->blockade|=1<<i;
+	}
+	u->blockade|=1<<ACT_NORMALATTACK;
+}
+const struct effect_base disarmed[1]={{
+	.id="disarmed",
+	.init=abnormal_init,
+	.update_state=disarmed_update_state,
 	.flag=EFFECT_NEGATIVE|EFFECT_CONTROL
 }};
 void head_blow(struct unit *s){
@@ -1383,7 +1412,14 @@ void head_blow(struct unit *s){
 	}
 	setcooldown(s,s->move_cur,4);
 }
-
+void rock_break(struct unit *s){
+	struct unit *t=gettarget(s);
+	if(hittest(t,s,1.3)){
+		attack(t,s,s->atk,DAMAGE_PHYSICAL,0,TYPE_ROCK);
+		effect(disarmed,t,s,0,4);
+	}
+	setcooldown(s,s->move_cur,4);
+}
 void mecha_update_attr(struct effect *e,struct unit *u){
 	if(u==e->dest){
 		u->type0=TYPE_MACHINE;
@@ -1577,7 +1613,7 @@ void poison_sting(struct unit *s){
 	struct unit *t=gettarget(s);
 	if(hittest(t,s,1.0)){
 		attack(t,s,0.8*s->atk,DAMAGE_PHYSICAL,0,TYPE_POISON);
-		if(test(0.35))
+		if(test(0.2))
 			effect(poisoned,t,s,0,5);
 	}
 }
@@ -2314,8 +2350,11 @@ void uniform_base(struct unit *s){
 }
 void spatially_shatter_pm(struct unit *s){
 	struct unit *t=s->osite;
-	unsigned dmg=0.875*t->base->max_hp;
-	attack(t,s,s->atk>dmg?s->atk:dmg,DAMAGE_REAL,0,TYPE_DRAGON);
+	long vdmg=0.875*t->base->max_hp;
+	long atk=s->atk;
+	if(vdmg<atk)
+		vdmg=atk;
+	addhp(t,-vdmg);
 }
 const struct move spatially_shatter_p={
 	.id="spatially_shatter",
@@ -2327,7 +2366,9 @@ const struct move spatially_shatter_p={
 };
 void spatially_shatter_action_end(struct effect *e,struct player *p){
 	struct move am;
-	if(!e->active||p!=e->dest->owner->enemy||p->action!=e->level)
+	if(*e->dest->owner->field->round<=*(int *)e->data
+			||p!=e->dest->owner->enemy
+			||p->action!=e->level)
 		return;
 	effect_event(e);
 	memcpy(&am,&spatially_shatter_p,sizeof(struct move));
@@ -2335,28 +2376,27 @@ void spatially_shatter_action_end(struct effect *e,struct player *p){
 	effect_event_end(e);
 	effect_end(e);
 }
-void spatially_shatter_roundstart(struct effect *e){
-	e->active=1;
+int spatially_shatter_init(struct effect *e,long level,int round){
+	*(int *)e->data=*e->dest->owner->field->round;
+	e->level=level;
+	e->round=round;
+	return 0;
 }
 const struct effect_base spatially_shatter_effect[1]={{
 	.id="spatially_shatter",
+	.init=spatially_shatter_init,
 	.action_end=spatially_shatter_action_end,
-	.roundstart=spatially_shatter_roundstart,
-	.flag=EFFECT_POSITIVE
+	.flag=EFFECT_POSITIVE|EFFECT_ISOLATED
 }};
 void spatially_shatter(struct unit *s){
 	struct unit *t=gettarget(s);
-	struct effect *e;
 	int a;
 	if(hittest(t,s,1.0))
 		attack(t,s,s->atk,DAMAGE_PHYSICAL,0,TYPE_DRAGON);
 	else
 		attack(t,s,s->atk/2,DAMAGE_MAGICAL,0,TYPE_DRAGON);
 	a=s->owner->enemy->action;
-	if(a==ACT_ABORT)
-		return;
-	e=unit_findeffect(s,spatially_shatter_effect);
-	if(!e)
+	if(a!=ACT_ABORT)
 		effect(spatially_shatter_effect,s,s,a,2);
 }
 void health_reset(struct unit *s){
@@ -3122,6 +3162,14 @@ const struct move builtin_moves[]={
 		.id="blow_down",
 		.action=blow_down,
 		.type=TYPE_WIND,
+		.prior=0,
+		.flag=MOVE_NORMALATTACK,
+		.mlevel=MLEVEL_REGULAR
+	},
+	{
+		.id="rock_break",
+		.action=rock_break,
+		.type=TYPE_ROCK,
 		.prior=0,
 		.flag=0,
 		.mlevel=MLEVEL_REGULAR

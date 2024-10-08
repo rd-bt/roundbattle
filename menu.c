@@ -453,7 +453,7 @@ void endless_win(struct player_data *pd){
 }
 void endless_menu(struct player_data *pd){
 	int my,mx,cur=0,r=-1;
-	struct player_data p;
+	struct player_data p,p0;
 st:
 	clear();
 	getmaxyx(stdscr,my,mx);
@@ -503,18 +503,22 @@ st:
 			switch(cur){
 				case 0:
 					assert(!pdata_fake(&p,"icefield_tiger",pd->endless_level));
+					memcpy(&p0,pd,sizeof(struct player_data));
+					memset(p0.ui+1,0,5*sizeof(struct unit_info));
 					endwin();
 					tm_init();
-					r=pbattle(pd,&p,term_selector,rand_selector,reporter_term,NULL);
+					r=pbattle(&p0,&p,term_selector,rand_selector,reporter_term,NULL);
 					tm_end();
 					scr();
 					if(!r)
 						endless_win(pd);
 					break;
 				case 2:
+					memcpy(&p0,pd,sizeof(struct player_data));
+					memset(p0.ui+1,0,5*sizeof(struct unit_info));
 					for(int i=0;i<1024;++i){
 						assert(!pdata_fake(&p,"icefield_tiger",pd->endless_level));
-						r=pbattle(pd,&p,rand_selector,rand_selector,NULL,NULL);
+						r=pbattle(&p0,&p,rand_selector,rand_selector,NULL,NULL);
 						if(!r)
 							endless_win(pd);
 					}

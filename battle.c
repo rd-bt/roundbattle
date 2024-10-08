@@ -63,6 +63,7 @@ void unit_fillattr(struct unit *u){
 	u->type1=u->base->type1;
 	u->state=UNIT_NORMAL;
 	u->level=u->base->level;
+	u->blockade=0;
 	memcpy(u->moves,u->base->moves,8*sizeof(struct move));
 	u->move_cur=NULL;
 }

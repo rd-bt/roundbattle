@@ -27,7 +27,14 @@ unsigned long gcdul(unsigned long x,unsigned long y){
 		return (x|y)<<r;
 	}
 }
-
+int isprime(unsigned long n){
+	if(n==2)return 1;
+	if(!(n&1))return 0;
+	unsigned long end=(unsigned long)(sqrt(n)+1.0);
+	for(unsigned long i=3;i<end;i+=2)
+		if(!(n%i))return 0;
+	return 1;
+}
 int abnormal_init(struct effect *e,long level,int round){
 	if(!e->round)
 		e->round=round;
@@ -2426,6 +2433,16 @@ void blow_down(struct unit *s){
 	struct unit *t=gettarget(s);
 	attack(t,s,0.9*s->atk,DAMAGE_PHYSICAL,0,TYPE_WIND);
 }
+void dark_night_light(struct unit *s){
+	struct unit *t=gettarget(s);
+	unsigned long hp;
+	if(!hittest(t,s,1.0))
+		return;
+	attack(t,s,s->atk,DAMAGE_PHYSICAL,0,TYPE_LIGHT);
+	hp=t->hp;
+	if(hp<INT_MAX&&!isprime(hp&0x7ffffffful))
+		attack(t,s,s->atk,DAMAGE_PHYSICAL,0,TYPE_LIGHT);
+}
 const struct move builtin_moves[]={
 	{
 		.id="steel_flywheel",
@@ -3173,6 +3190,14 @@ const struct move builtin_moves[]={
 		.prior=0,
 		.flag=0,
 		.mlevel=MLEVEL_REGULAR
+	},
+	{
+		.id="dark_night_light",
+		.action=dark_night_light,
+		.type=TYPE_LIGHT,
+		.prior=0,
+		.flag=0,
+		.mlevel=MLEVEL_REGULAR,
 	},
 	{.id=NULL}
 };

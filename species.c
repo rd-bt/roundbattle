@@ -287,7 +287,7 @@ const struct species builtin_species[]={
 			[145]="tidal",
 			[146]="metal_syncretize",
 			[147]="natural_shield",
-			[148]="kaleido",
+			//[148]="kaleido",
 			[149]="primordial_breath",
 			[150]="uniform_base",
 		},

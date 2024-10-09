@@ -15,7 +15,7 @@ struct unit_info {
 	const struct species *spec;
 	struct base_point bp;
 	const char *moves[8];
-	int level,unused;
+	int level,type0,type1,unused;
 };
 unsigned long xp_require_fromto(const struct species *spec,int from,int to);
 unsigned long xp_require_evo(const struct unit_info *info);

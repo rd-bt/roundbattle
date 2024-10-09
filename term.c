@@ -369,7 +369,8 @@ no_unit:
 	}
 	fflush(fp);
 	if(*f->stage==STAGE_BATTLE_END){
-		usleep(500000);
+		usleep(800000);
+		//read(STDIN_FILENO,buf,buflen);
 		azero(rec);
 	}
 }

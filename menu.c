@@ -402,15 +402,37 @@ st:
 				++cur;
 			}
 			goto st;
+		case 'c':
+				if(pd->ui[cur].spec->flag&UF_CANSELECTTYPE){
+					pd->ui[cur].type0<<=1;
+					if(pd->ui[cur].type0==pd->ui[cur].type1)
+						pd->ui[cur].type0<<=1;
+					if(!(pd->ui[cur].type0&TYPES_REGULAR))
+						pd->ui[cur].type0=TYPE_GRASS;
+					if(pd->ui[cur].type0==pd->ui[cur].type1)
+						pd->ui[cur].type0<<=1;
+				}
+				goto st;
+		case 'C':
+				if(pd->ui[cur].spec->flag&UF_CANSELECTTYPE){
+					pd->ui[cur].type1<<=1;
+					if(pd->ui[cur].type0==pd->ui[cur].type1)
+						pd->ui[cur].type1<<=1;
+					if(!(pd->ui[cur].type1&TYPES_REGULAR))
+						pd->ui[cur].type1=TYPE_GRASS;
+					if(pd->ui[cur].type0==pd->ui[cur].type1)
+						pd->ui[cur].type1<<=1;
+				}
+				goto st;
 		case 'K':
 			for(;;){
-				if((pd->ui+cur)->level>=150)
+				if(pd->ui[cur].level>=150)
 					break;
 				r=xp_require(pd->ui+cur);
 				if(pd->xp<r)
 					break;
 				pd->xp-=r;
-				++(pd->ui+cur)->level;
+				++pd->ui[cur].level;
 			}
 			goto st;
 		case '\n':
@@ -419,22 +441,26 @@ st:
 					writemove(pd->ui+cur);
 					goto st;
 				case 1:
-					if((pd->ui+cur)->level>=150)
+					if(pd->ui[cur].level>=150)
 						goto st;
 					r=xp_require(pd->ui+cur);
 					if(pd->xp<r)
 						goto st;
 					pd->xp-=r;
-					++(pd->ui+cur)->level;
+					++pd->ui[cur].level;
 					goto st;
 				case 2:
-					r=(pd->ui+cur)->spec->evolve_level;
-					if(!r||(pd->ui+cur)->level<r)
+					r=pd->ui[cur].spec->evolve_level;
+					if(!r||pd->ui[cur].level<r)
 						goto st;
 					if(pd->xp<r2)
 						goto st;
 					pd->xp-=r2;
-					++(pd->ui+cur)->spec;
+					++pd->ui[cur].spec;
+					if(pd->ui[cur].spec->flag&UF_CANSELECTTYPE){
+						pd->ui[cur].type0=pd->ui[cur].spec->max.type0;
+						pd->ui[cur].type1=pd->ui[cur].spec->max.type1;
+					}
 					goto st;
 				default:
 					return;
@@ -445,6 +471,17 @@ st:
 		default:
 			goto st;
 	}
+}
+#define arrsize(arr) (sizeof(arr)/sizeof(arr[0]))
+void endless_fake(struct player_data *p,int level){
+	static const char *mobs[]={"icefield_tiger_cub","hood_grass"};
+	const char *cp=mobs[(level-1)%arrsize(mobs)];
+	const struct species *spec=get_builtin_species_by_id(cp);
+	while((spec->flag&UF_EVOLVABLE)&&level>=spec->evolve_level&&spec[1].xp_type<=spec->xp_type*16){
+		++spec;
+		cp=spec->max.id;
+	}
+	assert(!pdata_fake(p,cp,level));
 }
 void endless_win(struct player_data *pd){
 	pd->xp+=271*pd->endless_level;
@@ -502,7 +539,7 @@ st:
 			}
 			switch(cur){
 				case 0:
-					assert(!pdata_fake(&p,"icefield_tiger",pd->endless_level));
+					endless_fake(&p,pd->endless_level);
 					memcpy(&p0,pd,sizeof(struct player_data));
 					memset(p0.ui+1,0,5*sizeof(struct unit_info));
 					endwin();
@@ -517,7 +554,7 @@ st:
 					memcpy(&p0,pd,sizeof(struct player_data));
 					memset(p0.ui+1,0,5*sizeof(struct unit_info));
 					for(int i=0;i<1024;++i){
-						assert(!pdata_fake(&p,"icefield_tiger",pd->endless_level));
+						endless_fake(&p,pd->endless_level);
 						r=pbattle(&p0,&p,rand_selector,rand_selector,NULL,NULL);
 						if(!r)
 							endless_win(pd);
@@ -675,6 +712,8 @@ st:
 	}else
 		printw("%s",ts("unevolvable"));
 	addch('\n');
+	if(builtin_species[cur].flag&UF_CANSELECTTYPE)
+		printw("%s\n",ts("can_select_type"));
 	refresh();
 	switch(getch()){
 		case KEY_DOWN:
@@ -802,6 +841,84 @@ st:
 			goto st;
 	}
 }
+void type_menu(struct player_data *pd){
+	int cur=0,shift=0;
+	int nline,ew;
+st:
+	nline=LINES/2;
+	clear();
+	move(0,0);
+	if(cur<shift){
+		shift=cur;
+	}else if(cur>shift+(nline-1)){
+		shift=cur-(nline-1);
+	}
+	for(int i=shift;i-shift<nline&&((1<<i)&TYPES_ALL);++i){
+		if(i==cur)
+			attron(COLOR_PAIR(1));
+		printw("%d:%s\n",i,type2str(1<<i));
+		if(i==cur)
+			attroff(COLOR_PAIR(1));
+	}
+	attron(COLOR_PAIR(1));
+	for(int i=COLS;i>0;--i){
+		addch('=');
+	}
+	attroff(COLOR_PAIR(1));
+	printw("%s:\n",ts("as_move_type"));
+	printw("%s:",ts("type_effect"));
+	ew=effect_types(1<<cur);
+	for(int i=TYPE_GRASS;i&TYPES_ALL;i<<=1){
+		if(i&ew){
+			if(i&TYPES_DEVINE)
+				printw(" [%s]",type2str(i));
+			else
+				printw(" %s",type2str(i));
+		}
+	}
+	addch('\n');
+	ew=weak_types(1<<cur);
+	printw("%s:",ts("type_weakened"));
+	for(int i=TYPE_GRASS;i&TYPES_ALL;i<<=1){
+		if(i&ew)
+			printw(" %s",type2str(i));
+	}
+	addch('\n');
+	ew=1<<cur;
+	if(ew&TYPES_DEVINE){
+		printw("%s\n",ts("not_unit_type"));
+	}else {
+		printw("%s:\n",ts("as_unit_type"));
+		printw("%s:",ts("type_effected"));
+		for(int i=TYPE_GRASS;i&TYPES_ALL;i<<=1){
+			if(effect_types(i)&ew)
+				printw(" %s",type2str(i));
+		}
+		addch('\n');
+
+		printw("%s:",ts("type_weak"));
+		for(int i=TYPE_GRASS;i&TYPES_ALL;i<<=1){
+			if(weak_types(i)&ew)
+				printw(" %s",type2str(i));
+		}
+		addch('\n');
+	}
+
+	refresh();
+	switch(getch()){
+		case KEY_DOWN:
+			cur=limit_ring(cur+1,0,19);
+			goto st;
+		case KEY_UP:
+			cur=limit_ring(cur-1,0,19);
+			goto st;
+		case '\n':
+		case 'q':
+			return;
+		default:
+			goto st;
+	}
+}
 const struct mm_option list_ops[]={
 	{
 		.name="wild_and_plot_character",
@@ -810,6 +927,10 @@ const struct mm_option list_ops[]={
 	{
 		.name="move",
 		.submenu=move_menu,
+	},
+	{
+		.name="type",
+		.submenu=type_menu,
 	},
 	{
 		.name="exit",
@@ -851,6 +972,77 @@ st:
 			goto st;
 	}
 }
+void show_tutorial(const char *item){
+	size_t len=strlen(item);
+	char *buf=alloca(len+4);
+	const char *p;
+	int cur=0,n;
+	memcpy(buf,item,len);
+st:
+	n=0;
+	clear();
+	move(0,0);
+	for(int i=0;i<100;++i){
+		sprintf(buf+len,"_%d",i);
+		p=locale(buf);
+		if(!p)
+			break;
+		++n;
+		if(i==cur)
+			attron(COLOR_PAIR(1));
+		printw("%s\n",ts(p));
+		if(i==cur)
+			attroff(COLOR_PAIR(1));
+	}
+	move(LINES-1,0);
+	printw("q:cancel");
+	refresh();
+	switch(getch()){
+		case KEY_DOWN:
+			cur=limit_ring(cur+1,0,n-1);
+			goto st;
+		case KEY_UP:
+			cur=limit_ring(cur-1,0,n-1);
+			goto st;
+		case '\n':
+		case 'q':
+			return;
+		default:
+			goto st;
+	}
+}
+void tutorial_menu(struct player_data *pd){
+	int cur=0;
+	static const char *items[]={"type","level_and_evolution","battling"};
+st:
+	clear();
+	move(0,0);
+	for(int i=0;i<arrsize(items);++i){
+		if(i==cur)
+			attron(COLOR_PAIR(1));
+		printw("%s\n",ts(items[i]));
+		if(i==cur)
+			attroff(COLOR_PAIR(1));
+	}
+	move(LINES-1,0);
+	printw("q:cancel");
+	refresh();
+	switch(getch()){
+		case KEY_DOWN:
+			cur=limit_ring(cur+1,0,(ssize_t)(arrsize(items)-1));
+			goto st;
+		case KEY_UP:
+			cur=limit_ring(cur-1,0,(ssize_t)(arrsize(items)-1));
+			goto st;
+		case '\n':
+			show_tutorial(items[cur]);
+			goto st;
+		case 'q':
+			return;
+		default:
+			goto st;
+	}
+}
 const struct mm_option mmop[]={
 	{
 		.name="units_on_battling",
@@ -863,6 +1055,10 @@ const struct mm_option mmop[]={
 	{
 		.name="list",
 		.submenu=list_menu,
+	},
+	{
+		.name="tutorial",
+		.submenu=tutorial_menu,
 	},
 	{
 		.name="exit",

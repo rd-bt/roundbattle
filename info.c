@@ -39,8 +39,13 @@ int mkbase(const struct unit_info *info,struct unit_base *out){
 	out->magical_bonus=max->magical_bonus;
 	out->physical_derate=max->physical_derate;
 	out->magical_derate=max->magical_derate;
-	out->type0=max->type0;
-	out->type1=max->type1;
+	if(info->spec->flag&UF_CANSELECTTYPE){
+		out->type0=info->type0;
+		out->type1=info->type1;
+	}else {
+		out->type0=max->type0;
+		out->type1=max->type1;
+	}
 	out->level=info->level;
 	for(int i=0,r=0;i<8;++i){
 		if(!info->moves[i])

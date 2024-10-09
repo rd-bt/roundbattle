@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <limits.h>
 int rand_selector(const struct player *p){
 	int n=0,c=0;
 	//if(canaction2(p,0))
@@ -207,6 +208,13 @@ int battle(struct player *p,struct player *e){
 	player_moveinit(prior);
 	player_moveinit(prior->enemy);
 	for(;;++round){
+		if(round>=INT_MAX){
+			if(p->front->speed==e->front->speed)
+				ret=test(0.5);
+			else
+				ret=p->front->speed<e->front->speed;
+			goto out;
+		}
 		stage=STAGE_ROUNDSTART;
 		p->action=ACT_ABORT;
 		e->action=ACT_ABORT;

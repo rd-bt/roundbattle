@@ -359,7 +359,7 @@ const struct effect_base natural_shield_effect[1]={{
 	.prior=-25
 }};
 void natural_shield(struct unit *s){
-	effect(natural_shield_effect,s,s,0,5);
+	effect(natural_shield_effect,s,s,0,*s->owner->field->stage==STAGE_PRIOR?5:6);
 	setcooldown(s,s->move_cur,13);
 }
 void effect_destruct(struct effect *e){
@@ -773,7 +773,7 @@ void kaleido_roundend(struct effect *e){
 	effect_event_end(e);
 }
 const struct effect_base kaleido[1]={{
-	.id="kaleido",
+	//.id="kaleido",
 	.damage_end=kaleido_damage_end,
 	.roundend=kaleido_roundend,
 	.flag=EFFECT_PASSIVE,
@@ -2583,6 +2583,7 @@ const struct move builtin_moves[]={
 	{
 		.id="natural_shield",
 		.action=natural_shield,
+		.init=kaleido_init,
 		.type=TYPE_DEVINEGRASS,
 		.prior=0,
 		.flag=0,
@@ -2679,13 +2680,6 @@ const struct move builtin_moves[]={
 		.id="thermobaric",
 		.action=thermobaric,
 		.type=TYPE_FIRE,
-		.flag=0,
-		.mlevel=MLEVEL_REGULAR
-	},
-	{
-		.id="kaleido",
-		.init=kaleido_init,
-		.type=TYPE_DEVINEGRASS,
 		.flag=0,
 		.mlevel=MLEVEL_REGULAR
 	},

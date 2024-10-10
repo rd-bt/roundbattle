@@ -124,15 +124,11 @@ int player_selectunit(struct player *p){
 void player_moveinit(struct player *p){
 	for_each_unit(u,p){
 		for(int i=0;i<8;++i){
-			if(!u->moves[i].id)
-				break;
-			if(!u->moves[i].init)
+			if(!u->moves[i].id||!u->moves[i].init)
 				continue;
-			//fprintf(stderr,"%s:%s\n",u->base->id,u->moves[i].id);
-			u->moves[i].init(u);
+			unit_move_init(u,u->moves+i);
 		}
 	}
-	//fprintf(stderr,"---\n");
 }
 #define deadcheck do {\
 	int r0,r1,r2,r3;\
@@ -217,7 +213,9 @@ int battle(struct player *p,struct player *e){
 		}
 		stage=STAGE_ROUNDSTART;
 		p->action=ACT_ABORT;
+		p->acted=0;
 		e->action=ACT_ABORT;
+		e->acted=0;
 		report(&field,MSG_ROUND);
 		history_add(&field);
 		effect_in_roundstart(field.effects);

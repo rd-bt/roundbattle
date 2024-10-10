@@ -454,8 +454,9 @@ struct effect {
 	struct unit *dest;
 	struct unit *src,*src1;
 	struct effect *next,*prev;
-	int round;
-	unsigned int active:1,intrash:1,:0,inevent;
+	int round,unused;
+	unsigned int active:1,intrash:1,:0;
+	unsigned int inevent;
 	long level;
 	char data[64];
 };
@@ -489,7 +490,8 @@ struct player {
 	struct unit *front;
 	struct player *enemy;
 	struct battle_field *field;
-	int action,unused;
+	int action;
+	unsigned int acted:1,:0;
 };
 struct history {
 	struct player p,e;
@@ -636,6 +638,8 @@ int effect_isnegative(const struct effect *e);
 int unit_hasnegative(const struct unit *u);
 
 int unit_move(struct unit *u,struct move *m);
+
+void unit_move_init(struct unit *u,struct move *m);
 
 int switchunit(struct unit *to);
 

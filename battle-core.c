@@ -33,7 +33,7 @@ unsigned long damage(struct unit *dest,struct unit *src,unsigned long value,int 
 		default:
 			return 0;
 	}
-	if(!isalive(dest->state))
+	if(!isalive(dest->state)||!value)
 			return 0;
 	for_each_effect(e,dest->owner->field->effects){
 		if(e->base->damage&&e->base->damage(e,dest,src,&value,&damage_type,&aflag,&type))
@@ -777,7 +777,7 @@ static int iffr(const struct unit *u,const struct move *m){
 	return m->id&&(m->mlevel&MLEVEL_FREEZING_ROARING)&&unit_hasnegative(u);
 }
 int unit_move(struct unit *u,struct move *m){
-	struct move *backup=u->move_cur;
+	struct move *backup;
 	int fr=iffr(u,m);
 	switch(u->state){
 		case UNIT_FAILED:
@@ -796,6 +796,7 @@ int unit_move(struct unit *u,struct move *m){
 			if(e->base->move&&e->base->move(e,u,m))
 				return -1;
 		}
+	backup=u->move_cur;
 	u->move_cur=m;
 	report(u->owner->field,MSG_MOVE,u,m);
 	m->action(u);
@@ -805,6 +806,12 @@ int unit_move(struct unit *u,struct move *m){
 			e->base->move_end(e,u,m);
 	}
 	return 0;
+}
+void unit_move_init(struct unit *u,struct move *m){
+	struct move *backup=u->move_cur;
+	u->move_cur=m;
+	m->init(u);
+	u->move_cur=backup;
 }
 int switchunit(struct unit *to){
 	struct unit *f=to->owner->front;
@@ -885,6 +892,8 @@ int canaction2(const struct player *p,int act){
 
 void player_action(struct player *p){
 	int r;
+	if(p->acted)
+		return;
 	switch(p->action){
 		case ACT_MOVE0 ... ACT_MOVE7:
 			if(iffr(p->front,p->front->moves+p->action))
@@ -930,6 +939,7 @@ fr:
 		default:
 			break;
 	}
+	p->acted=1;
 	for_each_effect(e,p->field->effects){
 		if(e->base->action_end)
 			e->base->action_end(e,p);
@@ -993,6 +1003,29 @@ struct player *getprior(struct player *p,struct player *e){
 		}
 	}
 	return prior;
+}
+static void message_add(struct battle_field *f,const struct message *msg){
+	struct message *p;
+	size_t len;
+	if(f->rec_size>=f->rec_length){
+		len=f->rec_length+1024;
+		if(!f->rec){
+			p=malloc(len*sizeof(struct message));
+			if(!p)
+				return;
+			f->rec=p;
+			f->rec_length=len;
+		}else {
+			p=realloc(f->rec,len*sizeof(struct message));
+			if(p){
+				f->rec=p;
+				f->rec_length=len;
+			}else {
+				f->rec_size=0;
+			}
+		}
+	}
+	memcpy(f->rec+f->rec_size++,msg,sizeof(struct message));
 }
 void report(struct battle_field *f,int type,...){
 	void (*rr)(const struct message *,const struct player *);
@@ -1064,33 +1097,12 @@ void report(struct battle_field *f,int type,...){
 			break;
 	}
 	va_end(ap);
+	if(msg.type!=MSG_UPDATE)
+		message_add(f,&msg);
 	if((rr=f->p->reporter))
 		rr(&msg,f->p);
 	if((rr=f->e->reporter))
 		rr(&msg,f->e);
-	if(msg.type==MSG_UPDATE)
-		return;
-	if(f->rec_size>=f->rec_length){
-		struct message *p;
-		size_t len;
-		len=f->rec_length+1024;
-		if(!f->rec){
-			p=malloc(len*sizeof(struct message));
-			if(!p)
-				return;
-			f->rec=p;
-			f->rec_length=len;
-		}else {
-			p=realloc(f->rec,len*sizeof(struct message));
-			if(p){
-				f->rec=p;
-				f->rec_length=len;
-			}else {
-				f->rec_size=0;
-			}
-		}
-	}
-	memcpy(f->rec+f->rec_size++,&msg,sizeof(struct message));
 }
 void history_add(struct battle_field *f){
 	struct history *h;

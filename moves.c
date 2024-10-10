@@ -585,7 +585,34 @@ void thunder_roaring(struct unit *s){
 		attack(t,s,0.15*dmg+n*0.06*u->base->max_hp,DAMAGE_REAL,0,TYPE_ELECTRIC);
 	}
 }
-
+void freezing_roaring_ondeath_kill(struct effect *e,struct unit *u){
+	struct move *m;
+	int a;
+	if(u!=e->dest||u->owner->acted)
+		return;
+	switch(a=u->owner->action){
+		case ACT_MOVE0 ... ACT_MOVE7:
+			m=u->moves+a;
+			break;
+		default:
+			return;
+	}
+	if(!(m->mlevel&MLEVEL_FREEZING_ROARING)||!unit_hasnegative(u))
+		return;
+	effect_event(e);
+	unit_move(u,m);
+	u->owner->acted=1;
+	effect_event_end(e);
+}
+const struct effect_base freezing_roaring_ondeath[1]={{
+	.kill=freezing_roaring_ondeath_kill,
+	.flag=EFFECT_PASSIVE,
+	.prior=INT_MIN,
+}};
+void freezing_roaring_init(struct unit *s){
+	if(s->move_cur->mlevel&MLEVEL_FREEZING_ROARING)
+		effect(freezing_roaring_ondeath,s,s,0,-1);
+}
 void freezing_roaring(struct unit *s){
 	struct unit *t;
 	long n,n1;
@@ -625,14 +652,6 @@ void freezing_roaring(struct unit *s){
 		t->owner->action=ACT_ABORT;
 	report(s->owner->field,MSG_FAIL,t);
 	unit_wipeeffect(t,0);
-	//for(mp=s->moves,*endp=mp+8;mp<endp;++mp){
-	//	if(!mp->id)
-	//		continue;
-	//	if(mp->cooldown){
-	//		mp->cooldown=0;
-	//		report(s->owner->field,MSG_UPDATE,mp);
-	//	}
-	//}
 	mp=s->move_cur;
 	if(mp->cooldown){
 		mp->cooldown=0;
@@ -1147,8 +1166,8 @@ void cog_hit(struct unit *s){
 	struct unit *t=gettarget(s);
 	if(!hittest(t,s,1.0))
 		return;
-	attack(t,s,s->atk,DAMAGE_PHYSICAL,0,TYPE_MACHINE);
 	effect(DEF,t,s,-1,-1);
+	attack(t,s,0.6*s->atk,DAMAGE_PHYSICAL,0,TYPE_MACHINE);
 }
 void defend(struct unit *s){
 	effect(DEF,s,s,2,-1);
@@ -2644,6 +2663,7 @@ const struct move builtin_moves[]={
 	{
 		.id="freezing_roaring",
 		.action=freezing_roaring,
+		.init=freezing_roaring_init,
 		.type=TYPE_ICE,
 		.flag=0,
 		.mlevel=MLEVEL_REGULAR|MLEVEL_FREEZING_ROARING

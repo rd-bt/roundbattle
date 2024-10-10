@@ -483,10 +483,12 @@ void endless_fake(struct player_data *p,int level){
 	}
 	assert(!pdata_fake(p,cp,level));
 }
-void endless_win(struct player_data *pd){
-	pd->xp+=271*pd->endless_level;
+unsigned long endless_win(struct player_data *pd){
+	unsigned long r=271*pd->endless_level;
+	pd->xp+=r;
 	if(pd->endless_level<INT_MAX)
 		++pd->endless_level;
+	return r;
 }
 void endless_menu(struct player_data *pd){
 	int my,mx,cur=0,r=-1;
@@ -1043,6 +1045,15 @@ st:
 			goto st;
 	}
 }
+void mirror_battling(struct player_data *pd){
+//	struct player_data enemy;
+//	memcpy(&enemy,pd,sizeof(struct player_data));
+	endwin();
+	tm_init();
+	pbattle(pd,pd,term_selector,rand_selector,reporter_term,NULL);
+	tm_end();
+	scr();
+}
 const struct mm_option mmop[]={
 	{
 		.name="units_on_battling",
@@ -1051,6 +1062,10 @@ const struct mm_option mmop[]={
 	{
 		.name="endless_challenge",
 		.submenu=endless_menu,
+	},
+	{
+		.name="mirror_battling",
+		.submenu=mirror_battling,
 	},
 	{
 		.name="list",

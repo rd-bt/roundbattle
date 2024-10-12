@@ -17,6 +17,7 @@ int main(){
 	//size_t r;
 	assert(!pdata_load(&p1));
 	main_menu(&p1);
+	pdata_save(&p1);
 	/*scr();
 	writemove(p1.ui);
 	endwin();

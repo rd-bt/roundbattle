@@ -1,12 +1,143 @@
 #include "player_data.h"
 #include "battle.h"
+#include "nbt.h"
 #include <string.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <errno.h>
+#include <assert.h>
+#include "readall.c"
+char *data_file="data.nbt";
+static struct nbt_node *data_read(void){
+	int fd=open(data_file,O_RDONLY);
+	void *buf;
+	ssize_t sz;
+	struct nbt_node *r;
+	errno=0;
+	if(!fd)
+		goto fail;
+	buf=readall(fd,&sz);
+	close(fd);
+	if(!buf)
+		goto fail;
+	r=nbt_read(buf,sz);
+	free(buf);
+	if(!r)
+		goto fail;
+	return r;
+fail:
+	/*if(errno)
+		perror("cannot read data");
+	else
+		fprintf(stderr,"cannot read data\n");
+	*/
+	return NULL;
+}
+static void data_write(struct nbt_node *np){
+	size_t sz;
+	void *buf;
+	int fd=open(data_file,O_WRONLY|O_CREAT|O_TRUNC,0660);
+	if(fd<0)
+		goto fail;
+	sz=nbt_size(np);
+	buf=malloc(sz);
+	if(!buf)
+		goto fail1;
+	assert(sz==nbt_write(np,buf));
+	if(write(fd,buf,sz)<sz)
+		goto fail2;
+	close(fd);
+	free(buf);
+	return;
+fail2:
+	free(buf);
+fail1:
+	close(fd);
+fail:
+	if(errno)
+		perror("cannot write data");
+	else
+		fprintf(stderr,"cannot read data\n");
+}
 int pdata_load(struct player_data *p){
+	struct nbt_node *np=data_read(),*np1,*np2;
+	struct nbt_node *npp[3];
+	struct nbt_node **npp1;
+	struct unit_info ui;
 	memset(p,0,sizeof(struct player_data));
-	p->endless_level=1;
-	ui_create(p->ui,"icefield_tiger_cub",1);
-	ui_create(p->ui+1,"flat_mouth_duck",1);
-	ui_create(p->ui+2,"hood_grass",1);
+	if(!np){
+		assert(np=nbt_zu("xp",2,0));
+
+		assert(!ui_create(&ui,"icefield_tiger_cub",1));
+		np1=ui_asnbt(&ui);
+		assert(np1);
+		npp[0]=np1;
+
+		assert(!ui_create(&ui,"flat_mouth_duck",1));
+		np1=ui_asnbt(&ui);
+		assert(np1);
+		npp[1]=np1;
+
+		assert(!ui_create(&ui,"hood_grass",1));
+		np1=ui_asnbt(&ui);
+		assert(np1);
+		npp[2]=np1;
+
+		np1=nbt_lista("units",5,npp,3);
+		assert(np1);
+		assert(nbt_add(np,np1));
+
+		np1=nbt_zd("level",5,1);
+		assert(np1);
+		np2=nbt_list("endless",7,np1);
+		assert(np2);
+		assert(nbt_add(np,np2));
+	}
+	p->nbt=np;
+	np=nbt_find(p->nbt,"xp",2);
+	assert(np);
+	p->xp=nbt_zul(np);
+	np=nbt_path(p->nbt,"endless/level",13);
+	assert(np);
+	p->endless_level=nbt_zdl(np);
+	np1=nbt_find(p->nbt,"units",5);
+	assert(np1);
+	assert(np1->type==NBT_LISTA);
+	npp1=(struct nbt_node **)(np1->data+np1->un.v_zd);
+	for(int i=0;i<8&&i<np1->count;++i){
+		assert(!ui_create_fromnbt(p->ui+i,npp1[i]));
+	}
+	return 0;
+}
+int pdata_save(const struct player_data *p){
+	struct nbt_node *np,**npp;
+	int n;
+	np=nbt_find(p->nbt,"xp",2);
+	assert(np);
+	nbt_zul(np)=p->xp;
+	np=nbt_path(p->nbt,"endless/level",13);
+	assert(np);
+	nbt_zdl(np)=p->endless_level;
+	for(n=0;n<8;){
+		if(!p->ui[n].spec)
+			break;
+		++n;
+	}
+	npp=alloca(n*sizeof(struct node *));
+	for(int i=0;i<n;++i){
+		np=ui_asnbt(p->ui+i);
+		assert(np);
+		npp[i]=np;
+	}
+	np=nbt_find(p->nbt,"units",5);
+	if(np){
+		assert(!nbt_delete(p->nbt,np));
+	}
+	np=nbt_lista("units",5,npp,n);
+	assert(nbt_add(p->nbt,np));
+	data_write(p->nbt);
+	nbt_free(p->nbt);
 	return 0;
 }
 int pdata_fake(struct player_data *p,const char *id,int level){
@@ -14,7 +145,6 @@ int pdata_fake(struct player_data *p,const char *id,int level){
 	ui_create(p->ui,id,level);
 	return 0;
 }
-//#include <stdio.h>
 int pbattle(const struct player_data *p,
 		const struct player_data *e,
 		int (*selector_p)(const struct player *),

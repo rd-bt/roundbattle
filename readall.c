@@ -1,4 +1,4 @@
-void *readall(int fd,ssize_t *len){
+static void *readall(int fd,ssize_t *len){
 	char *buf,*p;
 	size_t bufsiz,r1;
 	ssize_t r,ret=0;

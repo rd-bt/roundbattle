@@ -140,6 +140,56 @@ int pdata_save(const struct player_data *p){
 	nbt_free(p->nbt);
 	return 0;
 }
+unsigned long pdata_countitem(const struct player_data *p,const char *id){
+	struct nbt_node *np;
+	np=nbt_find(p->nbt,"items",5);
+	if(!np)
+		return 0;
+	assert(np->type==NBT_LIST);
+	np=nbt_find(nbt_listl(np),id,strlen(id));
+	if(!np)
+		return 0;
+	assert(np->type==NBT_LIST);
+	np=nbt_find(nbt_listl(np),"count",5);
+	assert(np);
+	assert(np->type==NBT_ZU);
+	return nbt_zul(np);
+}
+unsigned long pdata_giveitem(const struct player_data *p,const char *id,long count){
+	struct nbt_node *np,*np1,*np0,*np2;
+	size_t len=strlen(id);
+	long n;
+	np=nbt_find(p->nbt,"items",5);
+	if(!np){
+		np=nbt_root("root",4);
+		assert(np);
+		np=nbt_list("items",5,np);
+		assert(np);
+		assert(nbt_add(p->nbt,np));
+	}
+	assert(np->type==NBT_LIST);
+	np=nbt_find(np0=nbt_listl(np),id,len);
+	if(!np){
+		if(count<0)
+			return 0;
+		np1=nbt_zu("count",5,count);
+		assert(np1);
+		np=nbt_list(id,len,np1);
+		assert(nbt_add(np0,np));
+		return count;
+	}
+	np=nbt_find(np1=nbt_listl(np2=np),"count",5);
+	assert(np);
+	n=nbt_zul(np)+count;
+	if(n<0)
+		n=0;
+	if(!n){
+		assert(!nbt_delete(np0,np2));
+		return 0;
+	}
+	nbt_zul(np)=n;
+	return n;
+}
 int pdata_fake(struct player_data *p,const char *id,int level){
 	memset(p,0,sizeof(struct player_data));
 	ui_create(p->ui,id,level);

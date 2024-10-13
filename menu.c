@@ -2,6 +2,7 @@
 #include "locale.h"
 #include "moves.h"
 #include "battle.h"
+#include "item.h"
 #include <ncurses.h>
 #include <limits.h>
 #include <assert.h>
@@ -50,6 +51,28 @@ st:
 			break;
 	}
 	goto st;
+}
+void giveitem(const struct player_data *p,const char *id,long count){
+	unsigned long r=pdata_countitem(p,id),r1;
+	r1=pdata_giveitem(p,id,count);
+	if(r1<=r)
+		return;
+st:
+	clear();
+	move(LINES/2-1,COLS*5/12);
+	printw("%s %s *%lu",ts("item_get"),item_ts(id),r1-r);
+	move(LINES/2+1,COLS/2-1);
+	attron(COLOR_PAIR(1));
+	printw("%s",ts("close"));
+	attroff(COLOR_PAIR(1));
+	refresh();
+	switch(getch()){
+		case '\n':
+		case 'q':
+			return;
+		default:
+			goto st;
+	}
 }
 static int move_type(const char *s){
 	const struct move *m;
@@ -418,8 +441,10 @@ st:
 					pd->ui[cur].type1<<=1;
 					if(pd->ui[cur].type0==pd->ui[cur].type1)
 						pd->ui[cur].type1<<=1;
-					if(!(pd->ui[cur].type1&TYPES_REGULAR))
+					if(!pd->ui[cur].type1)
 						pd->ui[cur].type1=TYPE_GRASS;
+					if(!(pd->ui[cur].type1&TYPES_REGULAR))
+						pd->ui[cur].type1=TYPE_VOID;
 					if(pd->ui[cur].type0==pd->ui[cur].type1)
 						pd->ui[cur].type1<<=1;
 				}
@@ -474,7 +499,7 @@ st:
 }
 #define arrsize(arr) (sizeof(arr)/sizeof(arr[0]))
 void endless_fake(struct player_data *p,int level){
-	static const char *mobs[]={"icefield_tiger_cub","hood_grass"};
+	static const char *mobs[]={"icefield_tiger_cub","flat_mouth_duck","hood_grass"};
 	const char *cp=mobs[(level-1)%arrsize(mobs)];
 	const struct species *spec=get_builtin_species_by_id(cp);
 	while((spec->flag&UF_EVOLVABLE)&&level>=spec->evolve_level&&spec[1].xp_type<=spec->xp_type*16){
@@ -879,11 +904,15 @@ st:
 		}
 	}
 	addch('\n');
-	ew=weak_types(1<<cur);
 	printw("%s:",ts("type_weakened"));
+	ew=weak_types(1<<cur);
 	for(int i=TYPE_GRASS;i&TYPES_ALL;i<<=1){
-		if(i&ew)
-			printw(" %s",type2str(i));
+		if(i&ew){
+			if(i&TYPES_DEVINE)
+				printw(" [%s]",type2str(i));
+			else
+				printw(" %s",type2str(i));
+		}
 	}
 	addch('\n');
 	ew=1<<cur;
@@ -915,6 +944,79 @@ st:
 			cur=limit_ring(cur-1,0,19);
 			goto st;
 		case '\n':
+		case 'q':
+			return;
+		default:
+			goto st;
+	}
+}
+void item_menu(struct player_data *pd){
+	int cur=0,shift=0;
+	int nline;
+	size_t count;
+	const char *cp,*cp0=NULL;
+	struct nbt_node *np,*npi;
+	const struct item *ip;
+st:
+	np=nbt_find(pd->nbt,"items",5);
+	if(!np||np->type!=NBT_LIST)
+		return;
+	np=nbt_listl(np);
+	count=nbt_count(np);
+	if(count<2)
+		return;
+	nline=LINES/2;
+	clear();
+	move(0,0);
+	if(cur<shift){
+		shift=cur;
+	}else if(cur>shift+(nline-1)){
+		shift=cur-(nline-1);
+	}
+	for(int i=shift;i-shift<nline&&i<count;++i){
+		npi=nbt_byindex(np,i);
+		if(npi->type!=NBT_LIST){
+			continue;
+		}
+		cp=npi->data;
+		npi=nbt_find(nbt_listl(npi),"count",5);
+		assert(npi&&npi->type==NBT_ZU);
+		if(i==cur){
+			cp0=cp;
+			attron(COLOR_PAIR(1));
+		}
+		printw("%s:%zu\n",item_ts(cp),nbt_zul(npi));
+		if(i==cur)
+			attroff(COLOR_PAIR(1));
+	}
+	attron(COLOR_PAIR(1));
+	for(int i=COLS;i>0;--i){
+		addch('=');
+	}
+	attroff(COLOR_PAIR(1));
+	printw("%s\n",item_desc(cp0));
+	refresh();
+	switch(getch()){
+		case KEY_DOWN:
+			cur=limit_ring(cur+1,0,(ssize_t)count-1);
+			if(nbt_byindex(np,cur)->type!=NBT_LIST)
+				cur=limit_ring(cur+1,0,(ssize_t)count-1);
+			goto st;
+		case KEY_UP:
+			cur=limit_ring(cur-1,0,(ssize_t)count-1);
+			if(nbt_byindex(np,cur)->type!=NBT_LIST)
+				cur=limit_ring(cur-1,0,(ssize_t)count-1);
+			goto st;
+		case '\n':
+			npi=nbt_byindex(np,cur);
+			if(npi->type!=NBT_LIST){
+				goto st;
+			}
+			ip=get_builtin_item_by_id(npi->data);
+			if(ip&&ip->onenter)
+				ip->onenter(pd,npi);
+			goto st;
+
 		case 'q':
 			return;
 		default:
@@ -1046,13 +1148,14 @@ st:
 	}
 }
 void mirror_battling(struct player_data *pd){
-//	struct player_data enemy;
-//	memcpy(&enemy,pd,sizeof(struct player_data));
+	int r;
 	endwin();
 	tm_init();
-	pbattle(pd,pd,term_selector,rand_selector,reporter_term,NULL);
+	r=pbattle(pd,pd,term_selector,rand_selector,reporter_term,NULL);
 	tm_end();
 	scr();
+	if(!r)
+		giveitem(pd,"endless_cream",1);
 }
 const struct mm_option mmop[]={
 	{
@@ -1066,6 +1169,10 @@ const struct mm_option mmop[]={
 	{
 		.name="mirror_battling",
 		.submenu=mirror_battling,
+	},
+	{
+		.name="item",
+		.submenu=item_menu,
 	},
 	{
 		.name="list",

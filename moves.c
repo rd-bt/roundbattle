@@ -419,7 +419,7 @@ const struct effect_base metal_bomb_effect[1]={{
 void metal_bomb(struct unit *s){
 	effect(metal_bomb_effect,s->osite,s,0,0);
 }
-void fate_destroying_slash(struct unit *s){
+void pursue(struct unit *s){
 	struct unit *t=gettarget(s);
 	double coef=(0.12+0.00012*(s->atk+(s->def>0?s->def:0)));
 	if(hittest(t,s,1.0)){
@@ -2617,8 +2617,8 @@ const struct move builtin_moves[]={
 		.mlevel=MLEVEL_REGULAR
 	},
 	{
-		.id="fate_destroying_slash",
-		.action=fate_destroying_slash,
+		.id="pursue",
+		.action=pursue,
 		.type=TYPE_FIGHTING,
 		.prior=1,
 		.flag=0,

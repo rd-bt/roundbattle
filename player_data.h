@@ -11,6 +11,8 @@ struct player_data {
 int pdata_load(struct player_data *p);
 int pdata_save(const struct player_data *p);
 int pdata_fake(struct player_data *p,const char *id,int level);
+unsigned long pdata_countitem(const struct player_data *p,const char *id);
+unsigned long pdata_giveitem(const struct player_data *p,const char *id,long count);
 int pbattle(const struct player_data *p,
 		const struct player_data *e,
 		int (*selector_p)(const struct player *),

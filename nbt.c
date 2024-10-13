@@ -62,6 +62,40 @@ static struct nbt_node **nbt_findentry(struct nbt_node *list,const char *key,uns
 		}
 	}
 }
+static struct nbt_node *nbt_byindex0(struct nbt_node *list,size_t index,size_t *i){
+	struct nbt_node *p;
+	if(list->prev){
+		p=nbt_byindex0(list->prev,index,i);
+		if(p)
+			return p;
+	}
+	if(*i==index)
+		return list;
+	else
+		++(*i);
+	if(list->next){
+		p=nbt_byindex0(list->next,index,i);
+		if(p)
+			return p;
+	}
+	return NULL;
+}
+struct nbt_node *nbt_byindex(const struct nbt_node *list,size_t index){
+	size_t i=0;
+	return nbt_byindex0((struct nbt_node *)list,index,&i);
+}
+size_t nbt_foreach(const struct nbt_node *list,void *arg,void (*fn)(struct nbt_node *node,size_t i,void *arg)){
+	size_t i=0;
+	if(list->prev)
+		i+=nbt_foreach(list->prev,arg,fn);
+	if(list->type!=NBT_ROOT){
+		fn((struct nbt_node *)list,i,arg);
+		++i;
+	}
+	if(list->next)
+		i+=nbt_foreach(list->next,arg,fn);
+	return i;
+}
 struct nbt_node *nbt_find(const struct nbt_node *list,const char *key,unsigned int keylen){
 	int sum;
 	for(;;){
@@ -129,6 +163,18 @@ size_t nbt_size(const struct nbt_node *list){
 	}
 	return s;
 }
+size_t nbt_depth(const struct nbt_node *list){
+	size_t p,n;
+	if(list->prev)
+		p=nbt_depth(list->prev);
+	else
+		p=0;
+	if(list->next)
+		n=nbt_depth(list->next);
+	else
+		n=0;
+	return (p>n?p:n)+1;
+}
 size_t nbt_count(const struct nbt_node *list){
 	size_t s=1;
 	if(list->prev)
@@ -138,10 +184,12 @@ size_t nbt_count(const struct nbt_node *list){
 	return s;
 }
 void nbt_free(struct nbt_node *list){
+	//fprintf(stderr,"freeing %s %d\n",list->data,list->type);
 	if(list->prev)
 		nbt_free(list->prev);
 	if(list->next)
 		nbt_free(list->next);
+	//fprintf(stderr,"freeing pn %s %d\n",list->data,list->type);
 	switch(list->type){
 		case NBT_LIST:
 			nbt_free(list->un.v_list);
@@ -156,6 +204,7 @@ void nbt_free(struct nbt_node *list){
 			break;
 	}
 	free(list);
+	//fprintf(stderr,"freeing ok\n");
 }
 size_t nbt_delete(struct nbt_node *list,struct nbt_node *node){
 	struct nbt_node **e;
@@ -297,16 +346,19 @@ static void nbt_writep(const struct nbt_node *list,void **buf){
 			memcpy(&e->un,&list->un,sizeof(union nbt_value));
 			break;
 	}
-	if(list->data[list->keylen-1]&1){
-		if(list->prev)
+	if(list->prev&&list->next){
+		if(nbt_depth(list->prev)<=nbt_depth(list->next)){
 			nbt_writep(list->prev,buf);
-		if(list->next)
 			nbt_writep(list->next,buf);
+		}else {
+			nbt_writep(list->next,buf);
+			nbt_writep(list->prev,buf);
+		}
 	}else {
-		if(list->next)
-			nbt_writep(list->next,buf);
 		if(list->prev)
 			nbt_writep(list->prev,buf);
+		if(list->next)
+			nbt_writep(list->next,buf);
 	}
 }
 size_t nbt_write(const struct nbt_node *list,void *buf){
@@ -380,6 +432,16 @@ static void nbt_writevalue(const struct nbt_node *list,char **buf,char *test){
 			break;
 		case NBT_DBL:
 			(*buf)+=sprintf(test?test:*buf,"%lfd",list->un.v_dbl);
+			break;
+		case NBT_ROOT:
+			chadd('N');
+			chadd('B');
+			chadd('T');
+			chadd('_');
+			chadd('R');
+			chadd('O');
+			chadd('O');
+			chadd('T');
 			break;
 		default:
 			break;
@@ -508,6 +570,9 @@ lista_fail0:
 			case NBT_DBL:
 				p=nbt_dbl(e->data,e->keylen,e->un.v_dbl);
 				break;
+			case NBT_ROOT:
+				p=nbt_root(e->data,e->keylen);
+				break;
 			default:
 				break;
 		}
@@ -591,6 +656,15 @@ struct nbt_node *nbt_list(const char *key,unsigned int keylen,struct nbt_node *n
 	r->type=NBT_LIST;
 	r->count=1;
 	r->un.v_list=np;
+	return r;
+}
+struct nbt_node *nbt_root(const char *key,unsigned int keylen){
+	struct nbt_node *r;
+	r=nbt_new(key,keylen);
+	if(!r)
+		return NULL;
+	r->type=NBT_ROOT;
+	memset((char *)r+offsetof(struct nbt_node,count),0,offsetof(struct nbt_node,data)-offsetof(struct nbt_node,count));
 	return r;
 }
 struct nbt_node *nbt_zd(const char *key,unsigned int keylen,ptrdiff_t value){

@@ -145,3 +145,28 @@ const char *unit_desc(const char *id){
 		return id;
 	return p;
 }
+const char *item_ts(const char *id){
+	char *buf;
+	const char *p;
+	size_t l;
+	l=strlen(id);
+	buf=alloca(l+11);
+	sprintf(buf,"item.%s.name",id);
+	p=locale(buf);
+	if(!p)
+		return id;
+	return p;
+}
+
+const char *item_desc(const char *id){
+	char *buf;
+	const char *p;
+	size_t l;
+	l=strlen(id);
+	buf=alloca(l+11);
+	sprintf(buf,"item.%s.desc",id);
+	p=locale(buf);
+	if(!p)
+		return id;
+	return p;
+}

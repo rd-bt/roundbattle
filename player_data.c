@@ -58,7 +58,7 @@ fail:
 	if(errno)
 		perror("cannot write data");
 	else
-		fprintf(stderr,"cannot read data\n");
+		fprintf(stderr,"cannot write data\n");
 }
 int pdata_load(struct player_data *p){
 	struct nbt_node *np=data_read(),*np1,*np2;

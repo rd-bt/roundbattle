@@ -8,6 +8,7 @@
 #include <assert.h>
 #include <alloca.h>
 #include <stdlib.h>
+#include <string.h>
 void reporter_term(const struct message *msg,const struct player *p);
 int term_selector(const struct player *p);
 void tm_init(void);
@@ -159,6 +160,8 @@ st:
 		s0=ui->spec->moves[ri];
 	else if(cur>=r&&cur<r+8&&s[cur-r])
 		s0=s[cur-r];
+	else
+		abort();
 	printw("%s\n",move_desc(s0));
 	if(warn){
 		move(LINES-2,0);
@@ -279,7 +282,7 @@ void memswap(void *restrict s1,void *restrict s2,size_t len){
 	memcpy(s1,s2,len);
 	memcpy(s2,swapbuf,len);
 }
-#define pwc(cond,fmt,__VA_ARGS__) do {\
+#define pwc(cond,fmt,...) do {\
 	int _c=!!(cond);\
 	if(_c)\
 		attron(COLOR_PAIR(1));\
@@ -287,7 +290,7 @@ void memswap(void *restrict s1,void *restrict s2,size_t len){
 	if(_c)\
 		attroff(COLOR_PAIR(1));\
 }while(0)
-#define pwcr(cond,fmt,__VA_ARGS__) do {\
+#define pwcr(cond,fmt,...) do {\
 	int _c=!!(cond);\
 	if(_c)\
 		attron(COLOR_PAIR(2));\
@@ -353,8 +356,13 @@ st:
 		printw("\n%s:%zd (%s)",ts("evolve_level"),r1=pd->ui[cur].spec->evolve_level,unit_ts(pd->ui[cur].spec[1].max.id));
 		if(pd->ui[cur].level>=r1)
 			printw(" %s:%zd",ts("xp_for_evolve"),r2=xp_require_evo(pd->ui+cur));
-	}else
+		else
+			r2=0;
+	}else {
+		r2=0;
+		r1=0;
 		printw("\n%s",ts("unevolvable"));
+	}
 	addch('\n');
 	move(LINES-2,0);
 	pwc(hcur==0,"%s",ts("move"));
@@ -601,7 +609,7 @@ struct mm_option {
 };
 void listmove(const struct species *spec){
 	size_t i,r;
-	ssize_t cur=0,ri,shift=0,s,n;
+	ssize_t cur=0,ri=0,shift=0,s,n;
 	int types[151],nline;
 	const struct move *m;
 	for(i=0,r=0;i<=150;++i){

@@ -1,7 +1,10 @@
 #include "nbt.h"
 #include <stddef.h>
+#include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdio.h>
+#include <stdarg.h>
 #define likely(cond) __builtin_expect(!!(cond),1)
 #define unlikely(cond) __builtin_expect(!!(cond),0)
 static int expr_firstdiff(const char *restrict s1,const char *restrict s2,size_t len){

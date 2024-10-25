@@ -64,7 +64,7 @@ void wm(int who,const char msg[128]){
 		i=0;
 	}
 	//fprintf(stderr,"set %d :%s\n",i,msg);
-	strncpy(rec[i],msg,127);
+	memcpy(rec[i],msg,127);
 	rec[i][127]=0;
 	rec[i][128]=(char)who;
 }

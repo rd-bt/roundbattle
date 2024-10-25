@@ -10,10 +10,12 @@
 #include <time.h>
 #include <ncurses.h>
 #include <assert.h>
+#include <locale.h>
 const char *moves[]={"cycle_erode","defend","razor_carrot","piercing_missile","breach_missile","flamethrower","urgently_repair","metal_syncretize",NULL};
 
 int main(){
 	struct player_data p1;
+	setlocale(LC_ALL,"");
 	//size_t r;
 	assert(!pdata_load(&p1));
 	main_menu(&p1);

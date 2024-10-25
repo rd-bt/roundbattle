@@ -1,6 +1,7 @@
 #include "battle.h"
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdarg.h>
 #include <string.h>
 #include <math.h>
 #define SHEAR_COEF (M_SQRT2/128)
@@ -112,22 +113,22 @@ unsigned long attack(struct unit *dest,struct unit *src,unsigned long value,int 
 	}
 	switch(damage_type){
 		case DAMAGE_REAL:
-			goto no_derate;
 			break;
 		case DAMAGE_PHYSICAL:
 			derate=dest->physical_derate;
 			if(src)derate-=src->physical_bonus;
-			break;
+			goto do_derate;
 		case DAMAGE_MAGICAL:
 			derate=dest->magical_derate;
 			if(src)derate-=src->magical_bonus;
-			break;
+			goto do_derate;
+do_derate:
+		if(derate>0.8)
+			value/=5*derate+1;
+		else
+			value*=1-derate;
+		break;
 	}
-	if(derate>0.8)
-		value/=5*derate+1;
-	else
-		value*=1-derate;
-no_derate:
 	if(!(aflag&AF_NOFLOAT)&&damage_type!=DAMAGE_REAL)
 		value+=(0.1*rand01()-0.05)*value;
 	if(!value)

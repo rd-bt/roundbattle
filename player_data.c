@@ -7,6 +7,7 @@
 #include <unistd.h>
 #include <errno.h>
 #include <assert.h>
+#include <fcntl.h>
 #include "readall.c"
 char *data_file="data.nbt";
 static struct nbt_node *data_read(void){
@@ -67,7 +68,7 @@ int pdata_load(struct player_data *p){
 	struct unit_info ui;
 	memset(p,0,sizeof(struct player_data));
 	if(!np){
-		assert(np=nbt_zu("xp",2,0));
+		assert((np=nbt_zu("xp",2,0)));
 
 		assert(!ui_create(&ui,"icefield_tiger_cub",1));
 		np1=ui_asnbt(&ui);

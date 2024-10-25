@@ -4,12 +4,14 @@
 #include <stdio.h>
 #include <alloca.h>
 #include <unistd.h>
+#include <fcntl.h>
 #include <stdlib.h>
 #include <errno.h>
 #include <assert.h>
 #include "readall.c"
 static const char *types_string[21]={"void_type","grass","fire","water","steel","light","fighting","wind","poison","rock","electric","ghost","ice","bug","machine","soil","dragon","normal","devine_grass","alkali_fire","devine_water"};
 static struct strmap *loc=NULL;
+int loc_disable=0;
 static void __attribute__((destructor)) locale_end(void){
 	if(loc)
 		strmap_free(loc);
@@ -39,6 +41,8 @@ static void load_locale(void){
 			default:
 				break;
 		}
+		if(p1<p)
+			__builtin_unreachable();
 		p2=memchr(p,'=',p1-p);
 		if(p2&&p2>p&&p1>p2+1){
 			loc=strmap_add(loc,p,p2-p,p2+1,p1-p2-1);
@@ -52,6 +56,8 @@ end:
 	free(buf);
 }
 const char *locale(const char *id){
+	if(loc_disable)
+		return NULL;
 	if(!loc){
 		load_locale();
 	}

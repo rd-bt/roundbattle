@@ -288,7 +288,7 @@ static const char *eerror[]={
 	[EXPR_ENC]="Not a constant expression",
 	[EXPR_ECTA]="Cannot take address",
 	[EXPR_ESAF]="Static assertion failed",
-	[EXPR_EVD]="Void value must be dropped."
+	[EXPR_EVD]="Void value must be dropped"
 };
 //const static char ntoc[]={"0123456789abcdefg"};
 const char *expr_error(int error){
@@ -1713,6 +1713,7 @@ static struct expr_resource *expr_free_keepres(struct expr *restrict ep){
 	}
 	return ep->res;
 }
+__attribute__((noinline))
 void expr_free(struct expr *restrict ep){
 	struct expr *ep0=(struct expr *)ep;
 	struct expr_resource *erp,*erp1;
@@ -4130,9 +4131,6 @@ double expr_calc4(const char *e,const char *asym,double input,struct expr_symset
 double expr_calc3(const char *e,const char *asym,double input){
 	return expr_calc5(e,asym,input,NULL,0);
 }
-double expr_calc2(const char *e,struct expr_symset *esp){
-	return expr_calc5(e,NULL,0.0,esp,0);
-}
 double expr_calc(const char *e){
 	return expr_calc5(e,NULL,0.0,NULL,0);
 }
@@ -4728,6 +4726,8 @@ static int expr_constexpr(const struct expr *restrict ep,double *except){
 				*dest=ip->un.em->un.funcep(ip->un.em->dim,ip->un.em->eps,input);\
 				break
 static double expr_vmdeval(struct expr_vmdinfo *restrict ev,double input);
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
 static int expr_optimize_constexpr(struct expr *restrict ep){
 	double result;
 	union {
@@ -4923,6 +4923,7 @@ force_continue:
 #undef endp1
 #undef epp
 }
+#pragma GCC diagnostic pop
 static int expr_vcheck_ep(struct expr *restrict ep,struct expr_inst *ip0,double *v){
 	if(expr_vused(ip0,v))return 1;
 	for(struct expr_inst *ip=ip0;;++ip){
@@ -5388,6 +5389,8 @@ static double expr_vmdeval(struct expr_vmdinfo *restrict ev,double input){
 	}
 	return ev->func(ap-args,args);
 }
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
 __attribute__((noinline))
 double expr_eval(const struct expr *restrict ep,double input){
 	union {
@@ -5661,3 +5664,4 @@ double expr_eval(const struct expr *restrict ep,double input){
 #undef endp
 #undef epp
 }
+#pragma GCC diagnostic pop

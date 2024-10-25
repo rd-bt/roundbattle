@@ -10,10 +10,11 @@
 #include <ncurses.h>
 #include <assert.h>
 #include <math.h>
+#include <fcntl.h>
 #include "readall.c"
 #ifndef _SSIZE_T_DEFINED_
 #define _SSIZE_T_DEFINED_
-typedef ptrdiff_t ssize_t
+typedef ptrdiff_t ssize_t;
 #else
 _Static_assert(sizeof(ssize_t)==sizeof(ptrdiff_t),"ssize_t and ptrdiff_t has different size");
 #endif

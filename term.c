@@ -475,26 +475,28 @@ void reporter_term(const struct message *msg,const struct player *p){
 			wmf(msg->un.u->owner==p?0:1,ts("failed"));
 			break;
 		case MSG_HEAL:
-			buf[0]=0;
 			buf1[0]=0;
 			if(msg->un.heal.dest!=msg->un.heal.dest->owner->front){
 				snprintf(buf1,128,"[%ld]%s ",msg->un.heal.dest-msg->un.heal.dest->owner->units,unit_ts(msg->un.heal.dest->base->id));
 			}
-			wmf(msg->un.heal.dest->owner==p?0:1,"%s" GREEN "+%lu%s" WHITE,buf1,msg->un.heal.value,buf);
+			wmf(msg->un.heal.dest->owner==p?0:1,"%s" GREEN "+%lu" WHITE,buf1,msg->un.heal.value);
 			goto delay;
 		case MSG_HPMOD:
-			buf[0]=0;
 			buf1[0]=0;
 			if(msg->un.hpmod.dest!=msg->un.hpmod.dest->owner->front){
 				snprintf(buf1,128,"[%ld]%s ",msg->un.hpmod.dest-msg->un.hpmod.dest->owner->units,unit_ts(msg->un.hpmod.dest->base->id));
 			}
-			wmf(msg->un.hpmod.dest->owner==p?0:1,"%s%+ld%s",buf1,msg->un.hpmod.value,buf);
+			wmf(msg->un.hpmod.dest->owner==p?0:1,"%s%+ld",buf1,msg->un.hpmod.value);
 			goto delay;
 		case MSG_MISS:
 			wmf(msg->un.u2.dest->owner==p?0:1,ts("miss"));
 			goto delay;
 		case MSG_MOVE:
-			wmf(msg->un.move.u->owner==p?0:1,CYAN "%s" WHITE,move_ts(msg->un.move.m->id));
+			buf1[0]=0;
+			if(msg->un.move.u!=msg->un.move.u->owner->front){
+				snprintf(buf1,128,"[%ld]%s ",msg->un.move.u-msg->un.move.u->owner->units,unit_ts(msg->un.move.u->base->id));
+			}
+			wmf(msg->un.move.u->owner==p?0:1,"%s" CYAN "%s" WHITE,buf1,move_ts(msg->un.move.m->id));
 			goto delay;
 		case MSG_ROUND:
 			break;
@@ -502,12 +504,11 @@ void reporter_term(const struct message *msg,const struct player *p){
 			wmf(0,ts("round_end"));
 			break;
 		case MSG_SPIMOD:
-			buf[0]=0;
 			buf1[0]=0;
 			if(msg->un.spimod.dest!=msg->un.spimod.dest->owner->front){
 				snprintf(buf1,128,"[%ld]%s ",msg->un.spimod.dest-msg->un.spimod.dest->owner->units,unit_ts(msg->un.spimod.dest->base->id));
 			}
-			wmf(msg->un.spimod.dest->owner==p?0:1,"%s%+ld spi%s",buf1,msg->un.spimod.value,buf);
+			wmf(msg->un.spimod.dest->owner==p?0:1,"%s%+ld spi",buf1,msg->un.spimod.value);
 			goto delay;
 		case MSG_SWITCH:
 			wmf(msg->un.u2.dest->owner==p?0:1,"[%ld]%s",msg->un.u2.dest-msg->un.u2.dest->owner->units,unit_ts(msg->un.u2.dest->base->id));
@@ -545,7 +546,7 @@ void print_unit(const struct unit *u){
 		fprintf(stdout,"%s:%ld/%ld %.2lf%%\n",ts("spi_force"),u->spi,u->base->max_spi,100.0*u->spi/u->base->max_spi);
 	}
 	for_each_effect(ep,u->owner->field->effects){
-		if(ep->dest!=u)
+		if(ep->dest!=u||!ep->base->id)
 			continue;
 		neg=effect_isnegative(ep);
 		if(neg)

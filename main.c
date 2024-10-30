@@ -4,7 +4,7 @@
 #include "utils.h"
 #include "player_data.h"
 #include "menu.h"
-#include "locale.h"
+//#include "locale.h"
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>

@@ -142,6 +142,9 @@
 #define EFFECT_ISOLATED 128
 #define EFFECT_KEEP 256
 #define EFFECT_NONHOOKABLE 512
+#define EFFECT_NOCONSTRUCT 1024
+#define EFFECT_ADDLEVEL 2048
+#define EFFECT_ADDROUND 4096
 #define EFFECT_PASSIVE (EFFECT_POSITIVE|EFFECT_UNPURIFIABLE|EFFECT_KEEP|EFFECT_NONHOOKABLE)
 
 #define STAGE_INIT 0
@@ -579,7 +582,11 @@ long setspi(struct unit *dest,long spi);
 
 struct effect *effect(const struct effect_base *base,struct unit *dest,struct unit *src,long level,int round);
 
+struct effect *effectx(const struct effect_base *base,struct unit *dest,struct unit *src,long level,int round,int xflag);
+
 int effect_reinit(struct effect *ep,struct unit *src,long level,int round);
+
+int effect_reinitx(struct effect *ep,struct unit *src,long level,int round,int xflag);
 
 int effect_setlevel(struct effect *e,long level);
 

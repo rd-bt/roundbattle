@@ -341,6 +341,9 @@ static void effect_insert(struct effect *ep,struct battle_field *f){
 	}
 }
 struct effect *effect(const struct effect_base *base,struct unit *dest,struct unit *src,long level,int round){
+	return effectx(base,dest,src,level,round,0);
+}
+struct effect *effectx(const struct effect_base *base,struct unit *dest,struct unit *src,long level,int round,int xflag){
 	struct effect *ep=NULL;
 	struct battle_field *f=NULL;
 	int new;
@@ -350,12 +353,13 @@ struct effect *effect(const struct effect_base *base,struct unit *dest,struct un
 		f=src->owner->field;
 	if(!f||(dest&&!isalive(dest->state)))
 		return NULL;
-	if(!(base->flag&EFFECT_NONHOOKABLE))for_each_effect(e,f->effects){
+	xflag^=base->flag;
+	if(!(xflag&EFFECT_NONHOOKABLE))for_each_effect(e,f->effects){
 		if(e->base->effect&&e->base->effect(e,base,dest,src,&level,&round))
 			return NULL;
 	}
 	for_each_effect(e,f->effects){
-		if(e->dest==dest&&e->base==base&&!(base->flag&EFFECT_ISOLATED)){
+		if(e->dest==dest&&e->base==base&&!(xflag&EFFECT_ISOLATED)){
 			ep=e;
 			break;
 		}
@@ -372,20 +376,28 @@ struct effect *effect(const struct effect_base *base,struct unit *dest,struct un
 	}else
 		new=0;
 	ep->src1=src;
-	if(base->init){
+	if(!(xflag&EFFECT_NOCONSTRUCT)&&base->init){
 		if(base->init(ep,level,round)){
-			effect_final(ep);
+			if(new)
+				free(ep);
+			else
+				effect_final(ep);
 			return NULL;
 		}
 	}else {
-		ep->level=level;
-		ep->round=round;
+		if(xflag&EFFECT_ADDLEVEL)
+			ep->level+=level;
+		else
+			ep->level=level;
+		if(xflag&EFFECT_ADDROUND)
+			ep->round+=round;
+		else
+			ep->round=round;
 	}
-	report(f,MSG_EFFECT,ep,level,round);
 	if(new){
 		effect_insert(ep,f);
 	}
-
+	report(f,MSG_EFFECT,ep,level,round);
 	if(base->inited)
 		base->inited(ep);
 	for_each_effect(e,f->effects){
@@ -395,6 +407,9 @@ struct effect *effect(const struct effect_base *base,struct unit *dest,struct un
 	return ep;
 }
 int effect_reinit(struct effect *ep,struct unit *src,long level,int round){
+	return effect_reinitx(ep,src,level,round,0);
+}
+int effect_reinitx(struct effect *ep,struct unit *src,long level,int round,int xflag){
 	struct battle_field *f=NULL;
 	if(ep->dest)
 		f=ep->dest->owner->field;
@@ -402,19 +417,26 @@ int effect_reinit(struct effect *ep,struct unit *src,long level,int round){
 		f=ep->src->owner->field;
 	if(!f)
 		return -1;
-	if(!(ep->base->flag&EFFECT_NONHOOKABLE))for_each_effect(e,f->effects){
+	xflag^=ep->base->flag;
+	if(!(xflag&EFFECT_NONHOOKABLE))for_each_effect(e,f->effects){
 		if(e->base->effect&&e->base->effect(e,ep->base,ep->dest,src,&level,&round))
 			return -1;
 	}
 	ep->src1=src;
-	if(ep->base->init){
+	if(!(xflag&EFFECT_NOCONSTRUCT)&&ep->base->init){
 		if(ep->base->init(ep,level,round)){
 			effect_final(ep);
 			return -1;
 		}
 	}else {
-		ep->level=level;
-		ep->round=round;
+		if(xflag&EFFECT_ADDLEVEL)
+			ep->level+=level;
+		else
+			ep->level=level;
+		if(xflag&EFFECT_ADDROUND)
+			ep->round+=round;
+		else
+			ep->round=round;
 	}
 	report(f,MSG_EFFECT,ep,level,round);
 	if(ep->base->inited)

@@ -1713,12 +1713,9 @@ const struct effect_base hail_effect[1]={{
 }};
 void hail(struct unit *s){
 	struct unit *t=gettarget(s);
-	struct effect *e;
 	if(hittest(t,s,1.0))
 		attack(t,s,0.45*s->atk+t->base->max_hp/32.0,DAMAGE_PHYSICAL,0,TYPE_ICE);
-	e=effect(hail_effect,s,s,0,5);
-	if(e)
-		e->active=0;
+	effect(hail_effect,s,s,0,5);
 }
 void clip3(struct unit *s){
 	struct unit *t=gettarget(s);
@@ -2461,6 +2458,64 @@ void dark_night_light(struct unit *s){
 	hp=t->hp;
 	if(hp<INT_MAX&&!isprime(hp&0x7ffffffful))
 		attack(t,s,s->atk,DAMAGE_PHYSICAL,0,TYPE_LIGHT);
+}
+const struct effect_base natural_decay_effect[1];
+void natural_decay_pm(struct unit *s){
+	struct unit *t;
+	struct effect *e=unit_findeffect(s,natural_decay_effect);
+	if(!e)
+		return;
+	if(e->level<2){
+		t=gettarget(s);
+		attack(t,s,0.4122*s->atk+0.01832*t->base->max_hp,DAMAGE_PHYSICAL,0,TYPE_DEVINEGRASS);
+		effect_addlevel(e,1);
+	}else {
+		t=s->osite;
+		sethp(t,t->hp>2?(unsigned long)log(t->hp):0);
+		effect_end(e);
+	}
+}
+const struct move natural_decay_p={
+	.id="natural_decay",
+	.action=natural_decay_pm,
+	.type=TYPE_DEVINEGRASS,
+	.prior=0,
+	.flag=MOVE_NOCONTROL,
+	.mlevel=MLEVEL_CONCEPTUAL
+};
+void natural_decay_action_end(struct effect *e,struct player *p){
+	struct move am;
+	if(e->dest->owner!=p)
+		return;
+	if(!e->active){
+		e->active=1;
+		return;
+	}
+	effect_event(e);
+	memcpy(&am,&natural_decay_p,sizeof(struct move));
+	unit_move(e->dest,&am);
+	effect_event_end(e);
+}
+void natural_decay_inited(struct effect *e){
+	e->active=0;
+}
+void natural_decay_switchunit_end(struct effect *e,struct unit *t){
+	if(t->owner!=e->dest->owner){
+		effect_end(e);
+	}
+}
+const struct effect_base natural_decay_effect[1]={{
+	.id="natural_decay",
+	.action_end=natural_decay_action_end,
+	.action_fail=natural_decay_action_end,
+	.switchunit_end=natural_decay_switchunit_end,
+	.flag=EFFECT_POSITIVE
+}};
+void natural_decay(struct unit *s){
+	struct unit *t=gettarget(s);
+	if(hittest(t,s,1.0))
+	attack(t,s,0.4122*s->atk+0.01832*t->base->max_hp,DAMAGE_PHYSICAL,0,TYPE_DEVINEGRASS);
+	effect(natural_decay_effect,s,s,0,-1);
 }
 const struct move builtin_moves[]={
 	{
@@ -3212,6 +3267,14 @@ const struct move builtin_moves[]={
 		.prior=0,
 		.flag=0,
 		.mlevel=MLEVEL_REGULAR,
+	},
+	{
+		.id="natural_decay",
+		.action=natural_decay,
+		.type=TYPE_DEVINEGRASS,
+		.prior=0,
+		.flag=0,
+		.mlevel=MLEVEL_CONCEPTUAL
 	},
 	{.id=NULL}
 };

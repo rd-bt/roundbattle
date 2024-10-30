@@ -1709,6 +1709,7 @@ const struct effect_base hail_effect[1]={{
 	.id="hail",
 	.action_end=hail_action_end,
 	.action_fail=hail_action_end,
+	.inited=hail_inited,
 	.flag=EFFECT_POSITIVE
 }};
 void hail(struct unit *s){
@@ -2509,6 +2510,7 @@ const struct effect_base natural_decay_effect[1]={{
 	.action_end=natural_decay_action_end,
 	.action_fail=natural_decay_action_end,
 	.switchunit_end=natural_decay_switchunit_end,
+	.inited=natural_decay_inited,
 	.flag=EFFECT_POSITIVE
 }};
 void natural_decay(struct unit *s){

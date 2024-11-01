@@ -599,10 +599,8 @@ void freezing_roaring_ondeath_kill(struct effect *e,struct unit *u){
 	}
 	if(!(m->mlevel&MLEVEL_FREEZING_ROARING)||!unit_hasnegative(u))
 		return;
-	effect_event(e);
 	unit_move(u,m);
 	u->owner->acted=1;
-	effect_event_end(e);
 }
 const struct effect_base freezing_roaring_ondeath[1]={{
 	.kill=freezing_roaring_ondeath_kill,
@@ -616,6 +614,8 @@ void freezing_roaring_init(struct unit *s){
 void freezing_roaring(struct unit *s){
 	struct unit *t;
 	long n,n1;
+	int x;
+	unsigned long hp;
 	struct move *mp;
 	n=unit_hasnegative(s);
 	if(!n||!(s->move_cur->mlevel&MLEVEL_FREEZING_ROARING)){
@@ -644,9 +644,23 @@ void freezing_roaring(struct unit *s){
 		effect_final(e);
 	}
 	t=s->osite;
-	n1=(long)t->hp;
+	hp=t->hp;
 	t->hp=0;
-	report(s->owner->field,MSG_HPMOD,t,-n1);
+	x=effect_weak_level(t->type0|t->type1,TYPE_ICE);
+	switch(!!x+(x<0)){
+		case 0:
+			x=AF_CRIT;
+			break;
+		case 1:
+			x=AF_CRIT|AF_EFFECT;
+			break;
+		case 2:
+			x=AF_CRIT|AF_WEAK;
+			break;
+		default:
+			__builtin_unreachable();
+	}
+	report(s->owner->field,MSG_DAMAGE,t,s,hp,DAMAGE_MAGICAL,x,TYPE_ICE);
 	t->state=UNIT_FREEZING_ROARINGED;
 	if(t==t->owner->front)
 		t->owner->action=ACT_ABORT;
@@ -2121,6 +2135,7 @@ void fury_swipes(struct unit *s){
 	struct unit *t=gettarget(s);
 	struct effect *e;
 	int i;
+	unsigned long r=0;
 	e=unit_findeffect(s,mana);
 	if(e&&e->level>=8){
 		effect_reinit(e,s,-8,-1);
@@ -2129,7 +2144,8 @@ void fury_swipes(struct unit *s){
 		i=2+randi()%4;
 	for(;i>0;--i)
 		if(hittest(t,s,1.0))
-			attack(t,s,0.2*s->atk,DAMAGE_PHYSICAL,0,TYPE_NORMAL);
+			r+=attack(t,s,0.2*s->atk,DAMAGE_PHYSICAL,0,TYPE_NORMAL);
+	report(s->owner->field,MSG_DAMAGE,t,s,r,DAMAGE_TOTAL,0,TYPE_NORMAL);
 }
 void razor_carrot(struct unit *s){
 	struct unit *t=gettarget(s);

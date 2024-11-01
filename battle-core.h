@@ -221,6 +221,13 @@
 		_e?_e->level:0l;\
 }\
 )
+#define effect_weak_level(d,s) (\
+{\
+		int _d=(d),_s=(s);\
+		__builtin_popcount(_d&effect_types(_s))\
+		-__builtin_popcount(_d&weak_types(_s));\
+}\
+)
 #define def_coef(d) (\
 {\
 		int _d=(d);\

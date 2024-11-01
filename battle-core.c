@@ -91,9 +91,7 @@ unsigned long attack(struct unit *dest,struct unit *src,unsigned long value,int 
 				aflag&=~(AF_EFFECT|AF_WEAK);
 			}
 		}else {
-			dest_type=dest->type0|dest->type1;
-			x=__builtin_popcount(dest_type&effect_types(type))
-			-__builtin_popcount(dest_type&weak_types(type));
+			x=effect_weak_level(dest->type0|dest->type1,type);
 			if(x<0){
 				value/=(1-x);
 				aflag|=AF_WEAK;
@@ -782,19 +780,34 @@ int effect_isnegative(const struct effect *e){
 }
 int unit_hasnegative(const struct unit *u){
 	int r=0;
+	const struct move *m;
 	for_each_effect(e,u->owner->field->effects){
 		if(e->dest==u&&effect_isnegative(e))
 			++r;
 	}
-	if(!r)
-		switch(u->state){
-			case UNIT_CONTROLLED:
-			case UNIT_SUPPRESSED:
-				return -1;
-			default:
-				break;
-		}
-	return r;
+	if(r)
+		return r;
+	switch(u->state){
+		case UNIT_NORMAL:
+			r=u->blockade&255;
+			if(!r)
+				return 0;
+			for(int i=0;i<8;++i){
+				if(!((1<<i)&r))
+					continue;
+				m=u->moves+i;
+				if(!m->id)
+					continue;
+				if(m->mlevel&MLEVEL_FREEZING_ROARING)
+					return -1;
+			}
+			return 0;
+		case UNIT_CONTROLLED:
+		case UNIT_SUPPRESSED:
+			return -1;
+		default:
+			return 0;
+	}
 }
 static int iffr(const struct unit *u,const struct move *m){
 	return m->id&&(m->mlevel&MLEVEL_FREEZING_ROARING)&&unit_hasnegative(u);

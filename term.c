@@ -88,7 +88,7 @@ void frash(const struct player *p,FILE *fp,int current){
 	size_t buflen,sr;
 	int r,r1,c;
 	int found0=0,found1=0,cf0,cf1;
-	fputs("\033c",fp);
+	fputs("\033[2J\033[H",fp);
 	fprintf(fp,"ROUND %d\n",*f->round);
 	++line;
 	ioctl(STDIN_FILENO,TIOCGWINSZ,&ws);
@@ -380,6 +380,8 @@ void tm_init(void){
 	struct termios tm;
 	if(tm_set||tcgetattr(STDIN_FILENO,&tm)<0)
 		goto fail;
+	fputs("\033[?1049h",stdout);
+	fflush(stdout);
 	memcpy(&tm0,&tm,sizeof(struct termios));
 	tm.c_lflag&=~(ICANON|ECHO);
 	tm.c_cc[VMIN]=1;
@@ -396,6 +398,8 @@ void tm_end(void){
 	if(tm_set)
 		tcsetattr(STDIN_FILENO,TCSANOW,&tm0);
 	tm_set=0;
+	fputs("\033[?1049l",stdout);
+	fflush(stdout);
 }
 static int cur=ACT_NORMALATTACK;
 //static const int dtc[3]={'R','P','M'};

@@ -5,7 +5,7 @@
 #include "nbt.h"
 struct player_data {
 	struct unit_info ui[6];
-	unsigned long xp,endless_level;
+	unsigned long xp,endless_level,endless_highest;
 	struct nbt_node *nbt;
 };
 int pdata_load(struct player_data *p);
@@ -20,4 +20,5 @@ int pbattle(const struct player_data *p,
 		void (*reporter_p)(const struct message *msg,const struct player *p),
 		void (*reporter_e)(const struct message *msg,const struct player *p)
 		);
+int pdata_giveunit(const struct player_data *pd,const char *id,int level);
 #endif

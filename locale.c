@@ -95,6 +95,24 @@ const char *e2s(const char *id){
 		return id;
 	return p;
 }
+const char *e2desc(const char *id){
+	char *buf;
+	const char *p;
+	size_t l;
+	l=strlen(id);
+	buf=alloca(l+13);
+	sprintf(buf,"effect.%s.desc",id);
+	p=locale(buf);
+	if(!p)
+		return id;
+	return p;
+}
+const char *type2id(int type){
+	unsigned int index=type?__builtin_ctz(type)+1:0;
+	if(index>=21)
+		return "unknown";
+	return types_string[index];
+}
 const char *type2str(int type){
 	unsigned int index=type?__builtin_ctz(type)+1:0;
 	if(index>=21)

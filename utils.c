@@ -109,3 +109,9 @@ fail:
 	nbt_free(r);
 	return NULL;
 }
+struct nbt_node *create_unit_nbt(const char *id,int level){
+	struct unit_info ui;
+	if(ui_create(&ui,id,level)<0)
+		return NULL;
+	return ui_asnbt(&ui);
+}

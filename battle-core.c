@@ -1,10 +1,9 @@
-#include "battle.h"
+#define _GNU_SOURCE
+#include "battle-core.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdarg.h>
 #include <string.h>
-#include <math.h>
-#define SHEAR_COEF (M_SQRT2/128)
 #define printf (use report() instead.)
 int unit_kill(struct unit *u){
 	if(!isalive(u->state)||u->hp)
@@ -26,6 +25,7 @@ int unit_kill(struct unit *u){
 	return 0;
 }
 unsigned long damage(struct unit *dest,struct unit *src,unsigned long value,int damage_type,int aflag,int type){
+	unsigned long ohp;
 	switch(damage_type){
 		case DAMAGE_REAL:
 		case DAMAGE_PHYSICAL:
@@ -40,12 +40,19 @@ unsigned long damage(struct unit *dest,struct unit *src,unsigned long value,int 
 		if(e->base->damage&&e->base->damage(e,dest,src,&value,&damage_type,&aflag,&type))
 			return 0;
 	}
-	if(dest->hp>value){
+	ohp=dest->hp;
+	if(ohp>value){
 		dest->hp-=value;
 	}else {
-		dest->hp=0;
+		dest->hp=(aflag&AF_KEEPALIVE)?1:0;
 	}
 	report(dest->owner->field,MSG_DAMAGE,dest,src,value,damage_type,aflag,type);
+	if(dest->hp!=ohp){
+		for_each_effect(e,dest->owner->field->effects){
+			if(e->base->hpmod)
+				e->base->hpmod(e,dest,(long)dest->hp-(long)ohp,HPMOD_DAMAGE);
+		}
+	}
 	if(!dest->hp)
 		unit_kill(dest);
 	for_each_effect(e,dest->owner->field->effects){
@@ -69,12 +76,12 @@ unsigned long attack(struct unit *dest,struct unit *src,unsigned long value,int 
 	}
 	if(!isalive(dest->state))
 			return 0;
+	value_backup=value;
+	aflag_backup=aflag;
 	for_each_effect(e,dest->owner->field->effects){
 		if(e->base->attack&&e->base->attack(e,dest,src,&value,&damage_type,&aflag,&type))
 			return 0;
 	}
-	value_backup=value;
-	aflag_backup=aflag;
 	if(aflag&AF_CRIT){
 		if(src){
 			if(src->crit_effect>=0.5)
@@ -102,7 +109,8 @@ unsigned long attack(struct unit *dest,struct unit *src,unsigned long value,int 
 				aflag|=AF_EFFECT;
 			}
 		}
-	}
+	}else
+		aflag&=~(AF_EFFECT|AF_WEAK);
 	if(!(aflag&AF_NODEF)&&damage_type!=DAMAGE_REAL){
 		x=dest->def;
 		if(src)
@@ -127,10 +135,14 @@ do_derate:
 			value*=1-derate;
 		break;
 	}
+	if(!(aflag&AF_NOINHIBIT)&&dest->spi)
+		value*=inhibit_coef(dest->spi);
 	if(!(aflag&AF_NOFLOAT)&&damage_type!=DAMAGE_REAL)
 		value+=(0.1*rand01()-0.05)*value;
 	if(!value)
 		value=1;
+	if((aflag&AF_IDEATH)&&value<dest->hp&&value_backup>=dest->hp)
+		value=dest->hp;
 	value=damage(dest,src,value,damage_type,aflag,type);
 	for_each_effect(e,dest->owner->field->effects){
 		if(e->base->attack_end)
@@ -211,18 +223,27 @@ void normal_attack(struct unit *src){
 	unit_move(src,&am);
 }
 unsigned long heal(struct unit *dest,unsigned long value){
-	unsigned long hp;
+	unsigned long hp,ohp;
 	if(!isalive(dest->state))
 			return 0;
 	for_each_effect(e,dest->owner->field->effects){
 		if(e->base->heal&&e->base->heal(e,dest,&value))
 			return 0;
 	}
-	hp=dest->hp+value;
+	if(dest->spi)
+		value*=inhibit_coef(dest->spi);
+	ohp=dest->hp;
+	hp=ohp+value;
 	if(hp>dest->base->max_hp)
 		hp=dest->base->max_hp;
 	dest->hp=hp;
 	report(dest->owner->field,MSG_HEAL,dest,value);
+	if(hp!=ohp){
+		for_each_effect(e,dest->owner->field->effects){
+			if(e->base->hpmod)
+				e->base->hpmod(e,dest,(long)hp-(long)ohp,HPMOD_HEAL);
+		}
+	}
 	for_each_effect(e,dest->owner->field->effects){
 		if(e->base->heal_end)
 			e->base->heal_end(e,dest,value);
@@ -235,7 +256,7 @@ void instant_death(struct unit *dest){
 unsigned long sethp(struct unit *dest,unsigned long hp){
 	unsigned long ohp;
 	if(!isalive(dest->state))
-			return 0;
+			return LONG_MIN;
 	ohp=dest->hp;
 	if(hp>dest->base->max_hp)
 		hp=dest->base->max_hp;
@@ -243,32 +264,47 @@ unsigned long sethp(struct unit *dest,unsigned long hp){
 		return hp;
 	dest->hp=hp;
 	report(dest->owner->field,MSG_HPMOD,dest,(long)hp-(long)ohp);
-	if(!hp)
+	for_each_effect(e,dest->owner->field->effects){
+		if(e->base->hpmod)
+			e->base->hpmod(e,dest,(long)hp-(long)ohp,HPMOD_SETHP);
+	}
+	if(!dest->hp)
 		unit_kill(dest);
 	return hp;
 }
 
-unsigned long addhp(struct unit *dest,long hp){
+unsigned long addhp3(struct unit *dest,long hp,int flag){
+	unsigned long ohp;
 	long rhp;
 	if(!hp)
-		return 0;
+		return LONG_MIN;
 	if(!isalive(dest->state))
-		return 0;
-	rhp=hp+(long)dest->hp;
+		return LONG_MIN;
+	ohp=dest->hp;
+	rhp=hp+(long)ohp;
 	if(hp<0&&rhp<0)
 		rhp=0;
 	if((unsigned long)rhp>dest->base->max_hp)
 		rhp=dest->base->max_hp;
 	dest->hp=rhp;
 	report(dest->owner->field,MSG_HPMOD,dest,hp);
-	if(!rhp)
+	if(rhp!=ohp){
+		for_each_effect(e,dest->owner->field->effects){
+			if(e->base->hpmod)
+				e->base->hpmod(e,dest,(long)rhp-(long)ohp,flag);
+		}
+	}
+	if(!dest->hp)
 		unit_kill(dest);
 	return rhp;
 }
+unsigned long addhp(struct unit *dest,long hp){
+	return addhp3(dest,hp,HPMOD_SETHP);
+}
 long setspi(struct unit *dest,long spi){
-	long ospi;
+	long ospi,ds;
 	if(!isalive(dest->state))
-			return 0;
+		return LONG_MIN;
 	ospi=dest->spi;
 	if(spi>dest->base->max_spi)
 		spi=dest->base->max_spi;
@@ -277,8 +313,13 @@ long setspi(struct unit *dest,long spi){
 	if(spi==ospi)
 		return spi;
 	dest->spi=spi;
-	report(dest->owner->field,MSG_SPIMOD,dest,spi-ospi);
-	addhp(dest,-(SHEAR_COEF*dest->base->max_hp+1)*labs(spi-ospi));
+	ds=spi-ospi;
+	report(dest->owner->field,MSG_SPIMOD,dest,ds);
+	addhp3(dest,-(SHEAR_COEF*dest->base->max_hp*labs(ds)+1),HPMOD_SHEAR);
+	for_each_effect(e,dest->owner->field->effects){
+		if(e->base->spimod)
+			e->base->spimod(e,dest,ds);
+	}
 	return spi;
 }
 struct unit *gettarget(struct unit *u){
@@ -338,6 +379,17 @@ static void effect_insert(struct effect *ep,struct battle_field *f){
 		return;
 	}
 }
+static int frindex(const struct unit *u){
+	const struct move *m;
+	for(int i=0;i<8;++i){
+		m=u->moves+i;
+		if(!m->id)
+			continue;
+		if(m->mlevel&MLEVEL_FREEZING_ROARING)
+			return i;
+	}
+	return -1;
+}
 struct effect *effect(const struct effect_base *base,struct unit *dest,struct unit *src,long level,int round){
 	return effectx(base,dest,src,level,round,0);
 }
@@ -354,6 +406,10 @@ struct effect *effectx(const struct effect_base *base,struct unit *dest,struct u
 	xflag^=base->flag;
 	if(!(xflag&EFFECT_NONHOOKABLE))for_each_effect(e,f->effects){
 		if(e->base->effect&&e->base->effect(e,base,dest,src,&level,&round))
+			return NULL;
+	}
+	if(dest&&frindex(dest)>=0){
+		if((!src||src->owner==dest->owner)&&effect_isnegative_base(base,dest,src,level))
 			return NULL;
 	}
 	for_each_effect(e,f->effects){
@@ -375,12 +431,19 @@ struct effect *effectx(const struct effect_base *base,struct unit *dest,struct u
 		new=0;
 	ep->src1=src;
 	if(!(xflag&EFFECT_NOCONSTRUCT)&&base->init){
-		if(base->init(ep,level,round)){
-			if(new)
-				free(ep);
-			else
-				effect_final(ep);
-			return NULL;
+		switch(base->init(ep,level,round)){
+			case 0:
+				break;
+			case 1:
+				if(new)
+					free(ep);
+				else
+					effect_final(ep);
+				return NULL;
+			default:
+				if(new)
+					free(ep);
+				return NULL;
 		}
 	}else {
 		if(xflag&EFFECT_ADDLEVEL)
@@ -420,11 +483,19 @@ int effect_reinitx(struct effect *ep,struct unit *src,long level,int round,int x
 		if(e->base->effect&&e->base->effect(e,ep->base,ep->dest,src,&level,&round))
 			return -1;
 	}
+	if(ep->dest&&frindex(ep->dest)>=0){
+		if((!src||src->owner==ep->dest->owner)&&effect_isnegative_base(ep->base,ep->dest,src,level))
+			return -1;
+	}
 	ep->src1=src;
 	if(!(xflag&EFFECT_NOCONSTRUCT)&&ep->base->init){
-		if(ep->base->init(ep,level,round)){
-			effect_final(ep);
-			return -1;
+		switch(ep->base->init(ep,level,round)){
+			case 0:
+				break;
+			case 1:
+				effect_final(ep);
+			default:
+				return -1;
 		}
 	}else {
 		if(xflag&EFFECT_ADDLEVEL)
@@ -625,23 +696,10 @@ int revive(struct unit *u,unsigned long hp){
 	return 0;
 }
 int event(const struct event *ev,struct unit *src){
-	/*printf("event %s",ev->id);
-	if(src)
-		printf(" caused by %s\n",src->base->id);
-	else
-		printf("\n");*/
 	report(src->owner->field,MSG_EVENT,ev,src);
-	if(ev->un.action)
-		ev->un.action(ev,src);
-	//printf("event %s end\n",ev->id);
+	if(ev->action)
+		ev->action(ev,src);
 	report(src->owner->field,MSG_EVENT_END,ev,src);
-	return 0;
-}
-int event_field(const struct event *ev,struct battle_field *f){
-	report(f,MSG_EVENT,ev);
-	if(ev->un.action_field)
-		ev->un.action_field(ev,f);
-	report(f,MSG_EVENT_END,ev);
 	return 0;
 }
 void unit_cooldown_decrease(struct unit *u,int round){
@@ -693,11 +751,19 @@ void update_attr_all(struct battle_field *f){
 	}
 }
 void update_state(struct unit *u){
+	struct move *m;
 	int r;
 	if(!isalive(u->state))
 		return;
 	r=UNIT_NORMAL;
 	u->blockade=0;
+	for(int i=0;i<8;++i){
+		m=u->moves+i;
+		if(!m->id||!m->available)
+			continue;
+		if(!m->available(u,m))
+			u->blockade|=1<<i;
+	}
 	for_each_effect(e,u->owner->field->effects){
 		if(e->base->update_state){
 			e->base->update_state(e,u,&r);
@@ -768,15 +834,18 @@ struct effect *unit_findeffect3(const struct unit *u,const struct effect_base *b
 	}
 	return NULL;
 }
-int effect_isnegative(const struct effect *e){
-	if(e->base->flag&(EFFECT_NEGATIVE|EFFECT_ABNORMAL|EFFECT_CONTROL))
+int effect_isnegative_base(const struct effect_base *base,const struct unit *dest,const struct unit *src,long level){
+	if(base->flag&(EFFECT_NEGATIVE|EFFECT_ABNORMAL|EFFECT_CONTROL))
 		return 1;
-	else if(e->base->flag&EFFECT_POSITIVE)
+	else if(base->flag&EFFECT_POSITIVE)
 		return 0;
-	else if(e->base->flag&EFFECT_ATTR)
-		return e->level<0;
+	else if(base->flag&EFFECT_ATTR)
+		return level<0;
 	else
-		return e->src&&e->dest&&e->src->owner==e->dest->owner->enemy;
+		return src&&dest&&src->owner==dest->owner->enemy;
+}
+int effect_isnegative(const struct effect *e){
+	return effect_isnegative_base(e->base,e->dest,e->src,e->level);
 }
 int unit_hasnegative(const struct unit *u){
 	int r=0;
@@ -815,13 +884,20 @@ static int iffr(const struct unit *u,const struct move *m){
 int unit_move(struct unit *u,struct move *m){
 	struct move *backup;
 	int fr=iffr(u,m);
+	ptrdiff_t md;
 	switch(u->state){
 		case UNIT_FAILED:
 		case UNIT_FREEZING_ROARINGED:
 			return -1;
 		case UNIT_SUPPRESSED:
-			if(!fr)
-				return -1;
+			switch(md=m-u->moves){
+				case ACT_MOVE0 ... ACT_MOVE7:
+					if(u->owner->action==md&&(m->mlevel&MLEVEL_CONCEPTUAL))
+						break;
+				default:
+					if(!fr)
+						return -1;
+			}
 		default:
 			if(!m->action)
 				return -1;
@@ -870,22 +946,23 @@ int switchunit(struct unit *to){
 }
 int canaction2(const struct player *p,int act){
 	struct move *m;
-	int fr,blockade=!!((1<<act)&p->front->blockade);
+	int cpfr,blockade=!!((1<<act)&p->front->blockade),stage;
 	switch(act){
 		case ACT_MOVE0 ... ACT_MOVE7:
 			m=p->front->moves+act;
 			if(!m->id||!m->action)
 				return 0;
-			fr=iffr(p->front,m);
+			stage=*p->field->stage;
+			cpfr=(stage!=STAGE_SELECT&&(m->mlevel&MLEVEL_CONCEPTUAL))||iffr(p->front,m);
 			switch(p->front->state){
 				case UNIT_CONTROLLED:
-					if(!(m->flag&MOVE_NOCONTROL)&&!fr)
+					if(!(m->flag&MOVE_NOCONTROL)&&!cpfr)
 						return 0;
 				case UNIT_SUPPRESSED:
-					if(!fr)
+					if(!cpfr)
 						return 0;
 				default:
-					if((m->cooldown||blockade)&&!fr)
+					if(((stage==STAGE_SELECT&&m->cooldown)||blockade)&&!cpfr)
 						return 0;
 					return 1;
 				case UNIT_FAILED:
@@ -937,12 +1014,13 @@ void player_action(struct player *p){
 		default:
 			for_each_effect(e,p->field->effects){
 				if(e->base->action&&e->base->action(e,p))
-					return;
+					goto fail;
 			}
 			break;
 	}
 
 	if(p->action==ACT_ABORT||!canaction2(p,p->action)){
+fail:
 		for_each_effect(e,p->field->effects){
 			if(e->base->action_fail)
 				e->base->action_fail(e,p);
@@ -1042,7 +1120,7 @@ struct player *getprior(struct player *p,struct player *e){
 }
 static void message_add(struct battle_field *f,const struct message *msg){
 	struct message *p;
-	size_t len;
+	size_t len,index;
 	if(f->rec_size>=f->rec_length){
 		len=f->rec_length+1024;
 		if(!f->rec){
@@ -1061,7 +1139,9 @@ static void message_add(struct battle_field *f,const struct message *msg){
 			}
 		}
 	}
-	memcpy(f->rec+f->rec_size++,msg,sizeof(struct message));
+	index=f->rec_size++;
+	p=f->rec+index;
+	memcpy(p,msg,sizeof(struct message));
 }
 void report(struct battle_field *f,int type,...){
 	void (*rr)(const struct message *,const struct player *);

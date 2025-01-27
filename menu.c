@@ -3,6 +3,7 @@
 #include "moves.h"
 #include "battle.h"
 #include "item.h"
+#include "nbt.h"
 #include <ncurses.h>
 #include <limits.h>
 #include <assert.h>
@@ -53,6 +54,24 @@ st:
 	}
 	goto st;
 }
+void msgbox(const char *msg){
+st:
+	clear();
+	move(LINES/2-1,COLS*5/12);
+	addstr(msg);
+	move(LINES/2+1,COLS/2-1);
+	attron(COLOR_PAIR(1));
+	printw("%s",ts("close"));
+	attroff(COLOR_PAIR(1));
+	refresh();
+	switch(getch()){
+		case '\n':
+		case 'q':
+			return;
+		default:
+			goto st;
+	}
+}
 void giveitem(const struct player_data *p,const char *id,long count){
 	unsigned long r=pdata_countitem(p,id),r1;
 	r1=pdata_giveitem(p,id,count);
@@ -82,6 +101,21 @@ static int move_type(const char *s){
 		return m->type;
 	}
 	return INT_MIN;
+}
+static void move_title_print(const struct move *p){
+	printw("%s",move_ts(p->id));
+	printw(" %s:%s",ts("type"),type2str(p->type));
+	if(p->prior)
+		printw(" %s:%+d",ts("prior"),p->prior);
+	if(p->mlevel){
+		printw(" %s:",ts("mlevel"));
+		if(p->mlevel&MLEVEL_FREEZING_ROARING)
+			printw("%s",ts("freezing_roaring"));
+		else if(p->mlevel&MLEVEL_CONCEPTUAL)
+			printw("%s",ts("conceptual"));
+		else if(p->mlevel&MLEVEL_REGULAR)
+			printw("%s",ts("regular"));
+	}
 }
 void writemove(struct unit_info *ui){
 	size_t i,r;
@@ -190,31 +224,31 @@ st:
 			goto st;
 		case '\n':
 			if(ri>=0){
-				for(i=0;i<8;++i){
-					if(s[7]){
-						warn="A MOVE SHOULD BE DELECTED";
-						s0=ui->spec->moves[ri];
-						for(int j=0;j<8;++j){
-							if(s[j]==s0){
-								cur=r+j;
-								break;
-							}
+				s0=ui->spec->moves[ri];
+				if(s[7]){
+					for(int j=0;j<8;++j){
+						if(!strcmp(s[j],s0)){
+							cur=r+j;
+							goto conflict;
 						}
-						goto st;
 					}
+					warn="A MOVE SHOULD BE DELECTED";
+					goto st;
+				}
+				for(i=0;i<8;++i){
 					if(s[i])
 						continue;
-					s0=ui->spec->moves[ri];
-					for(int j=0;j<8;++j){
-						if(s[j]==s0){
+					//if(i!=7)abort();
+					for(int j=0;j<i;++j){
+						if(!strcmp(s[j],s0)){
 							cur=r+j;
-							break;
+							goto conflict;
 						}
-						if(j==7){
-							s[i]=s0;
-							goto st;
-						}
+						//fprintf(stderr,"%s != %s\n",s[j],s0);
 					}
+					s[i]=s0;
+					goto st;
+conflict:
 					warn="CONFLICT MOVE";
 					goto st;
 				}
@@ -303,10 +337,14 @@ void units_menu(struct player_data *pd){
 	struct unit_base ub;
 	const char *p;
 	ssize_t r,r1,r2;
+	struct nbt_node *np;
+	if(!pd->ui->spec)
+		return;
 	//char buf[512];
 st:
 	clear();
-	assert(pd->ui[cur].spec);
+	if(!pd->ui[cur].spec)
+		return;
 	move(0,0);
 	for(int i=0;i<6&&pd->ui[i].spec;++i){
 		if(i==cur)
@@ -333,11 +371,11 @@ st:
 			ts("speed"),ub.speed,
 			ts("hit"),ub.hit,
 			ts("avoid"),ub.avoid,
-			ts("crit_effect"),ub.crit_effect,
-			ts("physical_bonus"),ub.physical_bonus,
-			ts("magical_bonus"),ub.magical_bonus,
-			ts("physical_derate"),ub.physical_derate,
-			ts("magical_derate"),ub.magical_derate
+			ts("crit_effect"),100*ub.crit_effect,
+			ts("physical_bonus"),100*ub.physical_bonus,
+			ts("magical_bonus"),100*ub.magical_bonus,
+			ts("physical_derate"),100*ub.physical_derate,
+			ts("magical_derate"),100*ub.magical_derate
 			);
 	if(ub.max_spi!=128)
 		printw("%s:%ld\n",ts("max_spi"),ub.max_spi);
@@ -379,7 +417,7 @@ st:
 	addch('\t');
 	pwc(hcur==3,"%s",ts("exit"));
 	move(LINES-1,0);
-	printw("t:top u:up i:down q:cancel");
+	printw("t:top u:up i:down s:storage q:cancel");
 	refresh();
 	switch(getch()){
 		case KEY_DOWN:
@@ -468,6 +506,27 @@ st:
 				++pd->ui[cur].level;
 			}
 			goto st;
+		case 's':
+			np=nbt_find(pd->nbt,"storage",7);
+			if(!np){
+				assert(np=nbt_lista("storage",7,NULL,0));
+				assert(nbt_add(pd->nbt,np));
+			}
+			nbt_ainsert(pd->nbt,np,np->count,ui_asnbt(pd->ui+cur));
+			if(cur>=5||!pd->ui[cur+1].spec)
+				pd->ui[cur].spec=NULL;
+			else {
+				for(int i=cur;i<5;++i){
+					if(pd->ui[i+1].spec)
+						memcpy(pd->ui+i,pd->ui+i+1,sizeof(struct unit_info));
+					else
+						pd->ui[i].spec=NULL;
+				}
+				pd->ui[5].spec=NULL;
+			}
+			while(cur>0&&!pd->ui[cur].spec)
+				--cur;
+			goto st;
 		case '\n':
 			switch(hcur){
 				case 0:
@@ -507,7 +566,7 @@ st:
 }
 #define arrsize(arr) (sizeof(arr)/sizeof(arr[0]))
 void endless_fake(struct player_data *p,int level){
-	static const char *mobs[]={"icefield_tiger_cub","flat_mouth_duck","hood_grass"};
+	static const char *mobs[]={"icefield_tiger_cub","flat_mouth_duck","hood_grass","attacking_defensive_combined_matrix_1"};
 	const char *cp=mobs[(level-1)%arrsize(mobs)];
 	const struct species *spec=get_builtin_species_by_id(cp);
 	while((spec->flag&UF_EVOLVABLE)&&level>=spec->evolve_level&&spec[1].xp_type<=spec->xp_type*16){
@@ -517,10 +576,12 @@ void endless_fake(struct player_data *p,int level){
 	assert(!pdata_fake(p,cp,level));
 }
 unsigned long endless_win(struct player_data *pd){
-	unsigned long r=271*pd->endless_level;
+	unsigned long r=183*pd->endless_level;
 	pd->xp+=r;
 	if(pd->endless_level<INT_MAX)
 		++pd->endless_level;
+	if(pd->endless_highest<pd->endless_level)
+		pd->endless_highest=pd->endless_level;
 	return r;
 }
 void endless_menu(struct player_data *pd){
@@ -529,8 +590,10 @@ void endless_menu(struct player_data *pd){
 st:
 	clear();
 	getmaxyx(stdscr,my,mx);
-	move(my/2-1,mx/3-1);
+	move(my/2-2,mx/3-1);
 	printw("%s",ts("endless_challenge"));
+	move(my/2,mx/3-1);
+	printw("%s:%lu",ts("highest_level"),pd->endless_highest);
 	move(my/2+1,mx/3-1);
 	printw("%s:%lu",ts("current_level"),pd->endless_level);
 	move(my/2+3,mx/3-1);
@@ -552,12 +615,12 @@ st:
 	if(cur==2)
 		attroff(COLOR_PAIR(1));
 	switch(getch()){
-		case KEY_DOWN:
+		/*case KEY_DOWN:
 			--pd->endless_level;
 			goto st;
 		case KEY_UP:
 			++pd->endless_level;
-			goto st;
+			goto st;*/
 		case KEY_LEFT:
 			cur=limit_ring(cur-1,0,2);
 			goto st;
@@ -582,8 +645,9 @@ st:
 					r=pbattle(&p0,&p,term_selector,rand_selector,reporter_term,NULL);
 					tm_end();
 					scr();
-					if(!r)
+					if(!r){
 						endless_win(pd);
+					}
 					break;
 				case 2:
 					memcpy(&p0,pd,sizeof(struct player_data));
@@ -593,8 +657,81 @@ st:
 						r=pbattle(&p0,&p,rand_selector,rand_selector,NULL,NULL);
 						if(!r)
 							endless_win(pd);
+						if(pd->endless_highest<=pd->endless_level&&pd->endless_level>=150)
+							break;
 					}
 					break;
+			}
+			goto st;
+		case 'q':
+			return;
+		default:
+			goto st;
+	}
+}
+void storage_menu(struct player_data *pd){
+	ssize_t cur=0,shift=0;
+	struct nbt_node *np=nbt_find(pd->nbt,"storage",7),*p,**npp;
+	int nline;
+	if(!np){
+		assert(np=nbt_lista("storage",7,NULL,0));
+		assert(nbt_add(pd->nbt,np));
+	}
+	if(!np->count)
+		return;
+	npp=nbt_listap(np);
+st:
+	if(!np->count)
+		return;
+	nline=LINES/2;
+	clear();
+	move(0,0);
+	if(cur<shift){
+		shift=cur;
+	}else if(cur>shift+(nline-1)){
+		shift=cur-(nline-1);
+	}
+	for(ssize_t i=shift;i-shift<nline&&i<np->count;++i){
+		p=npp[i];
+		assert(p=nbt_find(p,"id",2));
+		if(i==cur)
+			attron(COLOR_PAIR(1));
+		printw("[%zd]%s",i,unit_ts(nbt_strp(p)));
+		addch('\n');
+		if(i==cur)
+			attroff(COLOR_PAIR(1));
+	}
+	attron(COLOR_PAIR(1));
+	for(int i=COLS;i>0;--i){
+		addch('=');
+	}
+	attroff(COLOR_PAIR(1));
+	printw("%s:\n",ts("deployed_units"));
+	for(int i=0;i<6&&pd->ui[i].spec;++i){
+		printw("[%d]%s\n",i,unit_ts(pd->ui[i].spec->max.id));
+	}
+	move(LINES-1,0);
+	printw("enter:deploy q:cancel");
+	refresh();
+	switch(getch()){
+		case KEY_DOWN:
+			cur=limit_ring(cur+1,0,(ssize_t)(np->count-1));
+			goto st;
+		case KEY_UP:
+			cur=limit_ring(cur-1,0,(ssize_t)(np->count-1));
+			goto st;
+		case '\n':
+			if(pd->ui[5].spec){
+				msgbox(ts("full_deployed_units"));
+				goto st;
+			}
+			for(int i=0;i<6;++i){
+				if(pd->ui[i].spec)
+					continue;
+				ui_create_fromnbt(pd->ui+i,npp[cur]);
+				nbt_adelete(np,cur);
+				cur=limit(cur,0,(ssize_t)(np->count-1));
+				break;
 			}
 			goto st;
 		case 'q':
@@ -733,11 +870,11 @@ st:
 			ts("speed"),p->speed,
 			ts("hit"),p->hit,
 			ts("avoid"),p->avoid,
-			ts("crit_effect"),p->crit_effect,
-			ts("physical_bonus"),p->physical_bonus,
-			ts("magical_bonus"),p->magical_bonus,
-			ts("physical_derate"),p->physical_derate,
-			ts("magical_derate"),p->magical_derate
+			ts("crit_effect"),100*p->crit_effect,
+			ts("physical_bonus"),100*p->physical_bonus,
+			ts("magical_bonus"),100*p->magical_bonus,
+			ts("physical_derate"),100*p->physical_derate,
+			ts("magical_derate"),100*p->magical_derate
 			);
 	if(p->max_spi!=128)
 		printw("%s:%ld\n",ts("max_spi"),p->max_spi);
@@ -749,6 +886,8 @@ st:
 	addch('\n');
 	if(builtin_species[cur].flag&UF_CANSELECTTYPE)
 		printw("%s\n",ts("can_select_type"));
+	move(LINES-1,0);
+	printw("id: %s",builtin_species[cur].max.id);
 	refresh();
 	switch(getch()){
 		case KEY_DOWN:
@@ -847,8 +986,8 @@ st:
 		p=builtin_moves+i;
 		if(i==cur)
 			attron(COLOR_PAIR(1));
-		printw("%zu:%s",i,move_ts(p->id));
-		printw(" %s:%s",ts("type"),type2str(p->type));
+		printw("%zu:",i);
+		move_title_print(p);
 		addch('\n');
 		if(i==cur)
 			attroff(COLOR_PAIR(1));
@@ -859,6 +998,8 @@ st:
 	}
 	attroff(COLOR_PAIR(1));
 	printw("%s\n",move_desc(builtin_moves[cur].id));
+	move(LINES-1,0);
+	printw("id: %s",builtin_moves[cur].id);
 	refresh();
 	switch(getch()){
 		case KEY_DOWN:
@@ -869,6 +1010,52 @@ st:
 			goto st;
 		case '\n':
 			move_unit_menu(pd,builtin_moves[cur].id);
+			goto st;
+		case 'q':
+			return;
+		default:
+			goto st;
+	}
+}
+void effect_menu(struct player_data *pd){
+	ssize_t cur=0,shift=0;
+	const char *p;
+	int nline;
+st:
+	nline=LINES/2;
+	clear();
+	move(0,0);
+	if(cur<shift){
+		shift=cur;
+	}else if(cur>shift+(nline-1)){
+		shift=cur-(nline-1);
+	}
+	for(ssize_t i=shift;i-shift<nline&&i<effects_size;++i){
+		p=effects[i];
+		if(i==cur)
+			attron(COLOR_PAIR(1));
+		printw("%zu:%s",i,e2s(p));
+		addch('\n');
+		if(i==cur)
+			attroff(COLOR_PAIR(1));
+	}
+	attron(COLOR_PAIR(1));
+	for(int i=COLS;i>0;--i){
+		addch('=');
+	}
+	attroff(COLOR_PAIR(1));
+	printw("%s\n",e2desc(effects[cur]));
+	move(LINES-1,0);
+	printw("id: %s",effects[cur]);
+	refresh();
+	switch(getch()){
+		case KEY_DOWN:
+			cur=limit_ring(cur+1,0,(ssize_t)(effects_size-1));
+			goto st;
+		case KEY_UP:
+			cur=limit_ring(cur-1,0,(ssize_t)(effects_size-1));
+			goto st;
+		case '\n':
 			goto st;
 		case 'q':
 			return;
@@ -942,7 +1129,8 @@ st:
 		}
 		addch('\n');
 	}
-
+	move(LINES-1,0);
+	printw("id: %s",type2id(1<<cur));
 	refresh();
 	switch(getch()){
 		case KEY_DOWN:
@@ -1045,6 +1233,10 @@ const struct mm_option list_ops[]={
 		.submenu=type_menu,
 	},
 	{
+		.name="effect",
+		.submenu=effect_menu,
+	},
+	{
 		.name="exit",
 		.submenu=NULL,
 	},
@@ -1125,7 +1317,13 @@ st:
 }
 void tutorial_menu(struct player_data *pd){
 	int cur=0;
-	static const char *items[]={"type","level_and_evolution","battling"};
+	static const char *items[]={"type",
+		"level_and_evolution",
+		"battling",
+		"attribute",
+		"state",
+		"move_level",
+	};
 st:
 	clear();
 	move(0,0);
@@ -1167,8 +1365,12 @@ void mirror_battling(struct player_data *pd){
 }
 const struct mm_option mmop[]={
 	{
-		.name="units_on_battling",
+		.name="deployed_units",
 		.submenu=units_menu,
+	},
+	{
+		.name="storage",
+		.submenu=storage_menu,
 	},
 	{
 		.name="endless_challenge",

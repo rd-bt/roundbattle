@@ -307,15 +307,23 @@ st:
 					edit_menu(&nbt_listl(npc));
 					break;
 				case NBT_ZDA:
+					if(!npc->count)
+						break;
 					nbt_zdap(npc)[hcur]=inzd(nbt_zdap(npc)[hcur]);
 					break;
 				case NBT_ZUA:
+					if(!npc->count)
+						break;
 					nbt_zuap(npc)[hcur]=inzu(nbt_zuap(npc)[hcur]);
 					break;
 				case NBT_DBLA:
+					if(!npc->count)
+						break;
 					nbt_dblap(npc)[hcur]=indbl(nbt_dblap(npc)[hcur]);
 					break;
 				case NBT_BYTEA:
+					if(!npc->count)
+						break;
 					nbt_byteap(npc)[hcur]=inzu(nbt_byteap(npc)[hcur]);
 					break;
 				case NBT_STR:
@@ -334,6 +342,8 @@ st:
 					nbt_replace(np,npc,np1);
 					break;
 				case NBT_LISTA:
+					if(!npc->count)
+						break;
 					edit_menu(nbt_listap(npc)+hcur);
 					break;
 				default:

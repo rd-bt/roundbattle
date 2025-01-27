@@ -163,7 +163,7 @@ void frash(const struct player *p,FILE *fp,int current){
 		print_attr("%s:%.2lf%%",ts("magical_derate"),100*u->magical_derate);
 	}
 	if(p->front->spi||e->front->spi){
-		print_attr("%s:%ld/%ld %.2lf%%",ts("spi_force"),u->spi,u->base->max_spi,100.0*u->spi/u->base->max_spi);
+		print_attr("%s:%ld/%ld %.2lf%%[I:%.2lf%%]",ts("spi_force"),u->spi,u->base->max_spi,100.0*u->spi/u->base->max_spi,100*inhibit_coef(u->spi));
 	}
 	for(struct effect *e0,*e1;;){
 		cf0=0;
@@ -432,7 +432,7 @@ void reporter_term(const struct message *msg,const struct player *p){
 					strcat(buf," E");
 				if(msg->un.damage.aflag&AF_WEAK)
 					strcat(buf," W");
-				wmf(msg->un.damage.dest->owner==p?0:1,"%s%s-%lu%s" WHITE,buf1,dtco[msg->un.damage.damage_type],msg->un.damage.value,buf);
+				wmf(msg->un.damage.dest->owner==p?0:1,"%s%s-%lu%s (%s:%s)" WHITE,buf1,dtco[msg->un.damage.damage_type],msg->un.damage.value,buf,ts("type"),type2str(msg->un.damage.type));
 			}
 			goto delay;
 		case MSG_EFFECT:
@@ -476,7 +476,7 @@ void reporter_term(const struct message *msg,const struct player *p){
 		case MSG_EVENT_END:
 			break;
 		case MSG_FAIL:
-			wmf(msg->un.u->owner==p?0:1,ts("failed"));
+			wmf(msg->un.u->owner==p?0:1,"[%ld]%s %s",msg->un.u-msg->un.u->owner->units,unit_ts(msg->un.u->base->id),ts("failed"));
 			break;
 		case MSG_HEAL:
 			buf1[0]=0;
@@ -512,7 +512,7 @@ void reporter_term(const struct message *msg,const struct player *p){
 			if(msg->un.spimod.dest!=msg->un.spimod.dest->owner->front){
 				snprintf(buf1,128,"[%ld]%s ",msg->un.spimod.dest-msg->un.spimod.dest->owner->units,unit_ts(msg->un.spimod.dest->base->id));
 			}
-			wmf(msg->un.spimod.dest->owner==p?0:1,"%s%+ld spi",buf1,msg->un.spimod.value);
+			wmf(msg->un.spimod.dest->owner==p?0:1,"%s%+ld S",buf1,msg->un.spimod.value);
 			goto delay;
 		case MSG_SWITCH:
 			wmf(msg->un.u2.dest->owner==p?0:1,"[%ld]%s",msg->un.u2.dest-msg->un.u2.dest->owner->units,unit_ts(msg->un.u2.dest->base->id));

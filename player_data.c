@@ -1,6 +1,7 @@
 #include "player_data.h"
 #include "battle.h"
 #include "nbt.h"
+#include "utils.h"
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -63,7 +64,7 @@ fail:
 }
 int pdata_load(struct player_data *p){
 	struct nbt_node *np=data_read(),*np1,*np2;
-	struct nbt_node *npp[3];
+	struct nbt_node *npp[6];
 	struct nbt_node **npp1;
 	struct unit_info ui;
 	memset(p,0,sizeof(struct player_data));
@@ -85,23 +86,50 @@ int pdata_load(struct player_data *p){
 		assert(np1);
 		npp[2]=np1;
 
-		np1=nbt_lista("units",5,npp,3);
+		assert(!ui_create(&ui,"defensive_matrix_1",1));
+		np1=ui_asnbt(&ui);
+		assert(np1);
+		npp[3]=np1;
+
+		assert(!ui_create(&ui,"attacking_matrix_1",1));
+		np1=ui_asnbt(&ui);
+		assert(np1);
+		npp[4]=np1;
+
+		assert(!ui_create(&ui,"self_explode_matrix",1));
+		np1=ui_asnbt(&ui);
+		assert(np1);
+		npp[5]=np1;
+
+		np1=nbt_lista("units",5,npp,6);
 		assert(np1);
 		assert(nbt_add(np,np1));
 
 		np1=nbt_zd("level",5,1);
 		assert(np1);
+		np2=nbt_zd("highest",7,1);
+		assert(np2);
+		assert(nbt_add(np1,np2));
 		np2=nbt_list("endless",7,np1);
 		assert(np2);
 		assert(nbt_add(np,np2));
+
+		p->nbt=np;
+		pdata_giveunit(p,"attacking_defensive_combined_matrix_1",1);
+		pdata_giveunit(p,"cactus_ball",1);
+		pdata_giveunit(p,"three_phase_driven_matrix_1_noscm",1);
+	}else {
+		p->nbt=np;
 	}
-	p->nbt=np;
 	np=nbt_find(p->nbt,"xp",2);
 	assert(np);
 	p->xp=nbt_zul(np);
 	np=nbt_path(p->nbt,"endless/level",13);
 	assert(np);
 	p->endless_level=nbt_zdl(np);
+	np=nbt_path(p->nbt,"endless/highest",15);
+	assert(np);
+	p->endless_highest=nbt_zdl(np);
 	np1=nbt_find(p->nbt,"units",5);
 	assert(np1);
 	assert(np1->type==NBT_LISTA);
@@ -120,7 +148,10 @@ int pdata_save(const struct player_data *p){
 	np=nbt_path(p->nbt,"endless/level",13);
 	assert(np);
 	nbt_zdl(np)=p->endless_level;
-	for(n=0;n<8;){
+	np=nbt_path(p->nbt,"endless/highest",15);
+	assert(np);
+	nbt_zdl(np)=p->endless_highest;
+	for(n=0;n<6;){
 		if(!p->ui[n].spec)
 			break;
 		++n;
@@ -155,6 +186,19 @@ unsigned long pdata_countitem(const struct player_data *p,const char *id){
 	assert(np);
 	assert(np->type==NBT_ZU);
 	return nbt_zul(np);
+}
+int pdata_giveunit(const struct player_data *pd,const char *id,int level){
+	struct nbt_node *np,*np1;
+	np1=create_unit_nbt(id,level);
+	if(!np1)
+		return -1;
+	np=nbt_find(pd->nbt,"storage",7);
+	if(!np){
+		assert(np=nbt_lista("storage",7,NULL,0));
+		assert(nbt_add(pd->nbt,np));
+	}
+	nbt_ainsert(pd->nbt,np,np->count,np1);
+	return 0;
 }
 unsigned long pdata_giveitem(const struct player_data *p,const char *id,long count){
 	struct nbt_node *np,*np1,*np0,*np2;

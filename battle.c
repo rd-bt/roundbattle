@@ -6,7 +6,7 @@
 int rand_selector(const struct player *p){
 	int n=0,c=0;
 	//if(canaction2(p,0))
-	//return 0;
+	//return ACT_NORMALATTACK;
 	//if(*p->field->round==1)return 7;
 	if(!isalive(p->front->state)){
 		/*for(int i=ACT_UNIT0;i<=ACT_UNIT5;++i)
@@ -230,6 +230,7 @@ int battle(struct player *p,struct player *e){
 		latter=prior->enemy;
 		player_update_state(prior);
 		player_update_state(latter);
+		stage=STAGE_SELECT;
 		prior->action=prior->selector(prior);
 		if((unsigned int)prior->action>=ACT_GIVEUP){
 			ret=prior==p?1:0;
@@ -250,9 +251,9 @@ int battle(struct player *p,struct player *e){
 		deadcheck;
 		player_update_state(prior);
 		player_update_state(latter);
+		stage=STAGE_LATTER;
 		if(!canaction(latter))
 			latter->action=ACT_ABORT;
-		stage=STAGE_LATTER;
 		player_action(latter);
 		deadcheck;
 		stage=STAGE_ROUNDEND;
@@ -274,8 +275,6 @@ out:
 	}
 	wipetrash(&field);
 	if(field.rec){
-//		for(size_t i=0;i<field.rec_size;++i)
-//			fprintf(stderr,"record:%d\n",field.rec[i].type);
 		free(field.rec);
 	}
 	if(field.ht){

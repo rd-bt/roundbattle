@@ -1,6 +1,9 @@
 #ifndef _BATTLE_CORE_H_
 #define _BATTLE_CORE_H_
 #include <stddef.h>
+#include <math.h>
+
+#define SHEAR_COEF (M_SQRT2/128)
 
 #define UNIT_NORMAL 0
 #define UNIT_CONTROLLED 1
@@ -32,6 +35,8 @@
 #define AF_NORMAL 16
 #define AF_NOFLOAT 32
 #define AF_IDEATH 64
+#define AF_NOINHIBIT 128
+#define AF_KEEPALIVE 256
 
 
 #define TYPE_VOID (0)
@@ -129,6 +134,10 @@
 #define ACT_UNIT5 15
 #define ACT_GIVEUP 16
 
+#define ACTS_MOVE 0x0ff
+#define ACTS_MOVE_A 0x1ff
+#define ACTS_SWITCHUNIT 0x0fc00
+
 #define ATTR_MAX (+8)
 #define ATTR_MIN (-8)
 
@@ -145,14 +154,22 @@
 #define EFFECT_NOCONSTRUCT 1024
 #define EFFECT_ADDLEVEL 2048
 #define EFFECT_ADDROUND 4096
+
 #define EFFECT_PASSIVE (EFFECT_POSITIVE|EFFECT_UNPURIFIABLE|EFFECT_KEEP|EFFECT_NONHOOKABLE)
 
 #define STAGE_INIT 0
 #define STAGE_ROUNDSTART 1
-#define STAGE_PRIOR 2
-#define STAGE_LATTER 3
-#define STAGE_ROUNDEND 4
-#define STAGE_BATTLE_END 5
+#define STAGE_SELECT 2
+#define STAGE_PRIOR 3
+#define STAGE_LATTER 4
+#define STAGE_ROUNDEND 5
+#define STAGE_BATTLE_END 6
+
+#define HPMOD_DAMAGE 1
+#define HPMOD_HEAL 2
+#define HPMOD_SETHP 4
+#define HPMOD_SHEAR 8
+
 #define limit(x,inf,sup) (\
 {\
 		__auto_type _inf=(inf);\
@@ -236,6 +253,30 @@
 			1.0-_d\
 		:\
 			512.0/_x;\
+}\
+)
+#define inhibit_coef(s) (\
+{\
+		double _s=SHEAR_COEF*(s);\
+		1.0/(2.0-1.0/(1+_s*_s));\
+}\
+)
+#define abs_add(d,v) (\
+{\
+		__auto_type _d=(d);\
+		__typeof(_d) _v=(v);\
+		if(_d>=0){\
+			if(_v>=0||_d>-_v)\
+				_d+=_v;\
+			else\
+				_d=0;\
+		}else {\
+			if(_v>=0||_d<_v)\
+				_d-=_v;\
+			else\
+				_d=0;\
+		}\
+		_d;\
 }\
 )
 #define effect_types(t) (\
@@ -373,7 +414,9 @@
 }\
 )
 #define for_each_effect(_var,_ehead) for(struct effect *_var=(_ehead),*_next=_var?_var->next:NULL;_next=_var?_var->next:NULL,_var;_var=_var->intrash?_next:_var->next)
-#define for_each_unit(_var,_player) for(struct unit *_var=(_player)->units,*_p0=_var+6;_var<_p0;++_var)if(_var->base)
+
+#define for_each_unit(_var,_player) for(struct unit *_var=(_player)->units,*_p0=_var+6;_var<_p0;++_var)if(!_var->base) continue;else
+
 #define osite owner->enemy->front
 enum {
 	MSG_ACTION=0,
@@ -407,6 +450,7 @@ struct move {
 	void (*action)(struct unit *);
 	void (*init)(struct unit *);
 	int (*getprior)(const struct unit *);
+	int (*available)(struct unit *u,struct move *m);
 	int type,mlevel,prior,cooldown,flag,unused;
 };
 struct unit_base {
@@ -443,6 +487,7 @@ struct effect_base {
 	void (*heal_end)(struct effect *e,struct unit *dest,unsigned long value);
 	int (*hittest)(struct effect *e,struct unit *dest,struct unit *src,double *hit_rate);
 	void (*hittest_end)(struct effect *e,struct unit *dest,struct unit *src,int hit);
+	void (*hpmod)(struct effect *e,struct unit *dest,long hp,int flag);
 	void (*kill)(struct effect *e,struct unit *u);
 	void (*kill_end)(struct effect *e,struct unit *u);
 	int (*move)(struct effect *e,struct unit *u,struct move *m);
@@ -453,6 +498,7 @@ struct effect_base {
 	void (*roundstart)(struct effect *e);
 	void (*setcooldown)(struct unit *u,struct move *m,int *round);
 	void (*setcooldown_end)(struct unit *u,struct move *m,int round);
+	void (*spimod)(struct effect *e,struct unit *dest,long spi);
 	int (*switchunit)(struct effect *e,struct unit *t);
 	void (*switchunit_end)(struct effect *e,struct unit *t);
 	void (*update_attr)(struct effect *e,struct unit *u);
@@ -473,10 +519,7 @@ struct effect {
 
 struct event {
 	const char *id;
-	union {
-		void (*action)(const struct event *ev,struct unit *src);
-		void (*action_field)(const struct event *ev,struct battle_field *f);
-	} un;
+	void (*action)(const struct event *ev,struct unit *src);
 };
 struct unit {
 	const struct unit_base *base;
@@ -502,13 +545,13 @@ struct player {
 	struct battle_field *field;
 	int action;
 	unsigned int acted:1,:0;
+	char data[64];
 };
 struct history {
 	struct player p,e;
 };
 struct message {
 	int type,round;
-	unsigned long index;
 	struct battle_field *field;
 	union {
 		struct {
@@ -583,6 +626,8 @@ void instant_death(struct unit *dest);
 
 unsigned long sethp(struct unit *dest,unsigned long hp);
 
+unsigned long addhp3(struct unit *dest,long hp,int flag);
+
 unsigned long addhp(struct unit *dest,long hp);
 
 long setspi(struct unit *dest,long spi);
@@ -646,6 +691,8 @@ int setcooldown(struct unit *u,struct move *m,int round);
 struct effect *unit_findeffect(const struct unit *u,const struct effect_base *base);
 
 struct effect *unit_findeffect3(const struct unit *u,const struct effect_base *base,int flag);
+
+int effect_isnegative_base(const struct effect_base *base,const struct unit *dest,const struct unit *src,long level);
 
 int effect_isnegative(const struct effect *e);
 

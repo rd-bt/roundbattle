@@ -73,6 +73,7 @@ EXPR_MD,
 EXPR_ME,
 EXPR_MEP,
 EXPR_VMD,
+EXPR_DO1,
 EXPR_EP,
 EXPR_EVAL,
 EXPR_HOT,
@@ -114,6 +115,7 @@ EXPR_END
 #define EXPR_ECTA 16
 #define EXPR_ESAF 17
 #define EXPR_EVD 18
+#define EXPR_EPM 19
 
 #define EXPR_CONSTANT 0
 #define EXPR_VARIABLE 1
@@ -136,9 +138,16 @@ EXPR_END
 #define EXPR_IF_EXTEND_MASK (\
 		EXPR_IF_INSTANT_FREE\
 		)
+#define EXPR_IF_NOBUILTIN 4
+#define EXPR_IF_NOKEYWORD 8
+#define EXPR_IF_PROTECT 16
+#define EXPR_IF_INJECTION 32
+#define EXPR_IF_INJECTION_S 64
 //expr keyword flag
 #define EXPR_KF_SUBEXPR 1
 #define EXPR_KF_SEPCOMMA 2
+#define EXPR_KF_NOPROTECT 4
+
 #define EXPR_EDBASE(d) (((union expr_double *)(d))->rd.base)
 #define EXPR_EDEXP(d) (((union expr_double *)(d))->rd.exp)
 #define EXPR_EDSIGN(d) (((union expr_double *)(d))->rd.sign)
@@ -299,6 +308,7 @@ double expr_and2(double x,double y);
 double expr_or2(double x,double y);
 double expr_xor2(double x,double y);
 double expr_not(double x);
+double expr_exp_old(double x);
 void expr_contract(void *buf,size_t size);
 __attribute__((noreturn)) void expr_explode(void);
 double expr_isfinite(double x);
@@ -338,7 +348,6 @@ struct expr *new_expr(const char *e,const char *asym,struct expr_symset *esp,int
 double expr_calc5(const char *e,const char *asym,double input,struct expr_symset *esp,int flag);
 double expr_calc4(const char *e,const char *asym,double input,struct expr_symset *esp);
 double expr_calc3(const char *e,const char *asym,double input);
-double expr_calc2(const char *e,struct expr_symset *esp);
 double expr_calc(const char *e);
 double expr_eval(const struct expr *restrict ep,double input);
 #endif

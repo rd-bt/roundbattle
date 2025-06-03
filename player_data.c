@@ -118,6 +118,7 @@ int pdata_load(struct player_data *p){
 		pdata_giveunit(p,"attacking_defensive_combined_matrix_1",1);
 		pdata_giveunit(p,"cactus_ball",1);
 		pdata_giveunit(p,"three_phase_driven_matrix_1_noscm",1);
+		pdata_giveunit(p,"little_snow_bear",1);
 	}else {
 		p->nbt=np;
 	}
@@ -245,8 +246,8 @@ int pbattle(const struct player_data *p,
 		int (*selector_p)(const struct player *),
 		int (*selector_e)(const struct player *),
 		void (*reporter_p)(const struct message *msg,const struct player *p),
-		void (*reporter_e)(const struct message *msg,const struct player *p)
-		){
+		void (*reporter_e)(const struct message *msg,const struct player *p),
+		void (*init)(struct battle_field *)){
 	struct unit_base ubp[6],ube[6];
 	struct player p0,e0;
 	memset(&p0,0,sizeof(struct player));
@@ -269,5 +270,5 @@ int pbattle(const struct player_data *p,
 	e0.selector=selector_e;
 	p0.reporter=reporter_p;
 	e0.reporter=reporter_e;
-	return battle(&p0,&e0);
+	return battle(&p0,&e0,NULL,NULL);
 };

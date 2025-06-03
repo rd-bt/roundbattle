@@ -169,6 +169,31 @@ const char *unit_desc(const char *id){
 		return id;
 	return p;
 }
+const char *event_ts(const char *id){
+	char *buf;
+	const char *p;
+	size_t l;
+	l=strlen(id);
+	buf=alloca(l+12);
+	sprintf(buf,"event.%s.name",id);
+	p=locale(buf);
+	if(!p)
+		return id;
+	return p;
+}
+
+const char *event_desc(const char *id){
+	char *buf;
+	const char *p;
+	size_t l;
+	l=strlen(id);
+	buf=alloca(l+12);
+	sprintf(buf,"event.%s.desc",id);
+	p=locale(buf);
+	if(!p)
+		return id;
+	return p;
+}
 const char *item_ts(const char *id){
 	char *buf;
 	const char *p;

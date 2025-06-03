@@ -18,5 +18,6 @@ int main(){
 	assert(!pdata_load(&p1));
 	main_menu(&p1);
 	pdata_save(&p1);
+	printf("\033c");
 	return 0;
 }

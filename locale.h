@@ -12,6 +12,8 @@ const char *move_ts(const char *id);
 const char *move_desc(const char *id);
 const char *unit_ts(const char *id);
 const char *unit_desc(const char *id);
+const char *event_ts(const char *id);
+const char *event_desc(const char *id);
 const char *item_ts(const char *id);
 const char *item_desc(const char *id);
 #endif

@@ -18,7 +18,7 @@ int pbattle(const struct player_data *p,
 		int (*selector_p)(const struct player *),
 		int (*selector_e)(const struct player *),
 		void (*reporter_p)(const struct message *msg,const struct player *p),
-		void (*reporter_e)(const struct message *msg,const struct player *p)
-		);
+		void (*reporter_e)(const struct message *msg,const struct player *p),
+		void (*init)(struct battle_field *));
 int pdata_giveunit(const struct player_data *pd,const char *id,int level);
 #endif

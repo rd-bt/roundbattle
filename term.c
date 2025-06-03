@@ -99,7 +99,7 @@ void frash(const struct player *p,FILE *fp,int current){
 	fputs("\n|",fp);
 	++line;
 	u=p->front;
-	n=(u->hp<u->base->max_hp/2?ceil:floor)((s-2)*(double)u->hp/u->base->max_hp);
+	n=(u->hp<u->max_hp/2?ceil:floor)((s-2)*(double)u->hp/u->max_hp);
 	fputs(RED_BG,fp);
 	putn('=',n);
 	fputs(BLACK_BG,fp);
@@ -108,7 +108,7 @@ void frash(const struct player *p,FILE *fp,int current){
 	putn(' ',ws.ws_col-2*s);
 	fputc('|',fp);
 	u=e->front;
-	n=(u->hp<u->base->max_hp/2?ceil:floor)((s-2)*(double)u->hp/u->base->max_hp);
+	n=(u->hp<u->max_hp/2?ceil:floor)((s-2)*(double)u->hp/u->max_hp);
 	fputs(RED_BG,fp);
 	putn('=',n);
 	fputs(BLACK_BG,fp);
@@ -144,7 +144,7 @@ void frash(const struct player *p,FILE *fp,int current){
 	fputc('\n',fp);\
 	++line
 	print_attr("%s%s%s [%ld]%s",type2str(u->type0),u->type1?"/":"",u->type1?type2str(u->type1):"",u-u->owner->units,unit_ts(u->base->id));
-	print_attr("%lu/%lu %.2lf%%",u->hp,u->base->max_hp,100.0*u->hp/u->base->max_hp);
+	print_attr("%lu/%lu %.2lf%%",u->hp,u->max_hp,100.0*u->hp/u->max_hp);
 	print_attr("%s:%d %s:%lu %s:%ld",ts("level"),u->level,ts("atk"),u->atk,ts("def"),u->def);
 	print_attr("%s:%lu %s:%lu %s:%lu",ts("speed"),u->speed,ts("hit"),u->hit,ts("avoid"),u->avoid);
 	if(p->front->crit_effect!=2.0||e->front->crit_effect!=2.0){
@@ -163,7 +163,7 @@ void frash(const struct player *p,FILE *fp,int current){
 		print_attr("%s:%.2lf%%",ts("magical_derate"),100*u->magical_derate);
 	}
 	if(p->front->spi||e->front->spi){
-		print_attr("%s:%ld/%ld %.2lf%%[I:%.2lf%%]",ts("spi_force"),u->spi,u->base->max_spi,100.0*u->spi/u->base->max_spi,100*inhibit_coef(u->spi));
+		print_attr("%s:%ld/%ld %.2lf%%[I:%.2lf%%]",ts("spi_force"),u->spi,u->max_spi,100.0*u->spi/u->max_spi,100*inhibit_coef(u->spi));
 	}
 	for(struct effect *e0,*e1;;){
 		cf0=0;
@@ -369,8 +369,8 @@ no_unit:
 	}
 	fflush(fp);
 	if(*f->stage==STAGE_BATTLE_END){
-		usleep(800000);
-		//read(STDIN_FILENO,buf,buflen);
+		//usleep(800000);
+		read(STDIN_FILENO,buf,buflen);
 		azero(rec);
 	}
 }
@@ -404,6 +404,25 @@ void tm_end(void){
 static int cur=ACT_NORMALATTACK;
 //static const int dtc[3]={'R','P','M'};
 static const char *dtco[3]={YELLOW,RED,CYAN};
+const char *srcid(const struct message *msg){
+	const char *p;
+	msg=message_findsource(msg);
+	if(!msg)
+		return ts("unknown");
+	p=message_id(msg);
+	if(!p)
+		return ts("unknown");
+	switch(msg->type){
+		case MSG_EFFECT_EVENT:
+			return e2s(p);
+		case MSG_EVENT:
+			return event_ts(p);
+		case MSG_MOVE:
+			return move_ts(p);
+		default:
+			return ts("unknown");
+	}
+}
 void reporter_term(const struct message *msg,const struct player *p){
 	char buf[128];
 	char buf1[128];
@@ -432,7 +451,7 @@ void reporter_term(const struct message *msg,const struct player *p){
 					strcat(buf," E");
 				if(msg->un.damage.aflag&AF_WEAK)
 					strcat(buf," W");
-				wmf(msg->un.damage.dest->owner==p?0:1,"%s%s-%lu%s (%s:%s)" WHITE,buf1,dtco[msg->un.damage.damage_type],msg->un.damage.value,buf,ts("type"),type2str(msg->un.damage.type));
+				wmf(msg->un.damage.dest->owner==p?0:1,"%s%s-%lu%s (%s:%s,%s:%s)" WHITE,buf1,dtco[msg->un.damage.damage_type],msg->un.damage.value,buf,ts("type"),type2str(msg->un.damage.type),ts("source"),srcid(msg));
 			}
 			goto delay;
 		case MSG_EFFECT:
@@ -450,7 +469,7 @@ void reporter_term(const struct message *msg,const struct player *p){
 				}
 				if(msg->un.e_init.level)
 					snprintf(buf+r,127-r," %+ld",msg->un.e_init.level);
-				wmf(msg->un.e->dest->owner==p?0:1,"%s" YELLOW "%s%s" WHITE,buf1,e2s(msg->un.e->base->id),buf);
+				wmf(msg->un.e->dest->owner==p?0:1,"%s" YELLOW "%s%s (%s:%s)" WHITE,buf1,e2s(msg->un.e->base->id),buf,ts("source"),srcid(msg));
 				goto delay;
 			}
 			break;
@@ -483,7 +502,7 @@ void reporter_term(const struct message *msg,const struct player *p){
 			if(msg->un.heal.dest!=msg->un.heal.dest->owner->front){
 				snprintf(buf1,128,"[%ld]%s ",msg->un.heal.dest-msg->un.heal.dest->owner->units,unit_ts(msg->un.heal.dest->base->id));
 			}
-			wmf(msg->un.heal.dest->owner==p?0:1,"%s" GREEN "+%lu" WHITE,buf1,msg->un.heal.value);
+			wmf(msg->un.heal.dest->owner==p?0:1,"%s" GREEN "%+ld (%s:%s)" WHITE,buf1,msg->un.heal.value,ts("source"),srcid(msg));
 			goto delay;
 		case MSG_HPMOD:
 			buf1[0]=0;
@@ -502,6 +521,8 @@ void reporter_term(const struct message *msg,const struct player *p){
 			}
 			wmf(msg->un.move.u->owner==p?0:1,"%s" CYAN "%s" WHITE,buf1,move_ts(msg->un.move.m->id));
 			goto delay;
+		case MSG_MOVE_END:
+			break;
 		case MSG_ROUND:
 			break;
 		case MSG_ROUNDEND:
@@ -528,7 +549,7 @@ delay:
 }
 void print_unit(const struct unit *u){
 	int neg;
-	fprintf(stdout,"(%s%s%s) %s[%ld] %lu/%lu %.2lf%% %s\n",type2str(u->type0),u->type1?"/":"",u->type1?type2str(u->type1):"",unit_ts(u->base->id),u-u->owner->units,u->hp,u->base->max_hp,100.0*u->hp/u->base->max_hp,sstr[u->state]);
+	fprintf(stdout,"(%s%s%s) %s[%ld] %lu/%lu %.2lf%% %s\n",type2str(u->type0),u->type1?"/":"",u->type1?type2str(u->type1):"",unit_ts(u->base->id),u-u->owner->units,u->hp,u->max_hp,100.0*u->hp/u->max_hp,sstr[u->state]);
 	fprintf(stdout,"%s:%d %s:%lu %s:%ld\n",ts("level"),u->level,ts("atk"),u->atk,ts("def"),u->def);
 	fprintf(stdout,"%s:%lu %s:%lu %s:%lu\n",ts("speed"),u->speed,ts("hit"),u->hit,ts("avoid"),u->avoid);
 	if(u->crit_effect!=2.0){
@@ -547,7 +568,7 @@ void print_unit(const struct unit *u){
 		fprintf(stdout,"%s:%.2lf%%\n",ts("magical_derate"),100*u->magical_derate);
 	}
 	if(u->spi){
-		fprintf(stdout,"%s:%ld/%ld %.2lf%%\n",ts("spi_force"),u->spi,u->base->max_spi,100.0*u->spi/u->base->max_spi);
+		fprintf(stdout,"%s:%ld/%ld %.2lf%%\n",ts("spi_force"),u->spi,u->max_spi,100.0*u->spi/u->max_spi);
 	}
 	for_each_effect(ep,u->owner->field->effects){
 		if(ep->dest!=u||!ep->base->id)

@@ -4,6 +4,7 @@
 #include "battle.h"
 #include "item.h"
 #include "nbt.h"
+#include "utils.h"
 #include <ncurses.h>
 #include <limits.h>
 #include <assert.h>
@@ -564,9 +565,9 @@ st:
 			goto st;
 	}
 }
+static const char *mobs[]={"icefield_tiger_cub","flat_mouth_duck","hood_grass","attacking_defensive_combined_matrix_1","cactus_ball"};
 #define arrsize(arr) (sizeof(arr)/sizeof(arr[0]))
 void endless_fake(struct player_data *p,int level){
-	static const char *mobs[]={"icefield_tiger_cub","flat_mouth_duck","hood_grass","attacking_defensive_combined_matrix_1"};
 	const char *cp=mobs[(level-1)%arrsize(mobs)];
 	const struct species *spec=get_builtin_species_by_id(cp);
 	while((spec->flag&UF_EVOLVABLE)&&level>=spec->evolve_level&&spec[1].xp_type<=spec->xp_type*16){
@@ -642,7 +643,7 @@ st:
 					memset(p0.ui+1,0,5*sizeof(struct unit_info));
 					endwin();
 					tm_init();
-					r=pbattle(&p0,&p,term_selector,rand_selector,reporter_term,NULL);
+					r=pbattle(&p0,&p,term_selector,rand_selector,reporter_term,NULL,NULL);
 					tm_end();
 					scr();
 					if(!r){
@@ -654,7 +655,7 @@ st:
 					memset(p0.ui+1,0,5*sizeof(struct unit_info));
 					for(int i=0;i<1024;++i){
 						endless_fake(&p,pd->endless_level);
-						r=pbattle(&p0,&p,rand_selector,rand_selector,NULL,NULL);
+						r=pbattle(&p0,&p,rand_selector,rand_selector,NULL,NULL,NULL);
 						if(!r)
 							endless_win(pd);
 						if(pd->endless_highest<=pd->endless_level&&pd->endless_level>=150)
@@ -1357,12 +1358,13 @@ void mirror_battling(struct player_data *pd){
 	int r;
 	endwin();
 	tm_init();
-	r=pbattle(pd,pd,term_selector,rand_selector,reporter_term,NULL);
+	r=pbattle(pd,pd,term_selector,rand_selector,reporter_term,NULL,NULL);
 	tm_end();
 	scr();
 	if(!r)
 		giveitem(pd,"endless_cream",1);
 }
+#include "fun.c"
 const struct mm_option mmop[]={
 	{
 		.name="deployed_units",
@@ -1379,6 +1381,10 @@ const struct mm_option mmop[]={
 	{
 		.name="mirror_battling",
 		.submenu=mirror_battling,
+	},
+	{
+		.name="fun_mode",
+		.submenu=fun_menu,
 	},
 	{
 		.name="item",

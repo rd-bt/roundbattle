@@ -48,33 +48,12 @@ int rand_selector(const struct player *p){
 	__builtin_unreachable();
 }
 #define printf (use report() instead.)
-void unit_fillattr(struct unit *u){
-	u->hp=u->base->max_hp;
-	u->atk=u->base->atk;
-	u->def=u->base->def;
-	u->speed=u->base->speed;
-	u->hit=u->base->hit;
-	u->avoid=u->base->avoid;
-	u->spi=0;
-	u->crit_effect=u->base->crit_effect;
-	u->physical_bonus=u->base->physical_bonus;
-	u->magical_bonus=u->base->magical_bonus;
-	u->physical_derate=u->base->physical_derate;
-	u->magical_derate=u->base->magical_derate;
-	u->type0=u->base->type0;
-	u->type1=u->base->type1;
-	u->state=UNIT_NORMAL;
-	u->level=u->base->level;
-	u->blockade=0;
-	memcpy(u->moves,u->base->moves,8*sizeof(struct move));
-	u->move_cur=NULL;
-}
 void player_fillattr(struct player *p){
 	for(int i=0;i<6;++i){
 		if(!p->units[i].base)
 			break;
-		unit_fillattr(p->units+i);
 		p->units[i].owner=p;
+		unit_fillattr(p->units+i);
 	}
 }
 
@@ -172,15 +151,17 @@ void player_moveinit(struct player *p){
 		}\
 	}\
 }while(0)
-int battle(struct player *p,struct player *e){
+int battle(struct player *p,struct player *e,struct battle_field *bf,void (*init)(struct battle_field *)){
 	struct player *prior,*latter;
 	struct battle_field field;
-	int round=0,ret,stage=STAGE_INIT;
+	int round,ret,stage;
 	if(p==e)
 		return -1;
 	if(!p->units->base||!e->units->base){
 		return -2;
 	}
+	round=0;
+	stage=STAGE_INIT;
 	e->enemy=p;
 	p->enemy=e;
 	field.p=p;
@@ -197,11 +178,13 @@ int battle(struct player *p,struct player *e){
 	field.ht_length=0;
 	p->field=&field;
 	e->field=&field;
-	player_fillattr(p);
-	player_fillattr(e);
 	p->front=p->units;
 	e->front=e->units;
+	player_fillattr(p);
+	player_fillattr(e);
 	prior=getprior(p,e);
+	if(init)
+		init(&field);
 	player_moveinit(prior);
 	player_moveinit(prior->enemy);
 	for(;;++round){
@@ -273,12 +256,10 @@ out:
 	for_each_effect(ep,field.effects){
 		effect_final(ep);
 	}
-	wipetrash(&field);
-	if(field.rec){
-		free(field.rec);
-	}
-	if(field.ht){
-		free(field.ht);
-	}
+	if(bf){
+		field.end_round=round;
+		memcpy(bf,&field,sizeof(struct battle_field));
+	}else
+		field_free(&field);
 	return ret;
 }

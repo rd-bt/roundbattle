@@ -923,10 +923,10 @@ const struct species builtin_species[]={
 	{
 		.max={
 			.id="blazing_fireball",
-			.max_hp=2932,
-			.atk=283,
-			.def=266,
-			.speed=257,
+			.max_hp=2332,
+			.atk=322,
+			.def=301,
+			.speed=287,
 			.hit=100,
 			.avoid=101,
 			.max_spi=128,
@@ -950,6 +950,7 @@ const struct species builtin_species[]={
 			[86]="fire_sea",
 			[94]="piercing_missile",
 			[108]="scorching_roaring",
+			[117]="heat_wave",
 		},
 	},
 	{
@@ -980,6 +981,7 @@ const struct species builtin_species[]={
 			[86]="fire_sea",
 			[94]="piercing_missile",
 			[108]="scorching_roaring",
+			[117]="heat_wave",
 			[122]="white_phosphorus_bomb",
 			[134]="celestial_phenomena",
 		},

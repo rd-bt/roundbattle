@@ -119,6 +119,7 @@ int pdata_load(struct player_data *p){
 		pdata_giveunit(p,"cactus_ball",1);
 		pdata_giveunit(p,"three_phase_driven_matrix_1_noscm",1);
 		pdata_giveunit(p,"little_snow_bear",1);
+		pdata_giveunit(p,"little_fireball",1);
 	}else {
 		p->nbt=np;
 	}

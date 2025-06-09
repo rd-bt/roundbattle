@@ -3469,7 +3469,7 @@ void white_phosphorus_bomb(struct unit *s){
 	struct unit *t;
 	t=gettarget(s);
 	if(hittest(t,s,1.8))
-		attack(t,s,0.75*s->atk,DAMAGE_PHYSICAL,0,TYPE_FIRE);
+		attack(t,s,1.75*s->atk,DAMAGE_PHYSICAL,0,TYPE_FIRE);
 	effect(moonless_night,NULL,s,0,5);
 	setcooldown(s,s->move_cur,9);
 }

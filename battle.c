@@ -1,3 +1,8 @@
+/*******************************************************************************
+ *License GPLv3+: GNU GPL version 3 or later <http://gnu.org/licenses/gpl.html>*
+ *This is free software: you are free to change and redistribute it.           *
+ *******************************************************************************/
+#define _GNU_SOURCE
 #include "battle.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -7,6 +12,7 @@ int rand_selector(const struct player *p){
 	int n=0,c=0;
 	//if(canaction2(p,0))
 	//return ACT_NORMALATTACK;
+	//return 7;
 	//if(*p->field->round==1)return 7;
 	if(!isalive(p->front->state)){
 		/*for(int i=ACT_UNIT0;i<=ACT_UNIT5;++i)
@@ -77,30 +83,6 @@ void cooldown_decrease(struct player *p){
 		unit_cooldown_decrease(p->units+r,1);
 	}
 }
-int player_hasunit(struct player *p){
-	for(int i=0;i<6;++i){
-		if(!p->units[i].base)
-			break;
-		if(isalive(p->units[i].state)){
-			return 1;
-		}
-	}
-	return 0;
-}
-int player_selectunit(struct player *p){
-	int r=0;
-	r=p->selector(p);
-	switch(r){
-		case ACT_UNIT0 ... ACT_UNIT5:
-			if(!canaction2(p,r))
-				return -1;
-			r-=ACT_UNIT0;
-			switchunit(p->units+r);
-			return 0;
-		default:
-			return -1;
-	}
-}
 void player_moveinit(struct player *p){
 	for_each_unit(u,p){
 		for(int i=0;i<8;++i){
@@ -110,47 +92,42 @@ void player_moveinit(struct player *p){
 		}
 	}
 }
+int player_selectunit(struct player *p){
+	int r;
+	if(!player_hasunit(p))
+		return -1;
+	r=p->selector(p);
+	switch(r){
+		case ACT_UNIT0 ... ACT_UNIT5:
+			if(!canaction2(p,r))
+				return -1;
+			r-=ACT_UNIT0;
+			return switchunit(p->units+r);
+		default:
+			return -1;
+	}
+}
 #define deadcheck do {\
-	int r0,r1,r2,r3;\
-	r0=!isalive(p->front->state);\
-	r1=!isalive(e->front->state);\
-	r2=r0?!player_hasunit(p):0;\
-	r3=r1?!player_hasunit(e):0;\
-	if(r2!=r3){\
-		ret=!r3;\
+	const struct player *w;\
+	int s;\
+	do {\
+		s=0;\
+		if(!isalive_s(p->front->state)){\
+			if(!player_selectunit(p))\
+				s=1;\
+		}\
+		if(!isalive_s(e->front->state)){\
+			if(!player_selectunit(e))\
+				s=1;\
+		}\
+	}while(s);\
+	w=getwinner(&field);\
+	if(w){\
+		ret=(w==p?0:1);\
 		goto out;\
-	}\
-	if(r2){\
-		if(p->front->speed==e->front->speed)\
-			ret=test(0.5);\
-		else\
-			ret=p->front->speed<e->front->speed;\
-		goto out;\
-	}\
-	if(r0){\
-		r0=player_selectunit(p);\
-	}\
-	if(r1){\
-		r1=player_selectunit(e);\
-	}\
-	if(r0||r1){\
-		if(r0&&r1){\
-			if(p->front->speed==e->front->speed)\
-				ret=test(0.5);\
-			else\
-				ret=p->front->speed<e->front->speed;\
-			goto out;\
-		}\
-		if(r0){\
-			ret=1;\
-			goto out;\
-		}\
-		else{\
-			ret=0;\
-			goto out;\
-		}\
 	}\
 }while(0)
+
 int battle(struct player *p,struct player *e,struct battle_field *bf,void (*init)(struct battle_field *)){
 	struct player *prior,*latter;
 	struct battle_field field;
@@ -241,6 +218,8 @@ int battle(struct player *p,struct player *e,struct battle_field *bf,void (*init
 		deadcheck;
 		stage=STAGE_ROUNDEND;
 		report(&field,MSG_ROUNDEND);
+		reap_fading(&field);
+		deadcheck;
 		effect_in_roundend(field.effects);
 		deadcheck;
 		cooldown_decrease(prior);

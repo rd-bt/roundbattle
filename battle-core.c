@@ -1,3 +1,7 @@
+/*******************************************************************************
+ *License GPLv3+: GNU GPL version 3 or later <http://gnu.org/licenses/gpl.html>*
+ *This is free software: you are free to change and redistribute it.           *
+ *******************************************************************************/
 #define _GNU_SOURCE
 #include "battle-core.h"
 #include <stdio.h>
@@ -11,15 +15,22 @@ static void clearhp(struct unit *u){
 	u->hp=0;
 	report(u->owner->field,MSG_HPMOD,u,-hp);
 }
+static int iffr(const struct unit *u,const struct move *m){
+	return m->id&&(m->mlevel&MLEVEL_FREEZING_ROARING)&&unit_hasnegative(u);
+}
 int unit_setstate(struct unit *u,int state){
+	struct player *p;
 	switch(state){
 		case UNIT_NORMAL:
 		case UNIT_CONTROLLED:
 		case UNIT_SUPPRESSED:
-			if(!isalive(u->state))
+		case UNIT_FADING:
+			if(u->state==UNIT_FREEZING_ROARINGED)
 				return -1;
+			if(u->state==state)
+				return 0;
 			u->state=state;
-			return 0;
+			goto end;
 		case UNIT_FAILED:
 			switch(u->state){
 				case UNIT_FAILED:
@@ -31,6 +42,23 @@ int unit_setstate(struct unit *u,int state){
 			}
 			if(u->hp)
 				clearhp(u);
+			//dealing the freezing_roaring
+			p=u->owner;
+			if(p->acted)
+				goto fr_end;
+			switch((state=u->owner->action)){
+				case ACT_MOVE0 ... ACT_MOVE7:
+					if(p->acted||*p->field->stage>=STAGE_ROUNDEND||!iffr(u,u->moves+state))
+						break;
+					if(u->state==UNIT_FADING)
+						return 1;
+					u->state=UNIT_FADING;
+					goto end1;
+				default:
+					break;
+			}
+fr_end:
+			//end
 			u->state=UNIT_FAILED;
 			if(u==u->owner->front)
 				u->owner->action=ACT_ABORT;
@@ -49,12 +77,19 @@ int unit_setstate(struct unit *u,int state){
 			u->state=UNIT_FREEZING_ROARINGED;
 			if(u==u->owner->front)
 				u->owner->action=ACT_ABORT;
+			memset(u->moves,0,8*sizeof(struct move));
 			report(u->owner->field,MSG_FAIL,u);
 			unit_wipeeffect(u,0);
 			return 0;
 		default:
 			return -1;
 	}
+end:
+	report(u->owner->field,MSG_UPDATE,u);
+	return 0;
+end1:
+	report(u->owner->field,MSG_UPDATE,u);
+	return 1;
 }
 int unit_kill(struct unit *u){
 	if(!isalive(u->state)||u->hp)
@@ -71,6 +106,13 @@ int unit_kill(struct unit *u){
 	}
 	return 0;
 }
+static int checkalive(struct unit *dest,struct unit *src){
+	if(src&&src->state==UNIT_FREEZING_ROARINGED)
+		return 0;
+	if(!dest)
+		return 1;
+	return isalive(dest->state);
+}
 unsigned long damage(struct unit *dest,struct unit *src,unsigned long value,int damage_type,int aflag,int type){
 	unsigned long ohp;
 	switch(damage_type){
@@ -81,7 +123,7 @@ unsigned long damage(struct unit *dest,struct unit *src,unsigned long value,int 
 		default:
 			return 0;
 	}
-	if(!isalive(dest->state)||!value)
+	if(!checkalive(dest,src)||!value)
 			return 0;
 	for_each_effectf(e,dest->owner->field->effects,damage){
 		if(e->base->damage(e,dest,src,&value,&damage_type,&aflag,&type))
@@ -119,7 +161,7 @@ unsigned long attack(struct unit *dest,struct unit *src,unsigned long value,int 
 		default:
 			return 0;
 	}
-	if(!isalive(dest->state))
+	if(!checkalive(dest,src))
 			return 0;
 	value_backup=value;
 	aflag_backup=aflag;
@@ -201,7 +243,7 @@ do_derate:
 int hittest(struct unit *dest,struct unit *src,double hit_rate){
 	double real_rate;
 	int effect_miss=0;
-	if(!isalive(dest->state))
+	if(!checkalive(dest,src))
 			return 0;
 	for_each_effectf(e,dest->owner->field->effects,hittest){
 		switch(e->base->hittest(e,dest,src,&hit_rate)){
@@ -296,8 +338,8 @@ unsigned long heal(struct unit *dest,long value){
 	}
 	return value;
 }
-void instant_death(struct unit *dest){
-	damage(dest,NULL,dest->max_hp*64,DAMAGE_REAL,AF_IDEATH,TYPE_VOID);
+unsigned long instant_death(struct unit *dest){
+	return damage(dest,NULL,dest->max_hp*64,DAMAGE_REAL,AF_IDEATH,TYPE_VOID);
 }
 /*unsigned long sethp(struct unit *dest,unsigned long hp){
 	unsigned long ohp;
@@ -322,10 +364,10 @@ void instant_death(struct unit *dest){
 int addhp3(struct unit *dest,long hp,int flag){
 	unsigned long ohp;
 	long rhp;
-	if(!hp)
-		return 0;
 	if(!isalive(dest->state))
 		return -1;
+	if(!hp)
+		return 0;
 	ohp=dest->hp;
 	if(ohp>=dest->max_hp&&hp>=0)
 		rhp=(long)ohp;
@@ -442,6 +484,21 @@ static int frindex(const struct unit *u){
 struct effect *effect(const struct effect_base *base,struct unit *dest,struct unit *src,long level,int round){
 	return effectx(base,dest,src,level,round,0);
 }
+static int checkalive3(struct unit *dest,struct unit *src,int xflag){
+	if(src&&src->state==UNIT_FREEZING_ROARINGED)
+		return 0;
+	if(!dest)
+		return 1;
+	switch(dest->state){
+		case UNIT_FADING:
+		case UNIT_FAILED:
+			return !!(xflag&EFFECT_ALLOWFAILED);
+		case UNIT_FREEZING_ROARINGED:
+			return 0;
+		default:
+			return 1;
+	}
+}
 struct effect *effectx(const struct effect_base *base,struct unit *dest,struct unit *src,long level,int round,int xflag){
 	struct effect *ep=NULL;
 	struct battle_field *f=NULL;
@@ -451,7 +508,7 @@ struct effect *effectx(const struct effect_base *base,struct unit *dest,struct u
 	else if(src)
 		f=src->owner->field;
 	xflag^=base->flag;
-	if(dest&&!(xflag&EFFECT_KEEP)&&!isalive(dest->state))
+	if(!checkalive3(dest,src,xflag))
 		return NULL;
 	if(!(xflag&EFFECT_NONHOOKABLE)){
 		for_each_effectf(e,f->effects,effect){
@@ -680,9 +737,10 @@ void effect_event_end(struct effect *e){
 	//printf("effect event %s end\n",e->base->id);
 }
 int revive_nonhookable(struct unit *u,unsigned long hp){
-	if(u->state!=UNIT_FAILED||!hp)
+	if(isalive(u->state))
 		return -1;
-	u->state=UNIT_NORMAL;
+	if(unit_setstate(u,UNIT_NORMAL))
+		return -1;
 	sethp(u,hp);
 	update_state(u);
 	update_attr(u);
@@ -692,13 +750,14 @@ int revive_nonhookable(struct unit *u,unsigned long hp){
 	return 0;
 }
 int revive(struct unit *u,unsigned long hp){
-	if(u->state!=UNIT_FAILED||!hp)
+	if(isalive(u->state))
 		return -1;
 	for_each_effectf(e,u->owner->field->effects,revive){
 		if(e->base->revive(e,u,&hp))
 			return -1;
 	}
-	u->state=UNIT_NORMAL;
+	if(unit_setstate(u,UNIT_NORMAL))
+		return -1;
 	sethp(u,hp);
 	update_state(u);
 	update_attr(u);
@@ -708,6 +767,8 @@ int revive(struct unit *u,unsigned long hp){
 	return 0;
 }
 int event(const struct event *ev,struct unit *src){
+	if(src->state==UNIT_FREEZING_ROARINGED)
+		return -1;
 //	report(src->owner->field,MSG_EVENT,ev,src);
 	event_start(ev,src);
 	if(ev->action)
@@ -761,6 +822,8 @@ void update_attr_init(struct unit *u){
 	u->type1=u->base->type1;
 }
 void update_attr(struct unit *u){
+	if(u->state==UNIT_FREEZING_ROARINGED)
+		return;
 	update_attr_init(u);
 	for_each_effectf(e,u->owner->field->effects,update_attr){
 		e->base->update_attr(e,u);
@@ -792,8 +855,7 @@ void update_state(struct unit *u){
 	for_each_effectf(e,u->owner->field->effects,update_state){
 		e->base->update_state(e,u,&r);
 	}
-	u->state=r;
-	report(u->owner->field,MSG_UPDATE,u);
+	unit_setstate(u,r);
 }
 void effect_in_roundstart(struct effect *effects){
 	for_each_effectf(e,effects,roundstart){
@@ -883,6 +945,7 @@ int unit_hasnegative(const struct unit *u){
 		return r;
 	switch(u->state){
 		case UNIT_NORMAL:
+		case UNIT_FADING:
 			r=u->blockade&255;
 			if(!r)
 				return 0;
@@ -903,39 +966,19 @@ int unit_hasnegative(const struct unit *u){
 			return 0;
 	}
 }
-static int iffr(const struct unit *u,const struct move *m){
-	return m->id&&(m->mlevel&MLEVEL_FREEZING_ROARING)&&unit_hasnegative(u);
-}
-int unit_move(struct unit *u,struct move *m){
+int unit_move_nonhookable(struct unit *u,struct move *m){
 	struct move *backup;
-	int fr=iffr(u,m);
-	ptrdiff_t md;
 	switch(u->state){
 		case UNIT_FAILED:
 		case UNIT_FREEZING_ROARINGED:
 			return -1;
-		case UNIT_SUPPRESSED:
-			switch(md=m-u->moves){
-				case ACT_MOVE0 ... ACT_MOVE7:
-					if(u->owner->action==md&&(m->mlevel&MLEVEL_CONCEPTUAL))
-						break;
-				default:
-					if(!fr)
-						return -1;
-			}
 		default:
 			if(!m->action)
 				return -1;
 			break;
 	}
-	if(!fr){
-		for_each_effectf(e,u->owner->field->effects,move){
-			if(e->base->move(e,u,m))
-				return -1;
-		}
-	}
-	backup=u->move_cur;
 	report(u->owner->field,MSG_MOVE,u,m);
+	backup=u->move_cur;
 	u->move_cur=m;
 	m->action(u);
 	u->move_cur=backup;
@@ -944,6 +987,31 @@ int unit_move(struct unit *u,struct move *m){
 		e->base->move_end(e,u,m);
 	}
 	return 0;
+}
+int unit_move(struct unit *u,struct move *m){
+	ptrdiff_t md;
+	switch(u->state){
+		case UNIT_FAILED:
+		case UNIT_FREEZING_ROARINGED:
+			return -1;
+		case UNIT_SUPPRESSED:
+			switch((md=m-u->moves)){
+				case ACT_MOVE0 ... ACT_MOVE7:
+					if(u->owner->action==md&&(m->mlevel&MLEVEL_CONCEPTUAL))
+						break;
+				default:
+					return -1;
+			}
+		default:
+			if(!m->action)
+				return -1;
+			break;
+	}
+	for_each_effectf(e,u->owner->field->effects,move){
+		if(e->base->move(e,u,m))
+			return -1;
+	}
+	return unit_move_nonhookable(u,m);
 }
 void unit_move_init(struct unit *u,struct move *m){
 	struct move *backup=u->move_cur;
@@ -1029,13 +1097,15 @@ int canaction2(const struct player *p,int act){
 }
 
 void player_action(struct player *p){
-	int r;
+	int r,nonh=0;
 	if(p->acted)
 		return;
 	switch(p->action){
 		case ACT_MOVE0 ... ACT_MOVE7:
-			if(iffr(p->front,p->front->moves+p->action))
+			if(iffr(p->front,p->front->moves+p->action)){
+				nonh=1;
 				goto fr;
+			}
 		default:
 			for_each_effectf(e,p->field->effects,action){
 				if(e->base->action(e,p))
@@ -1063,7 +1133,7 @@ fr:
 	}
 	switch(p->action){
 		case ACT_MOVE0 ... ACT_MOVE7:
-			unit_move(p->front,p->front->moves+p->action);
+			(nonh?unit_move_nonhookable:unit_move)(p->front,p->front->moves+p->action);
 			break;
 		case ACT_NORMALATTACK:
 			normal_attack(p->front);
@@ -1080,6 +1150,19 @@ fr:
 	p->acted=1;
 	for_each_effectf(e,p->field->effects,action_end){
 		e->base->action_end(e,p);
+	}
+}
+int unit_reap_fading(struct unit *u){
+	if(u->state!=UNIT_FADING)
+		return -1;
+	return unit_setstate(u,UNIT_FAILED);
+}
+void reap_fading(struct battle_field *f){
+	for_each_unit(u,f->p){
+		unit_reap_fading(u);
+	}
+	for_each_unit(u,f->e){
+		unit_reap_fading(u);
 	}
 }
 struct player *getprior(struct player *p,struct player *e){
@@ -1327,3 +1410,38 @@ void field_free(struct battle_field *field){
 	if(field->ht)
 		free(field->ht);
 }
+int player_hasunit(struct player *p){
+	for(int i=0;i<6;++i){
+		if(!p->units[i].base)
+			break;
+		if(isalive_s(p->units[i].state)){
+			return 1;
+		}
+	}
+	return 0;
+}
+const struct player *getwinner(struct battle_field *f){
+	struct player *p=f->p,*e=f->e;
+	int r0,r1,r2,r3;
+	r0=isalive_s(r2=p->front->state);
+	r1=isalive_s(r3=e->front->state);
+	if(!r0)
+		r0=player_hasunit(p);
+	if(!r1)
+		r1=player_hasunit(e);
+	if(r0&&r1)
+		return NULL;
+	if(r0!=r1)
+		return r0?p:e;
+	r0=(r2==UNIT_FREEZING_ROARINGED);
+	r1=(r3==UNIT_FREEZING_ROARINGED);
+	if(r0!=r1)
+		return r1?p:e;
+#define cmpfld(fld) \
+	if(p->front->fld!=e->front->fld)\
+		return p->front->fld>e->front->fld?p:e
+	cmpfld(level);
+	cmpfld(speed);
+	return test(0.5)?p:e;
+}
+

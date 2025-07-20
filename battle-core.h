@@ -1,3 +1,7 @@
+/*******************************************************************************
+ *License GPLv3+: GNU GPL version 3 or later <http://gnu.org/licenses/gpl.html>*
+ *This is free software: you are free to change and redistribute it.           *
+ *******************************************************************************/
 #ifndef _BATTLE_CORE_H_
 #define _BATTLE_CORE_H_
 #include <stddef.h>
@@ -8,8 +12,9 @@
 #define UNIT_NORMAL 0
 #define UNIT_CONTROLLED 1
 #define UNIT_SUPPRESSED 2
-#define UNIT_FAILED 3
-#define UNIT_FREEZING_ROARINGED 4
+#define UNIT_FADING 3
+#define UNIT_FAILED 4
+#define UNIT_FREEZING_ROARINGED 5
 
 #define MLEVEL_REGULAR 1
 #define MLEVEL_CONCEPTUAL 2
@@ -154,8 +159,9 @@
 #define EFFECT_NOCONSTRUCT 1024
 #define EFFECT_ADDLEVEL 2048
 #define EFFECT_ADDROUND 4096
+#define EFFECT_ALLOWFAILED 8192
 
-#define EFFECT_PASSIVE (EFFECT_POSITIVE|EFFECT_UNPURIFIABLE|EFFECT_KEEP|EFFECT_NONHOOKABLE)
+#define EFFECT_PASSIVE (EFFECT_POSITIVE|EFFECT_UNPURIFIABLE|EFFECT_KEEP|EFFECT_NONHOOKABLE|EFFECT_ALLOWFAILED)
 
 #define STAGE_INIT 0
 #define STAGE_ROUNDSTART 1
@@ -195,6 +201,23 @@
 }\
 )
 #define isalive(s) (\
+{\
+		int _r;\
+		switch(s){\
+			case UNIT_FAILED:\
+			case UNIT_FADING:\
+			case UNIT_FREEZING_ROARINGED:\
+				_r=0;\
+				break;\
+			default:\
+				_r=1;\
+				break;\
+		}\
+		_r;\
+}\
+)
+
+#define isalive_s(s) (\
 {\
 		int _r;\
 		switch(s){\
@@ -651,7 +674,7 @@ void normal_attack(struct unit *src);
 
 unsigned long heal(struct unit *dest,long value);
 
-void instant_death(struct unit *dest);
+unsigned long instant_death(struct unit *dest);
 
 int addhp3(struct unit *dest,long hp,int flag);
 
@@ -731,6 +754,8 @@ int effect_isnegative(const struct effect *e);
 
 int unit_hasnegative(const struct unit *u);
 
+int unit_move_nonhookable(struct unit *u,struct move *m);
+
 int unit_move(struct unit *u,struct move *m);
 
 void unit_move_init(struct unit *u,struct move *m);
@@ -740,6 +765,10 @@ int switchunit(struct unit *to);
 int canaction2(const struct player *p,int act);
 
 void player_action(struct player *p);
+
+int unit_reap_fading(struct unit *u);
+
+void reap_fading(struct battle_field *f);
 
 struct player *getprior(struct player *p,struct player *e);
 
@@ -752,5 +781,9 @@ const char *message_id(const struct message *msg);
 void history_add(struct battle_field *f);
 
 void field_free(struct battle_field *field);
+
+int player_hasunit(struct player *p);
+
+const struct player *getwinner(struct battle_field *f);
 
 #endif

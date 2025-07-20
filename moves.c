@@ -353,6 +353,20 @@ int natural_shield_damage(struct effect *e,struct unit *dest,struct unit *src,un
 	effect_event_end(e);
 	return 0;
 }
+int natural_shield_kill(struct effect *e,struct unit *u){
+	if(u==e->dest&&!*(int *)e->data){
+		effect_event(e);
+		addhp(u,0.05*u->max_hp);
+		if(e->round<3)
+			effect_setround(e,3);
+		*(int *)e->data=50;
+		effect_event_end(e);
+	}
+	return 0;
+}
+const struct event natural_shield_passive_sn[1]={{
+	.id="natural_shield_passive_sn",
+}};
 void kaleido_attack_end0(struct effect *e,struct unit *dest,struct unit *src,unsigned long value,int damage_type,int aflag,int type){
 	unsigned long dmg;
 	if(src!=e->dest||dest->owner!=src->owner->enemy||damage_type!=DAMAGE_PHYSICAL||value<3)
@@ -361,11 +375,15 @@ void kaleido_attack_end0(struct effect *e,struct unit *dest,struct unit *src,uns
 	dmg=0.35*value;
 	if(src->physical_bonus>0)
 		dmg*=1+0.6*src->physical_bonus;
+	event_start(natural_shield_passive_sn,src);
 	attack(dest,src,dmg,DAMAGE_MAGICAL,0,TYPE_DEVINEGRASS);	
+	event_end(natural_shield_passive_sn,src);
 	effect_event_end(e);
 }
 void kaleido_roundend(struct effect *e){
 	long v=(long)e->dest->max_hp-(long)e->dest->hp;
+	if(isfront(e->dest)&&*(int *)e->data>0)
+		--*(int *)e->data;
 	if(!v)
 		return;
 	if(v<25)
@@ -397,6 +415,7 @@ const struct effect_base natural_shield_effect[1]={{
 	.roundend=kaleido_roundend,
 	.end_in_roundend=kaleido_end_in_roundend,
 	.damage=natural_shield_damage,
+	.kill=natural_shield_kill,
 	.flag=EFFECT_PASSIVE,
 	.prior=-128,
 }};
@@ -570,28 +589,33 @@ void damage_recur(struct unit *s){
 	effect(damage_recuring,NULL,s,0,4);
 	setcooldown(s,s->move_cur,11);
 }
+#define roaring_common_a(_T) \
+		t=gettarget(s);\
+		if(hittest(t,s,2.5)){\
+			attack(t,s,0.75*s->atk,DAMAGE_PHYSICAL,0,_T);\
+			if(test(0.2))
+
+#define roaring_common_b \
+		}\
+		e=unit_findeffect(t,ATK);\
+		n=e?e->level:0;\
+		e=unit_findeffect(s,ATK);\
+		n1=e?e->level:0;\
+		if(n>n1+1)\
+			n=(n-n1)/2+1;\
+		else\
+			n=1;\
+		effect(ATK,s,s,n,-1);\
+		return
 void scorching_roaring(struct unit *s){
 	struct unit *t;
 	struct effect *e;
 	long n,n1;
 	n=unit_hasnegative(s);
 	if(n<=0){
-		t=gettarget(s);
-		if(hittest(t,s,2.5)){
-			attack(t,s,0.75*s->atk,DAMAGE_PHYSICAL,0,TYPE_FIRE);
-			if(test(0.2))
-				effect(burnt,t,s,0,5);
-		}
-		e=unit_findeffect(t,ATK);
-		n=e?e->level:0;
-		e=unit_findeffect(s,ATK);
-		n1=e?e->level:0;
-		if(n>n1+1)
-			n=(n-n1)/2+1;
-		else
-			n=1;
-		effect(ATK,s,s,n,-1);
-		return;
+		roaring_common_a(TYPE_FIRE)
+			effect(burnt,t,s,0,5);
+		roaring_common_b;
 	}
 	t=s->osite;
 	attack(t,s,(0.6+0.2*n)*s->atk,DAMAGE_MAGICAL,AF_CRIT,TYPE_FIRE);
@@ -605,23 +629,9 @@ void thunder_roaring(struct unit *s){
 	unsigned long dmg;
 	n=unit_hasnegative(s);
 	if(n<=0){
-		t=gettarget(s);
-		if(hittest(t,s,2.5)){
-
-			attack(t,s,0.75*s->atk,DAMAGE_PHYSICAL,0,TYPE_ELECTRIC);
-			if(test(0.2))
-				effect(paralysed,t,s,0,3);
-		}
-		e=unit_findeffect(t,ATK);
-		n=e?e->level:0;
-		e=unit_findeffect(s,ATK);
-		n1=e?e->level:0;
-		if(n>n1+1)
-			n=(n-n1)/2+1;
-		else
-			n=1;
-		effect(ATK,s,s,n,-1);
-		return;
+		roaring_common_a(TYPE_ELECTRIC)
+			effect(paralysed,t,s,0,3);
+		roaring_common_b;
 	}
 	t=s->osite;
 	dmg=attack(t,s,(0.6+0.2*n)*s->atk,DAMAGE_MAGICAL,AF_CRIT,TYPE_ELECTRIC);
@@ -629,7 +639,7 @@ void thunder_roaring(struct unit *s){
 		attack(t,s,0.15*dmg+n*0.06*u->max_hp,DAMAGE_REAL,0,TYPE_ELECTRIC);
 	}
 }
-int freezing_roaring_ondeath_kill(struct effect *e,struct unit *u){
+/*int freezing_roaring_ondeath_kill(struct effect *e,struct unit *u){
 	struct move *m;
 	int a;
 	if(u!=e->dest||u->owner->acted)
@@ -647,13 +657,13 @@ int freezing_roaring_ondeath_kill(struct effect *e,struct unit *u){
 	u->owner->acted=1;
 	return 0;
 }
-/*int freezing_roaring_blocker(struct effect *e,const struct effect_base *base,struct unit *dest,struct unit *src,long *level,int *round){
+int freezing_roaring_blocker(struct effect *e,const struct effect_base *base,struct unit *dest,struct unit *src,long *level,int *round){
 	if(dest!=e->dest)
 		return 0;
 	if((!src||src->owner==dest->owner)&&effect_isnegative_base(base,dest,src,*level))
 		return -1;
 	return 0;
-}*/
+}
 const struct effect_base freezing_roaring_passive[1]={{
 	.kill=freezing_roaring_ondeath_kill,
 	//.effect=freezing_roaring_blocker,
@@ -664,6 +674,7 @@ void freezing_roaring_init(struct unit *s){
 	if(s->move_cur->mlevel&MLEVEL_FREEZING_ROARING)
 		effect(freezing_roaring_passive,s,s,0,-1);
 }
+*/
 void freezing_roaring(struct unit *s){
 	struct unit *t;
 	struct effect *e;
@@ -671,38 +682,22 @@ void freezing_roaring(struct unit *s){
 	unsigned long hp;
 	struct move *mp;
 	n=unit_hasnegative(s);
-	if(!n||!(s->move_cur->mlevel&MLEVEL_FREEZING_ROARING)){
-		t=gettarget(s);
-		if(hittest(t,s,2.5)){
-
-			attack(t,s,0.75*s->atk,DAMAGE_PHYSICAL,0,TYPE_ICE);
-			if(test(0.2))
-				effect(SPEED,t,s,-1,-1);
-		}
-		e=unit_findeffect(t,ATK);
-		n=e?e->level:0;
-		e=unit_findeffect(s,ATK);
-		n1=e?e->level:0;
-		if(n>n1+1)
-			n=(n-n1)/2+1;
-		else
-			n=1;
-		effect(ATK,s,s,n,-1);
-		return;
+	if(!n||!((mp=s->move_cur)->mlevel&MLEVEL_FREEZING_ROARING)){
+		roaring_common_a(TYPE_ICE)
+			effect(SPEED,t,s,-1,-1);
+		roaring_common_b;
 	}
-
 	t=s->osite;
 	hp=t->hp;
 	t->hp=0;
 	report(s->owner->field,MSG_DAMAGE,t,s,hp,DAMAGE_MAGICAL,AF_CRIT,TYPE_ICE);
+	//show as a critical magical damage corresponding with other roarings.
 	unit_setstate(t,UNIT_FREEZING_ROARINGED);
 	for_each_effect(ep,s->owner->field->effects){
 		if(ep->dest!=s||!effect_isnegative(ep))
 			continue;
 		effect_final(ep);
 	}
-
-	mp=s->move_cur;
 	if(mp->cooldown){
 		mp->cooldown=0;
 		report(s->owner->field,MSG_UPDATE,mp);
@@ -1564,47 +1559,42 @@ void nether_roaring(struct unit *s){
 	long n,n1;
 	n=unit_hasnegative(s);
 	if(n<=0){
-		t=gettarget(s);
-		if(hittest(t,s,2.5)){
-			attack(t,s,0.75*s->atk,DAMAGE_PHYSICAL,0,TYPE_GHOST);
-			if(test(0.2)){
-				effect(ATK,s,s,1,-1);
-				effect(DEF,s,s,1,-1);
-				effect(SPEED,s,s,1,-1);
-				effect(HIT,s,s,1,-1);
-				effect(AVOID,s,s,1,-1);
-				effect(CE,s,s,1,-1);
-				effect(PDB,s,s,1,-1);
-				effect(MDB,s,s,1,-1);
-				effect(PDD,s,s,1,-1);
-				effect(MDD,s,s,1,-1);
-			}
+		roaring_common_a(TYPE_GHOST){
+			effect(ATK,s,s,1,-1);
+			effect(DEF,s,s,1,-1);
+			effect(SPEED,s,s,1,-1);
+			effect(HIT,s,s,1,-1);
+			effect(AVOID,s,s,1,-1);
+			effect(CE,s,s,1,-1);
+			effect(PDB,s,s,1,-1);
+			effect(MDB,s,s,1,-1);
+			effect(PDD,s,s,1,-1);
+			effect(MDD,s,s,1,-1);
 		}
-		e=unit_findeffect(t,ATK);
-		n=e?e->level:0;
-		e=unit_findeffect(s,ATK);
-		n1=e?e->level:0;
-		if(n>n1+1)
-			n=(n-n1)/2+1;
-		else
-			n=1;
-		effect(ATK,s,s,n,-1);
-		return;
+		roaring_common_b;
 	}
 	t=s->osite;
 	attack(t,s,(0.6+0.2*n)*s->atk,DAMAGE_MAGICAL,AF_CRIT,TYPE_GHOST);
 	effect(AVOID,s,s,n*2,-1);
 }
-void attr_clear_positive(struct unit *u){
+int attr_clear_positive(struct unit *u){
+	int r=0;
 	for_each_effect(e,u->owner->field->effects){
 		if(e->dest==u&&(e->base->flag&EFFECT_ATTR)&&e->level>0)
-			purify(e);
+			if(!purify(e))
+				++r;
 	}
+	return r;
 }
 void tidal(struct unit *s){
 	struct unit *t=gettarget(s);
-	attr_clear_positive(t);
-	attack(t,s,s->atk,DAMAGE_PHYSICAL,0,TYPE_DEVINEWATER);
+	int r=attr_clear_positive(t);
+	if(r){
+		attack(t,s,s->atk,DAMAGE_PHYSICAL,0,TYPE_DEVINEWATER);
+	}else {
+		attack(t,s,1.15*s->atk,DAMAGE_PHYSICAL,0,TYPE_DEVINEWATER);
+		heal(s,0.35*s->atk);
+	}
 }
 
 int rand_action(const struct player *p){
@@ -1664,22 +1654,9 @@ void anger_roaring(struct unit *s){
 	long n,n1;
 	n=unit_hasnegative(s);
 	if(n<=0){
-		t=gettarget(s);
-		if(hittest(t,s,2.5)){
-			attack(t,s,0.75*s->atk,DAMAGE_PHYSICAL,0,TYPE_FIGHTING);
-			if(test(0.2))
-				effect(silent,t,s,0,4);
-		}
-		e=unit_findeffect(t,ATK);
-		n=e?e->level:0;
-		e=unit_findeffect(s,ATK);
-		n1=e?e->level:0;
-		if(n>n1+1)
-			n=(n-n1)/2+1;
-		else
-			n=1;
-		effect(ATK,s,s,n,-1);
-		return;
+		roaring_common_a(TYPE_FIGHTING)
+			effect(silent,t,s,0,4);
+		roaring_common_b;
 	}
 	t=s->osite;
 	attack(t,s,(0.6+0.2*n)*s->atk,DAMAGE_MAGICAL,AF_CRIT,TYPE_FIGHTING);
@@ -2382,8 +2359,11 @@ int burn_boat_effect1(struct effect *e,const struct effect_base *base,struct uni
 	return 0;
 }
 void burn_boat_roundstart(struct effect *e){
-	if(e->level==2)
+	if(e->level==2){
+		effect_event(e);
 		effect_setlevel(e,1);
+		effect_event_end(e);
+	}
 }
 const struct effect_base burn_boat_effect[1]={{
 	.id="burn_boat",
@@ -2422,12 +2402,12 @@ int uniform_base_damage(struct effect *e,struct unit *dest,struct unit *src,unsi
 	dmg=*value;
 	if(!(dmg&(dmg-1)))
 		return 0;
-	effect_event(e);
 	x=0;
 	do {
 		dmg>>=1;
 		++x;
 	}while(dmg&(dmg-1));
+	effect_event(e);
 	*value=dmg<<x;
 	effect_event_end(e);
 	return 0;
@@ -2440,6 +2420,13 @@ const struct effect_base uniform_base_effect[1]={{
 }};
 void uniform_base(struct unit *s){
 	effect(uniform_base_effect,s,s,0,-1);
+}
+void uniform_base_a(struct unit *s){
+	struct unit *t=s->osite;
+	long sp=s->spi;
+	attack(t,s,0.75*s->atk+10.24*labs(sp),DAMAGE_PHYSICAL,AF_NOFLOAT|AF_EFFECT|AF_WEAK,TYPE_MACHINE);
+	setspi(s,0);
+	setspi(t,t->spi+sp);
 }
 void spatially_shatter_pm(struct unit *s){
 	struct unit *t=s->osite;
@@ -2808,6 +2795,20 @@ struct unit *rand_backend(struct unit *s){
 	for(int i=0;i<6;++i){
 		t=s->owner->units+i;
 		if(t==s||!t->base||!isalive(t->state))
+			continue;
+		ava[rsize++]=t;
+	}
+	if(!rsize)
+		return NULL;
+	return ava[randi()%rsize];
+}
+struct unit *rand_unit(struct unit *s){
+	struct unit *t;
+	struct unit *ava[6];
+	size_t rsize=0;
+	for(int i=0;i<6;++i){
+		t=s->owner->units+i;
+		if(!t->base||!isalive(t->state))
 			continue;
 		ava[rsize++]=t;
 	}
@@ -3194,26 +3195,13 @@ void time_space_roaring(struct unit *s){
 	long n,n1;
 	n=unit_hasnegative(s);
 	if(n<=0||!(s->move_cur->mlevel&MLEVEL_CONCEPTUAL)){
-		t=gettarget(s);
-		if(hittest(t,s,2.5)){
-			attack(t,s,0.75*s->atk,DAMAGE_PHYSICAL,0,TYPE_DRAGON);
-			if(test(0.2)){
-				if(*s->owner->field->stage==STAGE_PRIOR)
-					effect(rebound_effect,s,s,0,1);
-				else
-					do_star_move(s);
-			}
+		roaring_common_a(TYPE_DRAGON){
+			if(*s->owner->field->stage==STAGE_PRIOR)
+				effect(rebound_effect,s,s,0,1);
+			else
+				do_star_move(s);
 		}
-		e=unit_findeffect(t,ATK);
-		n=e?e->level:0;
-		e=unit_findeffect(s,ATK);
-		n1=e?e->level:0;
-		if(n>n1+1)
-			n=(n-n1)/2+1;
-		else
-			n=1;
-		effect(ATK,s,s,n,-1);
-		return;
+		roaring_common_b;
 	}
 	t=s->osite;
 	attack(t,s,(0.6+0.2*n)*s->atk,DAMAGE_MAGICAL,AF_CRIT,TYPE_DRAGON);
@@ -3377,7 +3365,7 @@ const struct effect_base alkali_sunfyre[1]={{
 void heat_wave(struct unit *s){
 	struct unit *t=gettarget(s);
 	if(hittest(t,s,1.0)){
-		attack(t,s,0.4*s->atk,DAMAGE_PHYSICAL,0,TYPE_FIRE);
+		attack(t,s,0.7*s->atk,DAMAGE_PHYSICAL,0,TYPE_FIRE);
 		effect(sunfyre,t,s,1,3);
 	}
 }
@@ -3472,6 +3460,63 @@ void white_phosphorus_bomb(struct unit *s){
 		attack(t,s,1.75*s->atk,DAMAGE_PHYSICAL,0,TYPE_FIRE);
 	effect(moonless_night,NULL,s,0,5);
 	setcooldown(s,s->move_cur,9);
+}
+void cm_end(struct effect *e){
+	struct unit *s=e->src;
+	struct unit *t=s->osite;
+	effect_event(e);
+	for(long i=limit(e->level,0,16);i;--i){
+		t=rand_unit(t);
+		if(!t)
+			break;
+		attack(t,s,0.7*s->atk+0.06*t->max_hp,DAMAGE_PHYSICAL,0,TYPE_FIRE);
+	}
+	effect_event_end(e);
+}
+const struct effect_base cm_effect[1]={{
+	.id="cluster_missile_splinter",
+	.end=cm_end,
+	.roundend=effect_destruct,
+	.flag=EFFECT_ISOLATED,
+}};
+void cluster_missile(struct unit *s){
+	struct unit *t;
+	int n;
+	t=gettarget(s);
+	if(hittest(t,s,INFINITY)){
+		attack(t,s,2*s->atk,DAMAGE_PHYSICAL,0,TYPE_MACHINE);
+		setspi(t,t->spi+5);
+	}
+	n=4+rand()%4;
+	effect(cm_effect,NULL,s,n,-1);
+	setcooldown(s,s->move_cur,n+1);
+}
+void suppressed_update_state(struct effect *e,struct unit *u,int *state){
+	if(e->dest!=u)
+		return;
+	switch(*state){
+		case UNIT_NORMAL:
+		case UNIT_CONTROLLED:
+			*state=UNIT_SUPPRESSED;
+		default:
+			return;
+	}
+}
+const struct effect_base suppressed[1]={{
+	.id="suppressed",
+	.update_state=suppressed_update_state,
+	.flag=EFFECT_NONHOOKABLE|EFFECT_UNPURIFIABLE|EFFECT_CONTROL|EFFECT_NEGATIVE,
+}};
+void plasmatizing_lightcannon(struct unit *s){
+	struct unit *t=s->osite;
+	int cd;
+	instant_death(t);
+	if(isalive(t->state)){
+		cd=70*(1.0-(double)t->hp/t->max_hp);
+		effect(suppressed,t,s,0,5);
+	}else
+		cd=70;
+	setcooldown(s,s->move_cur,cd+1);
 }
 //list
 const struct move builtin_moves[]={
@@ -3676,7 +3721,7 @@ const struct move builtin_moves[]={
 	{
 		.id="freezing_roaring",
 		.action=freezing_roaring,
-		.init=freezing_roaring_init,
+		//.init=freezing_roaring_init,
 		.type=TYPE_ICE,
 		.flag=0,
 		.mlevel=MLEVEL_REGULAR|MLEVEL_FREEZING_ROARING
@@ -4157,6 +4202,7 @@ const struct move builtin_moves[]={
 	},
 	{
 		.id="uniform_base",
+		.action=uniform_base_a,
 		.init=uniform_base,
 		.type=TYPE_MACHINE,
 		.flag=0,
@@ -4562,6 +4608,21 @@ const struct move builtin_moves[]={
 		.flag=0,
 		.mlevel=MLEVEL_REGULAR
 	},
+	{
+		.id="cluster_missile",
+		.action=cluster_missile,
+		.type=TYPE_MACHINE,
+		.flag=0,
+		.mlevel=MLEVEL_REGULAR
+	},
+	{
+		.id="plasmatizing_lightcannon",
+		.action=plasmatizing_lightcannon,
+		.type=TYPE_LIGHT,
+		.flag=0,
+		.cooldown=40,
+		.mlevel=MLEVEL_REGULAR
+	},
 	{.id=NULL}
 };
 const size_t builtin_moves_size=sizeof(builtin_moves)/sizeof(builtin_moves[0])-1;
@@ -4652,5 +4713,7 @@ const char *effects[]={
 "depositing",
 "life_limit",
 "moonless_night",
+"cluster_missile_splinter",
+"suppressed",
 NULL};
 const size_t effects_size=sizeof(effects)/sizeof(effects[0])-1;

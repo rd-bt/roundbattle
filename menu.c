@@ -565,7 +565,13 @@ st:
 			goto st;
 	}
 }
-static const char *mobs[]={"icefield_tiger_cub","flat_mouth_duck","hood_grass","attacking_defensive_combined_matrix_1","cactus_ball"};
+static const char *mobs[]={
+	"icefield_tiger_cub",
+	"flat_mouth_duck",
+	"hood_grass",
+	"attacking_defensive_combined_matrix_1",
+	"cactus_ball",
+};
 #define arrsize(arr) (sizeof(arr)/sizeof(arr[0]))
 void endless_fake(struct player_data *p,int level){
 	const char *cp=mobs[(level-1)%arrsize(mobs)];

@@ -639,7 +639,8 @@ void thunder_roaring(struct unit *s){
 		attack(t,s,0.15*dmg+n*0.06*u->max_hp,DAMAGE_REAL,0,TYPE_ELECTRIC);
 	}
 }
-/*int freezing_roaring_ondeath_kill(struct effect *e,struct unit *u){
+/*
+int freezing_roaring_ondeath_kill(struct effect *e,struct unit *u){
 	struct move *m;
 	int a;
 	if(u!=e->dest||u->owner->acted)
@@ -3507,6 +3508,11 @@ const struct effect_base suppressed[1]={{
 	.update_state=suppressed_update_state,
 	.flag=EFFECT_NONHOOKABLE|EFFECT_UNPURIFIABLE|EFFECT_CONTROL|EFFECT_NEGATIVE,
 }};
+const struct effect_base vanished[1]={{
+	.id="vanished",
+	.revive=perish_revive,
+	.flag=EFFECT_ALLOWFAILED|EFFECT_NONHOOKABLE|EFFECT_KEEP|EFFECT_UNPURIFIABLE|EFFECT_NEGATIVE,
+}};
 void plasmatizing_lightcannon(struct unit *s){
 	struct unit *t=s->osite;
 	int cd;
@@ -3514,9 +3520,48 @@ void plasmatizing_lightcannon(struct unit *s){
 	if(isalive(t->state)){
 		cd=70*(1.0-(double)t->hp/t->max_hp);
 		effect(suppressed,t,s,0,5);
-	}else
+	}else {
 		cd=70;
+		effect(vanished,t,s,0,-1);
+	}
 	setcooldown(s,s->move_cur,cd+1);
+}
+int countunit(struct player *p){
+	int r=0;
+	for_each_unit(u,p){
+		if(u->state!=UNIT_FREEZING_ROARINGED&&!unit_findeffect(u,vanished))
+			++r;
+	}
+	return r;
+}
+int countunit_alive(struct player *p){
+	int r=0;
+	for_each_unit(u,p){
+		if(isalive(u->state)&&!unit_findeffect(u,vanished))
+			++r;
+	}
+	return r;
+}
+int countunit_failed(struct player *p){
+	int r=0;
+	for_each_unit(u,p){
+		switch(u->state){
+			case UNIT_FADING:
+			case UNIT_FAILED:
+				if(!unit_findeffect(u,vanished))
+					++r;
+			default:
+				break;
+		}
+	}
+	return r;
+}
+void dominate(struct unit *s){
+	struct unit *t=gettarget(s);
+	if(hittest(t,s,1.5)){
+		attack(t,s,1.25*(1+0.5*countunit_failed(s->owner))*s->atk,DAMAGE_PHYSICAL,0,TYPE_NORMAL);
+	}
+	setcooldown(s,s->move_cur,6);
 }
 //list
 const struct move builtin_moves[]={
@@ -4623,6 +4668,14 @@ const struct move builtin_moves[]={
 		.cooldown=40,
 		.mlevel=MLEVEL_REGULAR
 	},
+	{
+		.id="dominate",
+		.action=dominate,
+		.type=TYPE_NORMAL,
+		.prior=1,
+		.flag=0,
+		.mlevel=MLEVEL_REGULAR
+	},
 	{.id=NULL}
 };
 const size_t builtin_moves_size=sizeof(builtin_moves)/sizeof(builtin_moves[0])-1;
@@ -4715,5 +4768,6 @@ const char *effects[]={
 "moonless_night",
 "cluster_missile_splinter",
 "suppressed",
+"vanished",
 NULL};
 const size_t effects_size=sizeof(effects)/sizeof(effects[0])-1;

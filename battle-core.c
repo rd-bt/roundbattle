@@ -125,15 +125,17 @@ unsigned long damage(struct unit *dest,struct unit *src,unsigned long value,int 
 	}
 	if(!checkalive(dest,src)||!value)
 			return 0;
-	for_each_effectf(e,dest->owner->field->effects,damage){
-		if(e->base->damage(e,dest,src,&value,&damage_type,&aflag,&type))
-			return 0;
+	if(!(aflag&AF_NONHOOKABLE_D)){
+		for_each_effectf(e,dest->owner->field->effects,damage){
+			if(e->base->damage(e,dest,src,&value,&damage_type,&aflag,&type))
+				return 0;
+		}
 	}
 	ohp=dest->hp;
 	if(ohp>value){
 		dest->hp-=value;
 	}else {
-		dest->hp=(aflag&AF_KEEPALIVE)?1:0;
+		dest->hp=0;
 	}
 	report(dest->owner->field,MSG_DAMAGE,dest,src,value,damage_type,aflag,type);
 	if(dest->hp!=ohp){
@@ -141,7 +143,7 @@ unsigned long damage(struct unit *dest,struct unit *src,unsigned long value,int 
 			e->base->hpmod(e,dest,(long)dest->hp-(long)ohp,HPMOD_DAMAGE);
 		}
 	}
-	if(!dest->hp)
+	if(!dest->hp&&!(aflag&AF_KEEPALIVE))
 		unit_kill(dest);
 	for_each_effectf(e,dest->owner->field->effects,damage_end){
 		e->base->damage_end(e,dest,src,value,damage_type,aflag,type);
@@ -165,9 +167,11 @@ unsigned long attack(struct unit *dest,struct unit *src,unsigned long value,int 
 			return 0;
 	value_backup=value;
 	aflag_backup=aflag;
-	for_each_effectf(e,dest->owner->field->effects,attack){
-		if(e->base->attack(e,dest,src,&value,&damage_type,&aflag,&type))
-			return 0;
+	if(!(aflag&AF_NONHOOKABLE)){
+		for_each_effectf(e,dest->owner->field->effects,attack){
+			if(e->base->attack(e,dest,src,&value,&damage_type,&aflag,&type))
+				return 0;
+		}
 	}
 	if(aflag&AF_CRIT){
 		if(src){
@@ -198,7 +202,7 @@ unsigned long attack(struct unit *dest,struct unit *src,unsigned long value,int 
 		}
 	}else
 		aflag&=~(AF_EFFECT|AF_WEAK);
-	if(!(aflag&AF_NODEF)&&damage_type!=DAMAGE_REAL){
+	if(!(aflag&AF_NODEF)==(damage_type!=DAMAGE_REAL)){
 		x=dest->def;
 		if(src)
 			x+=dest->level-src->level;
@@ -303,16 +307,18 @@ void normal_attack(struct unit *src){
 	am.unused=0;
 	unit_move(src,&am);
 }
-unsigned long heal(struct unit *dest,long value){
+long heal3(struct unit *dest,long value,int aflag){
 	unsigned long ohp;
 	long hp;
 	if(!isalive(dest->state))
 			return 0;
-	for_each_effectf(e,dest->owner->field->effects,heal){
-		if(e->base->heal(e,dest,&value))
-			return 0;
+	if(!(aflag&AF_NONHOOKABLE)){
+		for_each_effectf(e,dest->owner->field->effects,heal){
+			if(e->base->heal(e,dest,&value))
+				return 0;
+		}
 	}
-	if(dest->spi)
+	if(!(aflag&AF_NOINHIBIT)&&dest->spi)
 		value*=inhibit_coef(dest->spi);
 	ohp=dest->hp;
 	if(ohp>=dest->max_hp&&value>=0)
@@ -331,36 +337,19 @@ unsigned long heal(struct unit *dest,long value){
 			e->base->hpmod(e,dest,(long)hp-(long)ohp,HPMOD_HEAL);
 		}
 	}
-	if(!dest->hp)
+	if(!dest->hp&&!(aflag&AF_KEEPALIVE))
 		unit_kill(dest);
 	for_each_effectf(e,dest->owner->field->effects,heal_end){
 		e->base->heal_end(e,dest,value);
 	}
 	return value;
 }
+long heal(struct unit *dest,long value){
+	return heal3(dest,value,0);
+}
 unsigned long instant_death(struct unit *dest){
 	return damage(dest,NULL,dest->max_hp*64,DAMAGE_REAL,AF_IDEATH,TYPE_VOID);
 }
-/*unsigned long sethp(struct unit *dest,unsigned long hp){
-	unsigned long ohp;
-	if(!isalive(dest->state))
-			return LONG_MIN;
-	ohp=dest->hp;
-	if(hp>dest->max_hp)
-		hp=dest->max_hp;
-	if(hp==ohp)
-		return hp;
-	dest->hp=hp;
-	report(dest->owner->field,MSG_HPMOD,dest,(long)hp-(long)ohp);
-	for_each_effect(e,dest->owner->field->effects){
-		if(e->base->hpmod)
-			e->base->hpmod(e,dest,(long)hp-(long)ohp,HPMOD_SETHP);
-	}
-	if(!dest->hp)
-		unit_kill(dest);
-	return hp;
-}*/
-
 int addhp3(struct unit *dest,long hp,int flag){
 	unsigned long ohp;
 	long rhp;
@@ -520,10 +509,12 @@ struct effect *effectx(const struct effect_base *base,struct unit *dest,struct u
 		if((!src||src->owner==dest->owner)&&effect_isnegative_base(base,dest,src,level))
 			return NULL;
 	}
-	for_each_effect(e,f->effects){
-		if(e->dest==dest&&e->base==base&&!(xflag&EFFECT_ISOLATED)){
-			ep=e;
-			break;
+	if(!(xflag&EFFECT_ISOLATED)){
+		for_each_effect(e,f->effects){
+			if(e->dest==dest&&e->base==base){
+				ep=e;
+				break;
+			}
 		}
 	}
 	if(!ep){

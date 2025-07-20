@@ -42,6 +42,8 @@
 #define AF_IDEATH 64
 #define AF_NOINHIBIT 128
 #define AF_KEEPALIVE 256
+#define AF_NONHOOKABLE 512
+#define AF_NONHOOKABLE_D 1024
 
 
 #define TYPE_VOID (0)
@@ -672,7 +674,9 @@ long randi(void);
 
 void normal_attack(struct unit *src);
 
-unsigned long heal(struct unit *dest,long value);
+long heal3(struct unit *dest,long value,int aflag);
+
+long heal(struct unit *dest,long value);
 
 unsigned long instant_death(struct unit *dest);
 

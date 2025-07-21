@@ -1514,9 +1514,7 @@ void perish_kill_end(struct effect *e,struct unit *u){
 }
 int perish_revive(struct effect *e,struct unit *u,unsigned long *hp){
 	if(u==e->dest){
-		effect_event(e);
 		return -1;
-		effect_event_end(e);
 	}
 	return 0;
 }

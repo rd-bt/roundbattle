@@ -20,6 +20,8 @@ static int iffr(const struct unit *u,const struct move *m){
 }
 int unit_setstate(struct unit *u,int state){
 	struct player *p;
+	struct battle_field *bf;
+	int rf;
 	switch(state){
 		case UNIT_NORMAL:
 		case UNIT_CONTROLLED:
@@ -46,7 +48,7 @@ int unit_setstate(struct unit *u,int state){
 			p=u->owner;
 			if(p->acted)
 				goto fr_end;
-			switch((state=u->owner->action)){
+			switch((state=p->action)){
 				case ACT_MOVE0 ... ACT_MOVE7:
 					if(p->acted||*p->field->stage>=STAGE_ROUNDEND||!iffr(u,u->moves+state))
 						break;
@@ -60,26 +62,40 @@ int unit_setstate(struct unit *u,int state){
 fr_end:
 			//end
 			u->state=UNIT_FAILED;
-			if(u==u->owner->front)
-				u->owner->action=ACT_ABORT;
-			report(u->owner->field,MSG_FAIL,u);
+			if(u==p->front)
+				p->action=ACT_ABORT;
+			report(p->field,MSG_FAIL,u);
 			unit_wipeeffect(u,EFFECT_KEEP);
 			return 0;
 		case UNIT_FREEZING_ROARINGED:
 			switch(u->state){
 				case UNIT_FREEZING_ROARINGED:
 					return 0;
+				case UNIT_FAILED:
+					rf=0;
+					break;
 				default:
+					rf=1;
 					break;
 			}
 			if(u->hp)
 				clearhp(u);
+			p=u->owner;
 			u->state=UNIT_FREEZING_ROARINGED;
-			if(u==u->owner->front)
-				u->owner->action=ACT_ABORT;
+			if(u==p->front)
+				p->action=ACT_ABORT;
 			memset(u->moves,0,8*sizeof(struct move));
-			report(u->owner->field,MSG_FAIL,u);
+			report(bf=p->field,rf?MSG_FAIL:MSG_UPDATE,u);
 			unit_wipeeffect(u,0);
+			if(bf->ht_size){
+				rf=u-p->units;
+				for(struct history *h=bf->ht,*endh=h+bf->ht_size;h<endh;++h){
+					u=(p==bf->p?&h->p:&h->e)->units+rf;
+					u->hp=0;
+					u->state=UNIT_FREEZING_ROARINGED;
+					memset(u->moves,0,8*sizeof(struct move));
+				}
+			}
 			return 0;
 		default:
 			return -1;
@@ -927,32 +943,23 @@ int effect_isnegative(const struct effect *e){
 }
 int unit_hasnegative(const struct unit *u){
 	int r=0;
-	const struct move *m;
 	for_each_effect(e,u->owner->field->effects){
 		if(e->dest==u&&effect_isnegative(e))
 			++r;
 	}
 	if(r)
 		return r;
+	r=frindex(u);
+	if(r<0)
+		return 0;
 	switch(u->state){
 		case UNIT_NORMAL:
 		case UNIT_FADING:
-			r=u->blockade&255;
-			if(!r)
-				return 0;
-			for(int i=0;i<8;++i){
-				if(!((1<<i)&r))
-					continue;
-				m=u->moves+i;
-				if(!m->id)
-					continue;
-				if(m->mlevel&MLEVEL_FREEZING_ROARING)
-					return -1;
-			}
-			return 0;
+			if(u->blockade&(1<<r)){
 		case UNIT_CONTROLLED:
 		case UNIT_SUPPRESSED:
-			return -1;
+				return -1;
+			}
 		default:
 			return 0;
 	}
@@ -1395,6 +1402,9 @@ void history_add(struct battle_field *f){
 	memcpy(&h->e,f->e,sizeof(struct player));
 }
 void field_free(struct battle_field *field){
+	for_each_effect(ep,field->effects){
+		effect_final(ep);
+	}
 	wipetrash(field);
 	if(field->rec)
 		free(field->rec);
@@ -1411,6 +1421,9 @@ int player_hasunit(struct player *p){
 	}
 	return 0;
 }
+#define cmpfld(fld) \
+	if(p->front->fld!=e->front->fld)\
+		return p->front->fld>e->front->fld?p:e
 const struct player *getwinner(struct battle_field *f){
 	struct player *p=f->p,*e=f->e;
 	int r0,r1,r2,r3;
@@ -1428,9 +1441,25 @@ const struct player *getwinner(struct battle_field *f){
 	r1=(r3==UNIT_FREEZING_ROARINGED);
 	if(r0!=r1)
 		return r1?p:e;
-#define cmpfld(fld) \
-	if(p->front->fld!=e->front->fld)\
-		return p->front->fld>e->front->fld?p:e
+	cmpfld(level);
+	cmpfld(speed);
+	return test(0.5)?p:e;
+}
+const struct player *getwinner_nonnull(struct battle_field *f){
+	struct player *p=f->p,*e=f->e;
+	int r0,r1,r2,r3;
+	r0=isalive_s(r2=p->front->state);
+	r1=isalive_s(r3=e->front->state);
+	if(!r0)
+		r0=player_hasunit(p);
+	if(!r1)
+		r1=player_hasunit(e);
+	if(r0!=r1)
+		return r0?p:e;
+	r0=(r2==UNIT_FREEZING_ROARINGED);
+	r1=(r3==UNIT_FREEZING_ROARINGED);
+	if(r0!=r1)
+		return r1?p:e;
 	cmpfld(level);
 	cmpfld(speed);
 	return test(0.5)?p:e;

@@ -109,19 +109,24 @@ int player_selectunit(struct player *p){
 }
 #define deadcheck do {\
 	const struct player *w;\
-	int s;\
+	int s,ns;\
+	ns=0;\
 	do {\
 		s=0;\
 		if(!isalive_s(p->front->state)){\
 			if(!player_selectunit(p))\
 				s=1;\
+			else\
+				ns=1;\
 		}\
 		if(!isalive_s(e->front->state)){\
 			if(!player_selectunit(e))\
 				s=1;\
+			else\
+				ns=1;\
 		}\
 	}while(s);\
-	w=getwinner(&field);\
+	w=(ns?getwinner_nonnull:getwinner)(&field);\
 	if(w){\
 		ret=(w==p?0:1);\
 		goto out;\
@@ -165,11 +170,8 @@ int battle(struct player *p,struct player *e,struct battle_field *bf,void (*init
 	player_moveinit(prior);
 	player_moveinit(prior->enemy);
 	for(;;++round){
-		if(round>=INT_MAX){
-			if(p->front->speed==e->front->speed)
-				ret=test(0.5);
-			else
-				ret=p->front->speed<e->front->speed;
+		if(round>=ROUND_MAX){
+			ret=getwinner_nonnull(&field)==p?0:1;
 			goto out;
 		}
 		stage=STAGE_ROUNDSTART;
@@ -232,9 +234,6 @@ int battle(struct player *p,struct player *e,struct battle_field *bf,void (*init
 out:
 	stage=STAGE_BATTLE_END;
 	report(&field,MSG_BATTLE_END,ret?e:p);
-	for_each_effect(ep,field.effects){
-		effect_final(ep);
-	}
 	if(bf){
 		field.end_round=round;
 		memcpy(bf,&field,sizeof(struct battle_field));

@@ -9,6 +9,8 @@
 
 #define SHEAR_COEF (M_SQRT2/128)
 
+#define ROUND_MAX 1024
+
 #define UNIT_NORMAL 0
 #define UNIT_CONTROLLED 1
 #define UNIT_SUPPRESSED 2
@@ -789,5 +791,7 @@ void field_free(struct battle_field *field);
 int player_hasunit(struct player *p);
 
 const struct player *getwinner(struct battle_field *f);
+
+const struct player *getwinner_nonnull(struct battle_field *f);
 
 #endif

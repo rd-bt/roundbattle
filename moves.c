@@ -3623,8 +3623,13 @@ int ap_purify(struct effect *e,struct effect *ep){
 	effect_reinit(e,e->src,-3,-1);
 	return -1;
 }
+void ap_inited(struct effect *e){
+	if(e->level>=36)
+		unit_setstate(e->dest,UNIT_FAILED);
+}
 const struct effect_base assimilation_progress[1]={{
 	.id="assimilation_progress",
+	.inited=ap_inited,
 	.purify=ap_purify,
 	.flag=EFFECT_ADDLEVEL|EFFECT_NONHOOKABLE|EFFECT_NEGATIVE,
 }};
@@ -3632,15 +3637,12 @@ const struct event elf_light_impact_le[1]={{
 	.id="elf_light_impact_le",
 }};
 void dyed_amod(struct effect *e,struct unit *dest,struct unit *src,long level){
-	struct effect *e1;
 	if(*(unsigned int *)e->data>=3)
 		return;
 	event_start(elf_light_impact_le,e->src);
 	attack(dest,e->src,0.45*level*e->src->atk,DAMAGE_PHYSICAL,0,TYPE_LIGHT);
-	e1=effect(assimilation_progress,dest,e->src,level,-1);
-	if(e1&&e1->level>=36)
-		unit_setstate(dest,UNIT_FAILED);
-	else
+	effect(assimilation_progress,dest,e->src,level,-1);
+	if(!e->intrash)
 		++(*(unsigned int *)e->data);
 	event_end(elf_light_impact_le,e->src);
 }

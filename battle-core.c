@@ -18,10 +18,12 @@ static void clearhp(struct unit *u){
 static int iffr(const struct unit *u,const struct move *m){
 	return m->id&&(m->mlevel&MLEVEL_FREEZING_ROARING)&&unit_hasnegative(u);
 }
+static void effect_remove(struct effect **head,struct effect *e);
+static void effect_free(struct effect *ep,struct battle_field *f);
 int unit_setstate(struct unit *u,int state){
 	struct player *p;
 	struct battle_field *bf;
-	int rf;
+	int rf,index;
 	switch(state){
 		case UNIT_NORMAL:
 		case UNIT_CONTROLLED:
@@ -85,17 +87,27 @@ fr_end:
 			if(u==p->front)
 				p->action=ACT_ABORT;
 			memset(u->moves,0,8*sizeof(struct move));
-			report(bf=p->field,rf?MSG_FAIL:MSG_UPDATE,u);
-			unit_wipeeffect(u,0);
+			bf=p->field;
 			if(bf->ht_size){
-				rf=u-p->units;
+				struct unit *u1;
+				index=u-p->units;
 				for(struct history *h=bf->ht,*endh=h+bf->ht_size;h<endh;++h){
-					u=(p==bf->p?&h->p:&h->e)->units+rf;
-					u->hp=0;
-					u->state=UNIT_FREEZING_ROARINGED;
-					memset(u->moves,0,8*sizeof(struct move));
+					u1=(p==bf->p?&h->p:&h->e)->units+index;
+					//u1->hp=0;
+					//u1->state=UNIT_FREEZING_ROARINGED;
+					//memset(u1->moves,0,8*sizeof(struct move));
+					memcpy(u1,u,sizeof(struct unit));
+					for_each_effect(ep,h->effects){
+						if(ep->dest!=u)
+							continue;
+						effect_remove(&h->effects,ep);
+						effect_free(ep,bf);
+					}
+					report(bf,MSG_UPDATE,u1);
 				}
 			}
+			report(bf,rf?MSG_FAIL:MSG_UPDATE,u);
+			unit_wipeeffect(u,0);
 			return 0;
 		default:
 			return -1;
@@ -649,20 +661,23 @@ int effect_setround(struct effect *e,int round){
 	report(f,MSG_EFFECT,e,e->level,round);
 	return 0;
 }
+static void effect_remove(struct effect **head,struct effect *e){
+	if(e->prev){
+		e->prev->next=e->next;
+	}else {
+		*head=e->next;
+	}
+	if(e->next)
+		e->next->prev=e->prev;
+	if(!e->prev&&!e->next)
+		*head=NULL;
+}
 int effect_end(struct effect *e){
 	struct battle_field *f;
 	if(e->intrash)
 		return -1;
 	f=effect_field(e);
-	if(e->prev){
-		e->prev->next=e->next;
-	}else {
-		f->effects=e->next;
-	}
-	if(e->next)
-		e->next->prev=e->prev;
-	if(!e->prev&&!e->next)
-		f->effects=NULL;
+	effect_remove(&f->effects,e);
 	update_attr_all(f);
 	report(f,MSG_EFFECT_END,e);
 	if(e->base->end)
@@ -671,26 +686,39 @@ int effect_end(struct effect *e){
 	effect_free(e,f);
 	return 0;
 }
-
 int effect_final(struct effect *e){
 	struct battle_field *f;
 	if(e->intrash)
 		return -1;
 	f=effect_field(e);
-	if(e->prev){
-		e->prev->next=e->next;
-	}else {
-		f->effects=e->next;
-	}
-	if(e->next)
-		e->next->prev=e->prev;
-	if(!e->prev&&!e->next)
-		f->effects=NULL;
+	effect_remove(&f->effects,e);
 	update_attr_all(f);
 	report(f,MSG_EFFECT_END,e);
 	//printf("FREE3 %p\n",e);
 	effect_free(e,f);
 	return 0;
+}
+struct effect *effect_copyall(struct effect *head){
+	struct effect *r=NULL,*p,*prev;
+	for_each_effect(ep,head){
+		if(r){
+			p->next=malloc(sizeof(struct effect));
+			if(!p->next)
+				break;
+			prev=p;
+			p=p->next;
+		}else {
+			p=malloc(sizeof(struct effect));
+			if(!p)
+				break;
+			prev=NULL;
+			r=p;
+		}
+		memcpy(p,ep,sizeof(struct effect));
+		p->prev=prev;
+		p->next=NULL;
+	}
+	return r;
 }
 int purify(struct effect *ep){
 	struct battle_field *f;
@@ -718,6 +746,20 @@ int unit_wipeeffect(struct unit *u,int mask){
 		++r;
 	}
 	return r;
+}
+void effect_freeall(struct effect **head,struct battle_field *bf){
+	for_each_effect(ep,*head){
+		effect_remove(head,ep);
+		effect_free(ep,bf);
+	}
+	/*struct effect *e,*e1;
+	e=*head;
+	do {
+		e1=e->next;
+		effect_remove(head,e);
+		free(e);
+		e=e1;
+	}while(e);*/
 }
 void wipetrash(struct battle_field *f){
 	struct effect *e,*p;
@@ -1400,16 +1442,25 @@ void history_add(struct battle_field *f){
 	h=f->ht+f->ht_size++;
 	memcpy(&h->p,f->p,sizeof(struct player));
 	memcpy(&h->e,f->e,sizeof(struct player));
+	//h->effects=NULL;
+	h->effects=effect_copyall(f->effects);
 }
 void field_free(struct battle_field *field){
+	struct history *h;
 	for_each_effect(ep,field->effects){
-		effect_final(ep);
+		effect_remove(&field->effects,ep);
+		effect_free(ep,field);
 	}
-	wipetrash(field);
 	if(field->rec)
 		free(field->rec);
-	if(field->ht)
+	if((h=field->ht)){
+		for(struct history *endh=h+field->ht_size;h<endh;++h){
+			if(h->effects)
+				effect_freeall(&h->effects,field);
+		}
 		free(field->ht);
+	}
+	wipetrash(field);
 }
 int player_hasunit(struct player *p){
 	for(int i=0;i<6;++i){

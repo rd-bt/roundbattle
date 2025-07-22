@@ -76,8 +76,28 @@ void wmf(int who,const char *fmt,...){
 	wm(who,buf);
 	va_end(ap);
 }
-
-static const char *sstr[5]={"normal","controlled","spuuressed","failed","freezing_roaringed"};
+void wm_o(int who,const char msg[128]){
+	int i=0;
+	for(i=0;i<REC_SIZE;++i){
+		if(!rec[i][0]){
+			if(i>0)
+				--i;
+			break;
+		}
+	}
+	memcpy(rec[i],msg,127);
+	rec[i][127]=0;
+	rec[i][128]=(char)who;
+}
+void wmf_o(int who,const char *fmt,...){
+	va_list ap;
+	char buf[128];
+	va_start(ap,fmt);
+	vsnprintf(buf,128,fmt,ap);
+	wm_o(who,buf);
+	va_end(ap);
+}
+static const char *sstr[6]={"normal","controlled","spuuressed","fading","failed","freezing_roaringed"};
 void frash(const struct player *p,FILE *fp,int current){
 	struct player *e=p->enemy;
 	struct unit *u;
@@ -334,8 +354,13 @@ no_move:
 							strncpy(buf+r,"[B]",buflen-r);
 						break;
 					case UNIT_CONTROLLED:
-					case UNIT_SUPPRESSED:
 						strncpy(buf+r,"[C]",buflen-r);
+						break;
+					case UNIT_SUPPRESSED:
+						strncpy(buf+r,"[S]",buflen-r);
+						break;
+					case UNIT_FADING:
+						strncpy(buf+r,"[D]",buflen-r);
 						break;
 					case UNIT_FAILED:
 						strncpy(buf+r,"[X]",buflen-r);
@@ -424,11 +449,48 @@ const char *srcid(const struct message *msg){
 	}
 }
 void reporter_term(const struct message *msg,const struct player *p){
+	const struct history *h;
+	const struct unit *u;
+	const struct battle_field *f;
+	ptrdiff_t pt;
+	static int fred=0;
 	char buf[128];
 	char buf1[128];
+	char arrow[16];
 	int r;
-	if(*msg->field->stage==STAGE_BATTLE_END&&msg->type!=MSG_BATTLE_END)
+	f=msg->field;
+	if(*f->stage==STAGE_BATTLE_END&&msg->type!=MSG_BATTLE_END)
 		return;
+	switch(msg->type){
+		case MSG_UPDATE:
+			u=msg->un.uaddr;
+			pt=(ptrdiff_t)u-(ptrdiff_t)f->ht;
+			h=f->ht+pt/sizeof(struct history);
+			pt=h-f->ht;
+			if(pt>=0&&pt<f->ht_size){
+				pt=100*(pt+1)/f->ht_size;
+				r=15*pt/100;
+				if(r>1)
+					memset(arrow,'=',r-1);
+				if(r>=1)
+					arrow[r-1]=r<15?'>':'=';
+				if(r<15)
+					memset(arrow+r,' ',15-r);
+				arrow[15]=0;
+				if(fred){
+					wmf_o(u->owner==p?0:1,"%lu%%[%s]",pt,arrow);
+				}else {
+					wmf(u->owner==p?0:1,"%lu%%[%s]",pt,arrow);
+					fred=1;
+				}
+				if(pt==100)
+					goto delay;
+				goto delayn;
+			}
+		default:
+			fred=0;
+			break;
+	}
 	switch(msg->type){
 		case MSG_ACTION:
 		case MSG_UPDATE:
@@ -458,6 +520,7 @@ void reporter_term(const struct message *msg,const struct player *p){
 			if(*msg->field->stage==STAGE_INIT)
 				break;
 			if(msg->un.e->dest&&msg->un.e->base->id){
+
 				if(!isalive(msg->un.e->dest->state))
 					break;
 				buf[0]=0;
@@ -546,6 +609,11 @@ void reporter_term(const struct message *msg,const struct player *p){
 delay:
 	frash(msg->field->p,stdout,-1);
 	usleep(200000);
+	return;
+delayn:
+	frash(msg->field->p,stdout,-1);
+	usleep(1414213/f->ht_size);
+	return;
 }
 void print_unit(const struct unit *u){
 	int neg;

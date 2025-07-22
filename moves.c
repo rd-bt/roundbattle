@@ -682,8 +682,7 @@ void freezing_roaring(struct unit *s){
 	long n,n1;
 	unsigned long hp;
 	struct move *mp;
-	n=unit_hasnegative(s);
-	if(!n||!((mp=s->move_cur)->mlevel&MLEVEL_FREEZING_ROARING)){
+	if(!((mp=s->move_cur)->mlevel&MLEVEL_FREEZING_ROARING)||!unit_hasnegative(s)){
 		roaring_common_a(TYPE_ICE)
 			effect(SPEED,t,s,-1,-1);
 		roaring_common_b;
@@ -1045,38 +1044,34 @@ void cycle_erode_init(struct unit *s){
 }
 
 void soul_back(struct unit *s){
-	for_each_unit(u,s->owner){
-		if(isalive(u->state))
+	struct battle_field *f=s->owner->field;
+	struct unit *t;
+	for(const struct message *p=f->rec+f->rec_size-1;p>=f->rec;--p){
+		if(p->type!=MSG_FAIL
+		||p->un.u->owner!=s->owner
+		||isalive(p->un.u->state))
 			continue;
-		if(!revive(u,u->max_hp)){
-			sethp(s,0);
-			setcooldown(s,s->move_cur,16);
-		}
+		t=(struct unit *)p->un.u;
+		goto found;
+	}
+	goto fail;
+found:
+	if(!revive(t,t->max_hp)){
+		sethp(s,0);
+		setcooldown(s,s->move_cur,16);
 		return;
 	}
+fail:
+	setcooldown(s,s->move_cur,4);
 }
 int absolutely_immortal_kill(struct effect *e,struct unit *u){
 	if(u==e->dest){
-		//effect_event(e);
-		//sethp(u,1);
-		//effect_event_end(e);
 		return -1;
 	}
 	return 0;
 }
-/*int absolutely_immortal_damage(struct effect *e,struct unit *dest,struct unit *src,unsigned long *value,int *damage_type,int *aflag,int *type){
-	if(dest==e->dest){
-		if(*value>=dest->hp){
-			effect_event(e);
-			*value=dest->hp-1;
-			effect_event_end(e);
-		}
-	}
-	return 0;
-}*/
 const struct effect_base absolutely_immortal_effect[1]={{
 	.id="absolutely_immortal",
-	//.damage=absolutely_immortal_damage,
 	.kill=absolutely_immortal_kill,
 	.flag=EFFECT_POSITIVE|EFFECT_UNPURIFIABLE|EFFECT_NONHOOKABLE,
 	.prior=-128
@@ -1354,7 +1349,7 @@ void force_vh(struct unit *s){
 void back(struct player *p,const struct player *h,long ds[6]){
 	struct unit *b;
 	for(int i=0;i<6;++i){
-		if(!p->units[i].base||p->units[i].state==UNIT_FREEZING_ROARINGED){
+		if(!p->units[i].base){
 			ds[i]=0;
 			continue;
 		}
@@ -1375,6 +1370,7 @@ void do_shear(struct unit *u,long ds){
 void time_back(struct unit *s){
 	struct battle_field *f=s->owner->field;
 	struct history *h;
+	struct effect *head;
 	long pds[6],eds[6];
 	int round=*f->round-20,off=s->move_cur-s->moves;
 	if(round<0)
@@ -1384,15 +1380,19 @@ void time_back(struct unit *s){
 	h=f->ht+round;
 	back(f->p,&h->p,pds);
 	back(f->e,&h->e,eds);
+	head=f->effects;
+	f->effects=effect_copyall(h->effects);
+	effect_freeall(&head,f);
+	report(f,MSG_UPDATE,&f->effects);
 	update_attr_all(f);
-	if(s->moves[off].action==time_back)
-		setcooldown(s,s->moves+off,41);
 	for(int i=0;i<6;++i){
 		if(pds[i])
 			do_shear(f->p->units+i,pds[i]);
 		if(eds[i])
 			do_shear(f->e->units+i,eds[i]);
 	}
+	if(s->moves[off].action==time_back)
+		setcooldown(s,s->moves+off,41);
 }
 int repeat_action(struct effect *e,struct player *p){
 	if(e->dest!=p->front)
@@ -1689,7 +1689,7 @@ void moonlight(struct unit *s){
 
 }
 void byebye(struct unit *s){
-	sethp(s,0);
+	unit_setstate(s,UNIT_FAILED);
 }
 void scent(struct unit *s){
 	for_each_effect(e,s->owner->field->effects){

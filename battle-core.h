@@ -602,10 +602,11 @@ struct player {
 };
 struct history {
 	struct player p,e;
+	struct effect *effects;
 };
 struct message {
 	int type,round;
-	struct battle_field *field;
+	const struct battle_field *field;
 	union {
 		struct {
 			const struct unit *dest,*src;
@@ -708,7 +709,11 @@ int effect_end(struct effect *e);
 
 int effect_final(struct effect *e);
 
+void effect_freeall(struct effect **head,struct battle_field *bf);
+
 void wipetrash(struct battle_field *f);
+
+struct effect *effect_copyall(struct effect *head);
 
 int purify(struct effect *e);
 

@@ -170,9 +170,10 @@ int attr_init(struct effect *e,long level,int round){
 		level=ATTR_MAX;
 	if(level<ATTR_MIN)
 		level=ATTR_MIN;
-	e->level=level;
 	if(!level)
-		return -1;
+		return 1;
+	else
+		e->level=level;
 	return 0;
 }
 #define effect_attr(name,attr)\
@@ -1350,10 +1351,12 @@ void back(struct player *p,const struct player *h,long ds[6]){
 	struct unit *b;
 	for(int i=0;i<6;++i){
 		if(!p->units[i].base){
-			ds[i]=0;
+			if(ds)
+				ds[i]=0;
 			continue;
 		}
-		ds[i]=(h->units+i)->spi-(p->units+i)->spi;
+		if(ds)
+			ds[i]=(h->units+i)->spi-(p->units+i)->spi;
 		memcpy(p->units+i,h->units+i,offsetof(struct unit,owner));
 		report(p->field,MSG_UPDATE,p->units+i);
 	}
@@ -1580,6 +1583,15 @@ int attr_clear_positive(struct unit *u){
 	int r=0;
 	for_each_effect(e,u->owner->field->effects){
 		if(e->dest==u&&(e->base->flag&EFFECT_ATTR)&&e->level>0)
+			if(!purify(e))
+				++r;
+	}
+	return r;
+}
+int attr_clear(struct unit *u){
+	int r=0;
+	for_each_effect(e,u->owner->field->effects){
+		if(e->dest==u&&(e->base->flag&EFFECT_ATTR))
 			if(!purify(e))
 				++r;
 	}
@@ -2415,7 +2427,7 @@ const struct effect_base uniform_base_effect[1]={{
 	.id="uniform_base",
 	.flag=EFFECT_PASSIVE,
 	.damage=uniform_base_damage,
-	.prior=-26
+	.prior=-256
 }};
 void uniform_base(struct unit *s){
 	effect(uniform_base_effect,s,s,0,-1);
@@ -3561,6 +3573,114 @@ void dominate(struct unit *s){
 	}
 	setcooldown(s,s->move_cur,6);
 }
+void globality_reset(struct unit *s){
+	struct battle_field *f=s->owner->field;
+	struct history *h;
+	struct effect *head;
+	int off=s->move_cur-s->moves;
+	if(!f->ht_size)
+		return;
+	h=f->ht;
+	back(f->p,&h->p,NULL);
+	back(f->e,&h->e,NULL);
+	head=f->effects;
+	f->effects=effect_copyall(h->effects);
+	effect_freeall(&head,f);
+	report(f,MSG_UPDATE,&f->effects);
+	update_attr_all(f);
+	if(s->moves[off].action==globality_reset)
+		setcooldown(s,s->moves+off,-1);
+}
+const struct effect_base monoxide[1]={{
+	.id="monoxide",
+	.flag=EFFECT_ADDLEVEL|EFFECT_NEGATIVE,
+}};
+void kf_roundend(struct effect *e){
+	effect_event(e);
+	attack(e->dest,e->src,0.4*e->src->atk,DAMAGE_PHYSICAL,0,TYPE_FIRE);
+	if(unit_effect_level(e->dest,monoxide)<16){
+		effect(monoxide,e->dest,e->src,1,-1);
+	}else {
+		attack(e->dest,e->src,e->dest->max_hp,DAMAGE_MAGICAL,0,TYPE_POISON);
+	}
+	effect_event_end(e);
+}
+const struct effect_base karmic_fire[1]={{
+	.id="karmic_fire",
+	.roundend=kf_roundend,
+	.flag=EFFECT_NEGATIVE,
+}};
+void karmic_burn(struct unit *s){
+	struct unit *t=gettarget(s);
+	if(hittest(t,s,1.0)){
+		attack(t,s,0.4*s->atk,DAMAGE_PHYSICAL,0,TYPE_FIRE);
+	}
+	effect(karmic_fire,t,s,0,3);
+}
+int ap_purify(struct effect *e,struct effect *ep){
+	if(e!=ep||e->level<=3)
+		return 0;
+	effect_reinit(e,e->src,-3,-1);
+	return -1;
+}
+const struct effect_base assimilation_progress[1]={{
+	.id="assimilation_progress",
+	.purify=ap_purify,
+	.flag=EFFECT_ADDLEVEL|EFFECT_NONHOOKABLE|EFFECT_NEGATIVE,
+}};
+const struct event elf_light_impact_le[1]={{
+	.id="elf_light_impact_le",
+}};
+void dyed_amod(struct effect *e,struct unit *dest,struct unit *src,long level){
+	struct effect *e1;
+	if(*(unsigned int *)e->data>=3)
+		return;
+	event_start(elf_light_impact_le,e->src);
+	attack(dest,e->src,0.45*level*e->src->atk,DAMAGE_PHYSICAL,0,TYPE_LIGHT);
+	e1=effect(assimilation_progress,dest,e->src,level,-1);
+	if(e1&&e1->level>=36)
+		unit_setstate(dest,UNIT_FAILED);
+	else
+		++(*(unsigned int *)e->data);
+	event_end(elf_light_impact_le,e->src);
+}
+void dyed_effect_endt(struct effect *e,struct effect *ep){
+	long level;
+	if(e->dest!=ep->dest||!(ep->base->flag&EFFECT_ATTR))
+		return;
+	level=ep->level;
+	if(!level)
+		return;
+	dyed_amod(e,e->dest,e->src,labs(level));
+}
+void dyed_effect_end0(struct effect *e,struct effect *ep,struct unit *dest,struct unit *src,long level,int round){
+	if(e->dest!=dest||!(ep->base->flag&EFFECT_ATTR))
+		return;
+	level=ep->level-level;
+	if(!level)
+		return;
+	dyed_amod(e,dest,src,labs(level));
+}
+const struct effect_base dyed[1]={{
+	.id="dyed",
+	.roundstart=hf_roundstart,
+	.effect_end0=dyed_effect_end0,
+	.effect_endt=dyed_effect_endt,
+	.flag=EFFECT_NEGATIVE,
+}};
+void dye_bomb(struct unit *s){
+	struct unit *t=gettarget(s);
+	if(hittest(t,s,1.3)){
+		attack(t,s,s->atk,DAMAGE_PHYSICAL,0,TYPE_LIGHT);
+	}
+	effect(dyed,t,s,0,5);
+	setcooldown(s,s->move_cur,4);
+}
+void light_curtain(struct unit *s){
+	attr_clear(s);
+	attr_clear(s->osite);
+	setcooldown(s,s->move_cur,6);
+}
 //list
 const struct move builtin_moves[]={
 	{
@@ -4674,6 +4794,35 @@ const struct move builtin_moves[]={
 		.flag=0,
 		.mlevel=MLEVEL_REGULAR
 	},
+	{
+		.id="globality_reset",
+		.action=globality_reset,
+		.type=TYPE_DRAGON,
+		.prior=5,
+		.flag=MOVE_NOCONTROL,
+		.mlevel=MLEVEL_CONCEPTUAL
+	},
+	{
+		.id="karmic_burn",
+		.action=karmic_burn,
+		.type=TYPE_FIRE,
+		.flag=0,
+		.mlevel=MLEVEL_REGULAR
+	},
+	{
+		.id="dye_bomb",
+		.action=dye_bomb,
+		.type=TYPE_LIGHT,
+		.flag=0,
+		.mlevel=MLEVEL_REGULAR
+	},
+	{
+		.id="light_curtain",
+		.action=light_curtain,
+		.type=TYPE_LIGHT,
+		.flag=0,
+		.mlevel=MLEVEL_REGULAR
+	},
 	{.id=NULL}
 };
 const size_t builtin_moves_size=sizeof(builtin_moves)/sizeof(builtin_moves[0])-1;
@@ -4767,5 +4916,9 @@ const char *effects[]={
 "cluster_missile_splinter",
 "suppressed",
 "vanished",
+"monoxide",
+"karmic_fire",
+"assimilation_progress",
+"dyed",
 NULL};
 const size_t effects_size=sizeof(effects)/sizeof(effects[0])-1;

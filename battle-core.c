@@ -96,7 +96,7 @@ fr_end:
 					//u1->hp=0;
 					//u1->state=UNIT_FREEZING_ROARINGED;
 					//memset(u1->moves,0,8*sizeof(struct move));
-					memcpy(u1,u,sizeof(struct unit));
+					memcpy(u1,u,offsetof(struct unit,owner));
 					for_each_effect(ep,h->effects){
 						if(ep->dest!=u)
 							continue;
@@ -519,6 +519,8 @@ static int checkalive3(struct unit *dest,struct unit *src,int xflag){
 struct effect *effectx(const struct effect_base *base,struct unit *dest,struct unit *src,long level,int round,int xflag){
 	struct effect *ep=NULL;
 	struct battle_field *f=NULL;
+	long level_old=0;
+	int round_old=0;
 	int new;
 	if(dest)
 		f=dest->owner->field;
@@ -541,6 +543,8 @@ struct effect *effectx(const struct effect_base *base,struct unit *dest,struct u
 		for_each_effect(e,f->effects){
 			if(e->dest==dest&&e->base==base){
 				ep=e;
+				level_old=ep->level;
+				round_old=ep->round;
 				break;
 			}
 		}
@@ -565,7 +569,7 @@ struct effect *effectx(const struct effect_base *base,struct unit *dest,struct u
 				if(new)
 					free(ep);
 				else
-					effect_final(ep);
+					effect_end(ep);
 				return NULL;
 			default:
 				if(new)
@@ -591,6 +595,9 @@ struct effect *effectx(const struct effect_base *base,struct unit *dest,struct u
 	for_each_effectf(e,f->effects,effect_end){
 		e->base->effect_end(e,ep,dest,src,level,round);
 	}
+	for_each_effectf(e,f->effects,effect_end0){
+		e->base->effect_end0(e,ep,dest,src,level_old,round_old);
+	}
 	return ep;
 }
 int effect_reinit(struct effect *ep,struct unit *src,long level,int round){
@@ -598,6 +605,10 @@ int effect_reinit(struct effect *ep,struct unit *src,long level,int round){
 }
 int effect_reinitx(struct effect *ep,struct unit *src,long level,int round,int xflag){
 	struct battle_field *f=effect_field(ep);
+	long level_old;
+	int round_old;
+	level_old=ep->level;
+	round_old=ep->round;
 	xflag^=ep->base->flag;
 	if(!(xflag&EFFECT_NONHOOKABLE)){
 		for_each_effectf(e,f->effects,effect){
@@ -615,7 +626,7 @@ int effect_reinitx(struct effect *ep,struct unit *src,long level,int round,int x
 			case 0:
 				break;
 			case 1:
-				effect_final(ep);
+				effect_end(ep);
 			default:
 				return -1;
 		}
@@ -634,6 +645,9 @@ int effect_reinitx(struct effect *ep,struct unit *src,long level,int round,int x
 		ep->base->inited(ep);
 	for_each_effectf(e,f->effects,effect_end){
 		e->base->effect_end(e,ep,ep->dest,src,level,round);
+	}
+	for_each_effectf(e,f->effects,effect_end0){
+		e->base->effect_end0(e,ep,ep->dest,src,level_old,round_old);
 	}
 	return 0;
 }
@@ -684,6 +698,9 @@ int effect_end(struct effect *e){
 		e->base->end(e);
 	//printf("FREE1 %p\n",e);
 	effect_free(e,f);
+	for_each_effectf(v,f->effects,effect_endt){
+		v->base->effect_endt(v,e);
+	}
 	return 0;
 }
 int effect_final(struct effect *e){
@@ -828,6 +845,8 @@ int event(const struct event *ev,struct unit *src){
 }
 void unit_cooldown_decrease(struct unit *u,int round){
 	int r,r1,r2;
+	if(u->state==UNIT_FREEZING_ROARINGED)
+		return;
 	for(r=0;r<8;++r){
 		if(!u->moves[r].id)
 			continue;

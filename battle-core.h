@@ -532,6 +532,8 @@ struct effect_base {
 	void (*damage_end)(struct effect *e,struct unit *dest,struct unit *src,unsigned long value,int damage_type,int aflag,int type);
 	int (*effect)(struct effect *e,const struct effect_base *base,struct unit *dest,struct unit *src,long *level,int *round);
 	void (*effect_end)(struct effect *e,struct effect *ep,struct unit *dest,struct unit *src,long level,int round);
+	void (*effect_end0)(struct effect *e,struct effect *ep,struct unit *dest,struct unit *src,long level,int round);
+	void (*effect_endt)(struct effect *e,struct effect *ep);
 	struct unit *(*gettarget)(struct effect *e,struct unit *u);
 	int (*getprior)(struct effect *e,struct player *p);
 	int (*heal)(struct effect *e,struct unit *dest,long *value);
@@ -575,7 +577,6 @@ struct event {
 	void (*action)(const struct event *ev,struct unit *src);
 };
 struct unit {
-	const struct unit_base *base;
 	unsigned long hp,atk,max_hp;
 	long def;
 	unsigned long speed,hit,avoid;
@@ -585,6 +586,7 @@ struct unit {
 		physical_derate,magical_derate;
 	int type0,type1,state,level,blockade,unused;
 	struct move moves[8];
+	const struct unit_base *base;
 	struct player *owner;
 	struct move *move_cur;
 };

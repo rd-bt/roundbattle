@@ -11,11 +11,13 @@
 #include <ncurses.h>
 #include <assert.h>
 #include <locale.h>
+#include <unistd.h>
 
 int main(){
 	struct player_data p1;
 	setlocale(LC_ALL,"");
 	assert(!pdata_load(&p1));
+	srand48(time(NULL)+getpid());
 	main_menu(&p1);
 	pdata_save(&p1);
 	printf("\033c");

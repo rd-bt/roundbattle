@@ -478,9 +478,9 @@ void reporter_term(const struct message *msg,const struct player *p){
 					memset(arrow+r,' ',15-r);
 				arrow[15]=0;
 				if(fred){
-					wmf_o(u->owner==p?0:1,"%lu%%[%s]",pt,arrow);
+					wmf_o(u->owner==p?0:1,YELLOW "%lu%%[%s]" WHITE,pt,arrow);
 				}else {
-					wmf(u->owner==p?0:1,"%lu%%[%s]",pt,arrow);
+					wmf(u->owner==p?0:1,YELLOW "%lu%%[%s]" WHITE,pt,arrow);
 					fred=1;
 				}
 				if(pt==100)

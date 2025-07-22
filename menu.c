@@ -568,9 +568,9 @@ st:
 static const char *mobs[]={
 	"icefield_tiger_cub",
 	"flat_mouth_duck",
+	"cactus_ball",
 	"hood_grass",
 	"attacking_defensive_combined_matrix_1",
-	"cactus_ball",
 };
 #define arrsize(arr) (sizeof(arr)/sizeof(arr[0]))
 void endless_fake(struct player_data *p,int level){

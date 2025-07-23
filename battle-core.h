@@ -276,6 +276,12 @@
 			512.0/_x;\
 }\
 )
+#define derate_coef(d) (\
+{\
+		double _d=(d);\
+		_d>0.8?1.0/(5*_d+1):1.0-_d;\
+}\
+)
 #define inhibit_coef(s) (\
 {\
 		double _s=SHEAR_COEF*(s);\

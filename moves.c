@@ -374,8 +374,7 @@ void kaleido_attack_end0(struct effect *e,struct unit *dest,struct unit *src,uns
 		return;
 	effect_event(e);
 	dmg=0.35*value;
-	if(src->physical_bonus>0)
-		dmg*=1+0.6*src->physical_bonus;
+	dmg*=derate_coef(dest->physical_derate-src->physical_bonus);
 	event_start(natural_shield_passive_sn,src);
 	attack(dest,src,dmg,DAMAGE_MAGICAL,0,TYPE_DEVINEGRASS);	
 	event_end(natural_shield_passive_sn,src);

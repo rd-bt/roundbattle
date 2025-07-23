@@ -248,10 +248,7 @@ unsigned long attack(struct unit *dest,struct unit *src,unsigned long value,int 
 			if(src)derate-=src->magical_bonus;
 			goto do_derate;
 do_derate:
-		if(derate>0.8)
-			value/=5*derate+1;
-		else
-			value*=1-derate;
+		value*=derate_coef(derate);
 		break;
 	}
 	if(!(aflag&AF_NOINHIBIT)&&dest->spi)

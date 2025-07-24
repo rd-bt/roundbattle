@@ -1089,7 +1089,7 @@ int switchunit(struct unit *to){
 	to->owner->front=to;
 	report(to->owner->field,MSG_SWITCH,to,f);
 	for_each_effectf(e,to->owner->field->effects,switchunit_end){
-		e->base->switchunit_end(e,to);
+		e->base->switchunit_end(e,f);
 	}
 	return 0;
 }

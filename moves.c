@@ -1809,7 +1809,7 @@ void entangle(struct unit *s){
 int maple_init(struct effect *e,long level,int round){
 	level+=e->level;
 	if(level<=0)
-		return -1;
+		return 1;
 	e->round=round;
 	e->level=level;
 	return 0;
@@ -3635,12 +3635,12 @@ const struct effect_base assimilation_progress[1]={{
 const struct event elf_light_impact_le[1]={{
 	.id="elf_light_impact_le",
 }};
-void dyed_amod(struct effect *e,struct unit *dest,struct unit *src,long level){
+void dyed_amod(struct effect *e,long level){
 	if(*(unsigned int *)e->data>=3)
 		return;
 	event_start(elf_light_impact_le,e->src);
-	attack(dest,e->src,0.45*level*e->src->atk,DAMAGE_PHYSICAL,0,TYPE_LIGHT);
-	effect(assimilation_progress,dest,e->src,level,-1);
+	attack(e->dest,e->src,0.45*level*e->src->atk,DAMAGE_PHYSICAL,0,TYPE_LIGHT);
+	effect(assimilation_progress,e->dest,e->src,level,-1);
 	if(!e->intrash)
 		++(*(unsigned int *)e->data);
 	event_end(elf_light_impact_le,e->src);
@@ -3652,7 +3652,7 @@ void dyed_effect_endt(struct effect *e,struct effect *ep){
 	level=ep->level;
 	if(!level)
 		return;
-	dyed_amod(e,e->dest,e->src,labs(level));
+	dyed_amod(e,labs(level));
 }
 void dyed_effect_end0(struct effect *e,struct effect *ep,struct unit *dest,struct unit *src,long level,int round){
 	if(e->dest!=dest||!(ep->base->flag&EFFECT_ATTR))
@@ -3660,7 +3660,7 @@ void dyed_effect_end0(struct effect *e,struct effect *ep,struct unit *dest,struc
 	level=ep->level-level;
 	if(!level)
 		return;
-	dyed_amod(e,dest,src,labs(level));
+	dyed_amod(e,labs(level));
 }
 const struct effect_base dyed[1]={{
 	.id="dyed",
@@ -3681,6 +3681,84 @@ void light_curtain(struct unit *s){
 	attr_clear(s);
 	attr_clear(s->osite);
 	setcooldown(s,s->move_cur,6);
+}
+const struct effect_base gate[1];
+void sr_switchunit_end(struct effect *e,struct unit *from){
+	if(from==e->dest&&!unit_findeffect(from,gate)){
+		purify(e);
+	}
+}
+const struct effect_base san_reduce[1]={{
+	.id="san_reduce",
+	.init=maple_init,
+	.switchunit_end=sr_switchunit_end,
+	.flag=EFFECT_NEGATIVE
+}};
+int ps_attack(struct effect *e,struct unit *dest,struct unit *src,unsigned long *value,int *damage_type,int *aflag,int *type){
+	struct effect *e1;
+	if(src==e->dest&&*damage_type!=DAMAGE_REAL&&(e1=unit_findeffect(dest,san_reduce)))
+		*value*=1+(*damage_type==DAMAGE_PHYSICAL?0.03:0.02)*e1->level;
+	return 0;
+}
+void ps_attack_end(struct effect *e,struct unit *dest,struct unit *src,unsigned long value,int damage_type,int aflag,int type){
+	if(e->dest==src&&damage_type!=DAMAGE_REAL&&dest->owner==e->dest->owner->enemy){
+		effect_event(e);
+		effect(san_reduce,dest,src,damage_type==DAMAGE_PHYSICAL?3:2,-1);
+		effect_event_end(e);
+	}
+}
+const struct effect_base psychic_suppress_effect[1]={{
+	.id="psychic_suppress",
+	.attack_end=ps_attack_end,
+	.attack=ps_attack,
+	.flag=EFFECT_PASSIVE,
+}};
+void psychic_suppress_init(struct unit *s){
+	effect(psychic_suppress_effect,s,s,0,-1);
+}
+void nameless_mist(struct unit *s){
+	struct unit *t=s->osite;
+	for_each_effect(e,s->owner->field->effects){
+		if(e->dest==t&&(e->base->flag&EFFECT_ATTR)&&e->level>0)
+			effectx(e->base,t,s,-2*e->level,-1,EFFECT_NONHOOKABLE|EFFECT_NOCONSTRUCT|EFFECT_ADDLEVEL);
+	}
+	effectx(san_reduce,t,s,10,-1,EFFECT_NONHOOKABLE);
+	effect(suppressed,t,s,0,5);
+	setcooldown(s,s->move_cur,31);
+}
+long getsan(const struct unit *u){
+	return 100l-unit_effect_level(u,san_reduce);
+}
+void gate_end(struct effect *e){
+	effect_event(e);
+	attack(e->dest,e->src,0.35*e->src->atk,DAMAGE_PHYSICAL,0,TYPE_STEEL);
+	attack(e->dest,e->src,0.35*e->src->atk,DAMAGE_PHYSICAL,0,TYPE_STEEL);
+	attack(e->dest,e->src,0.35*e->src->atk,DAMAGE_PHYSICAL,0,TYPE_STEEL);
+	if(getsan(e->dest)<15)
+		instant_death(e->dest);
+	effect_event_end(e);
+}
+struct unit *gate_gettarget(struct effect *e,struct unit *u){
+	if(u->owner!=e->dest->owner){
+		effect_event(e);
+		effect_event_end(e);
+		return e->dest;
+	}
+	return NULL;
+}
+const struct effect_base gate[1]={{
+	.id="gate",
+	.end=gate_end,
+	.gettarget=gate_gettarget,
+	.flag=EFFECT_UNPURIFIABLE|EFFECT_NEGATIVE
+}};
+void gate_key(struct unit *s){
+	struct unit *t=gettarget(s);
+	if(hittest(t,s,2.5)){
+		attack(t,s,1.05*s->atk,DAMAGE_PHYSICAL,0,TYPE_STEEL);
+	}
+	effect(gate,t,s,0,3);
+	setcooldown(s,s->move_cur,16);
 }
 //list
 const struct move builtin_moves[]={
@@ -4824,6 +4902,30 @@ const struct move builtin_moves[]={
 		.flag=0,
 		.mlevel=MLEVEL_REGULAR
 	},
+	{
+		.id="psychic_suppress",
+		.init=psychic_suppress_init,
+		.type=TYPE_STEEL,
+		.prior=0,
+		.flag=0,
+		.mlevel=MLEVEL_REGULAR
+	},
+	{
+		.id="nameless_mist",
+		.action=nameless_mist,
+		.type=TYPE_STEEL,
+		.prior=0,
+		.flag=0,
+		.mlevel=MLEVEL_CONCEPTUAL
+	},
+	{
+		.id="gate_key",
+		.action=gate_key,
+		.type=TYPE_STEEL,
+		.prior=0,
+		.flag=0,
+		.mlevel=MLEVEL_CONCEPTUAL
+	},
 	{.id=NULL}
 };
 const size_t builtin_moves_size=sizeof(builtin_moves)/sizeof(builtin_moves[0])-1;
@@ -4921,5 +5023,8 @@ const char *effects[]={
 "karmic_fire",
 "assimilation_progress",
 "dyed",
+"san_reduce",
+"psychic_suppress",
+"gate",
 NULL};
 const size_t effects_size=sizeof(effects)/sizeof(effects[0])-1;

@@ -560,8 +560,8 @@ struct effect_base {
 	void (*setcooldown)(struct unit *u,struct move *m,int *round);
 	void (*setcooldown_end)(struct unit *u,struct move *m,int round);
 	void (*spimod)(struct effect *e,struct unit *dest,long spi);
-	int (*switchunit)(struct effect *e,struct unit *t);
-	void (*switchunit_end)(struct effect *e,struct unit *t);
+	int (*switchunit)(struct effect *e,struct unit *to);
+	void (*switchunit_end)(struct effect *e,struct unit *from);
 	void (*update_attr)(struct effect *e,struct unit *u);
 	void (*update_state)(struct effect *e,struct unit *u,int *state);
 	int flag,prior;

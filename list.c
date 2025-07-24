@@ -37,12 +37,13 @@ void p_move(void){
 void listmove(const struct species *spec){
 	size_t i;
 	int x=0;
+	const char *slv=ts("level");
 	printf("[");
 	for(i=0;i<=150;++i){
 		if(!spec->moves[i]){
 			continue;
 		}
-		printf("%s%s",x?",":"",move_ts(spec->moves[i]));
+		printf("%s%s(%s:%zu)",x?",":"",move_ts(spec->moves[i]),slv,i);
 		x=1;
 	}
 	printf("]");

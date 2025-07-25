@@ -457,10 +457,7 @@ const struct event real_fire_disillusion_fr[1]={{
 	.action=real_fire_disillusion_fr_action,
 }};
 void metal_bomb_inited(struct effect *e){
-	if((e->dest->type0|
-	e->dest->type1|
-	e->src->type0|
-	e->src->type1)&TYPE_WATER)
+	if((unit_type(e->dest)|unit_type(e->src))&TYPE_WATER)
 		effect_end(e);
 }
 void metal_bomb_end(struct effect *e){
@@ -513,8 +510,8 @@ void mosquito_bump(struct unit *s){
 	setcooldown(s,s->move_cur,2);
 }
 int frost_destroying_init(struct effect *e,long level,int round){
-	if(!e->round)
-		e->round=round;
+	if(e->round)
+		return -1;
 	return 0;
 }
 void frost_destroying_cd(struct effect *e,struct unit *u,struct move *m,int *round){
@@ -1712,7 +1709,7 @@ void scent(struct unit *s){
 }
 void synthesis(struct unit *s){
 	struct unit *t=gettarget(s);
-	heal(s,((t->type0|t->type1)&TYPE_LIGHT?0.55:0.45)*s->max_hp);
+	heal(s,((unit_type(t)&TYPE_LIGHT)?0.55:0.45)*s->max_hp);
 	setcooldown(s,s->move_cur,4);
 }
 void hail_pm(struct unit *s){
@@ -2500,7 +2497,7 @@ void soil_loosening(struct unit *s){
 	if(!hittest(t,s,1.0))
 		return;
 	attack(t,s,0.8*s->atk,DAMAGE_PHYSICAL,0,TYPE_SOIL);
-	if((t->type0|t->type1)&TYPE_SOIL)
+	if(unit_type(t)&TYPE_SOIL)
 		effect(DEF,t,s,-1,-1);
 }
 void flash(struct unit *s){
@@ -3688,18 +3685,18 @@ void sr_switchunit_end(struct effect *e,struct unit *from){
 		purify(e);
 	}
 }
+int sr_attack(struct effect *e,struct unit *dest,struct unit *src,unsigned long *value,int *damage_type,int *aflag,int *type){
+	if(dest==e->dest&&*damage_type!=DAMAGE_REAL)
+		*value*=1+(*damage_type==DAMAGE_PHYSICAL?0.03:0.02)*e->level;
+	return 0;
+}
 const struct effect_base san_reduce[1]={{
 	.id="san_reduce",
 	.init=maple_init,
+	.attack=sr_attack,
 	.switchunit_end=sr_switchunit_end,
 	.flag=EFFECT_NEGATIVE
 }};
-int ps_attack(struct effect *e,struct unit *dest,struct unit *src,unsigned long *value,int *damage_type,int *aflag,int *type){
-	struct effect *e1;
-	if(src==e->dest&&*damage_type!=DAMAGE_REAL&&(e1=unit_findeffect(dest,san_reduce)))
-		*value*=1+(*damage_type==DAMAGE_PHYSICAL?0.03:0.02)*e1->level;
-	return 0;
-}
 void ps_attack_end(struct effect *e,struct unit *dest,struct unit *src,unsigned long value,int damage_type,int aflag,int type){
 	if(e->dest==src&&damage_type!=DAMAGE_REAL&&dest->owner==e->dest->owner->enemy){
 		effect_event(e);
@@ -3710,7 +3707,6 @@ void ps_attack_end(struct effect *e,struct unit *dest,struct unit *src,unsigned 
 const struct effect_base psychic_suppress_effect[1]={{
 	.id="psychic_suppress",
 	.attack_end=ps_attack_end,
-	.attack=ps_attack,
 	.flag=EFFECT_PASSIVE,
 }};
 void psychic_suppress_init(struct unit *s){
@@ -3729,13 +3725,28 @@ void nameless_mist(struct unit *s){
 long getsan(const struct unit *u){
 	return 100l-unit_effect_level(u,san_reduce);
 }
+void resetcd(struct unit *u,void (*ma)(struct unit *)){
+	for_each_move(m,u){
+		if(m->action==ma){
+			setcooldown(u,m,0);
+		}
+	}
+}
+void gate_key(struct unit *s);
 void gate_end(struct effect *e){
+	if(e->active)
+		return;
+	e->active=1;
 	effect_event(e);
 	attack(e->dest,e->src,0.35*e->src->atk,DAMAGE_PHYSICAL,0,TYPE_STEEL);
 	attack(e->dest,e->src,0.35*e->src->atk,DAMAGE_PHYSICAL,0,TYPE_STEEL);
 	attack(e->dest,e->src,0.35*e->src->atk,DAMAGE_PHYSICAL,0,TYPE_STEEL);
 	if(getsan(e->dest)<15)
 		instant_death(e->dest);
+	if(!isalive(e->dest->state)){
+		effect(vanished,e->dest,e->src,0,-1);
+		resetcd(e->src,gate_key);
+	}
 	effect_event_end(e);
 }
 struct unit *gate_gettarget(struct effect *e,struct unit *u){
@@ -3746,19 +3757,32 @@ struct unit *gate_gettarget(struct effect *e,struct unit *u){
 	}
 	return NULL;
 }
+void gate_kill_end(struct effect *e,struct unit *u){
+	if(u!=e->dest)
+		return;
+	if(e->active)
+		return;
+	e->active=1;
+	effect(vanished,e->dest,e->src,0,-1);
+	resetcd(e->src,gate_key);
+	effect_end(e);
+}
 const struct effect_base gate[1]={{
 	.id="gate",
 	.end=gate_end,
+	.kill_end=gate_kill_end,
 	.gettarget=gate_gettarget,
-	.flag=EFFECT_UNPURIFIABLE|EFFECT_NEGATIVE
+	.flag=EFFECT_UNPURIFIABLE|EFFECT_KEEP|EFFECT_NEGATIVE
 }};
 void gate_key(struct unit *s){
 	struct unit *t=gettarget(s);
-	if(hittest(t,s,2.5)){
+	if(hittest(t,s,2.3)){
 		attack(t,s,1.05*s->atk,DAMAGE_PHYSICAL,0,TYPE_STEEL);
 	}
-	effect(gate,t,s,0,3);
-	setcooldown(s,s->move_cur,16);
+	if(isalive(t->state)){
+		effect(gate,t,s,0,4);
+		setcooldown(s,s->move_cur,14);
+	}
 }
 //list
 const struct move builtin_moves[]={

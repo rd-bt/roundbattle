@@ -98,6 +98,34 @@ void hp100_battle(struct player_data *p){
 	tm_end();
 	scr();
 }
+void hp10000_battle(struct player_data *p){
+	struct unit_base ubp[6],ube[1];
+	struct player p0,e0;
+	memset(&p0,0,sizeof(struct player));
+	memset(&e0,0,sizeof(struct player));
+	for(int i=0;i<6;++i){
+		if(p->ui[i].spec){
+			mkbase(p->ui+i,ubp+i);
+			p0.units[i].base=ubp+i;
+			ubp[i].max_hp*=10000;
+		}else
+			p0.units[i].base=NULL;
+	}
+	mkbase_id(cont_id_fake(randi()),150,ube);
+	e0.units->base=ube;
+	(e0.units+1)->base=ube;
+	(e0.units+2)->base=ube;
+	ube->max_hp*=10000;
+	p0.selector=term_selector;
+	e0.selector=rand_selector;
+	p0.reporter=reporter_term;
+	e0.reporter=NULL;
+	endwin();
+	tm_init();
+	battle(&p0,&e0,NULL,NULL);
+	tm_end();
+	scr();
+}
 void hp1_battle(struct player_data *p){
 	struct unit_base ubp[6],ube[1];
 	struct player p0,e0;
@@ -162,6 +190,10 @@ const struct mm_option fun_modes[]={
 	{
 		.name="hp100",
 		.submenu=hp100_battle,
+	},
+	{
+		.name="hp10000",
+		.submenu=hp10000_battle,
 	},
 	{
 		.name="hp1",

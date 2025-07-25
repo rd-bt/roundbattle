@@ -446,12 +446,20 @@
 
 #define for_each_unit(_var,_player) for(struct unit *_var=(_player)->units,*_p0=_var+6;_var<_p0;++_var)if(!_var->base)continue;else
 
+#define for_each_move(_var,_unit) for(struct move *_var=(_unit)->moves,*_p0=_var+6;_var<_p0;++_var)if(!_var->id)continue;else
+
 #define osite owner->enemy->front
 
 #define unit_effect_level(u,E) (\
 {\
 		const struct effect *_e=unit_findeffect((u),(E));\
 		_e?_e->level:0l;\
+}\
+)
+#define unit_type(u) (\
+{\
+		const struct unit *_u=(u);\
+		_u->type0|_u->type1;\
 }\
 )
 #define effect_field(e) (\

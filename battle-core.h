@@ -255,7 +255,7 @@
 )
 #define isfront(u) (\
 {\
-		struct unit *_u=(u);\
+		const struct unit *_u=(u);\
 		_u->owner->front==_u;\
 }\
 )
@@ -440,7 +440,16 @@
 		_r;\
 }\
 )
-#define for_each_effect(_var,_ehead) for(struct effect *_var=(_ehead),*_next=_var?_var->next:NULL;_next=_var?_var->next:NULL,_var;_var=_var->intrash?_next:_var->next)
+
+#define EFFECT_RECURSION_DEFAULT 8
+#define effect_recursion_check(e) (\
+{\
+		const struct effect *_e=(e);\
+		unsigned int _rm=_e->base->recursion_max;\
+		_rm?(_e->inevent<_rm):(_e->inevent<EFFECT_RECURSION_DEFAULT);\
+}\
+)
+#define for_each_effect(_var,_ehead) for(struct effect *_var=(_ehead),*_next=_var?_var->next:NULL;_next=_var?_var->next:NULL,_var;_var=_var->intrash?_next:_var->next)if(!effect_recursion_check(_var))continue;else
 
 #define for_each_effectf(_var,_ehead,_field) for_each_effect(_var,_ehead)if(!_var->base->_field)continue;else
 
@@ -572,7 +581,8 @@ struct effect_base {
 	void (*switchunit_end)(struct effect *e,struct unit *from);
 	void (*update_attr)(struct effect *e,struct unit *u);
 	void (*update_state)(struct effect *e,struct unit *u,int *state);
-	int flag,prior;
+	int flag,prior,unused;
+	unsigned recursion_max;
 };
 struct effect {
 	const struct effect_base *base;

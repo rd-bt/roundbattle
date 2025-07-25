@@ -274,6 +274,8 @@ int hittest(struct unit *dest,struct unit *src,double hit_rate){
 	int effect_miss=0;
 	if(!checkalive(dest,src))
 			return 0;
+	if(dest->state==UNIT_SUPPRESSED)
+		return 1;
 	for_each_effectf(e,dest->owner->field->effects,hittest){
 		switch(e->base->hittest(e,dest,src,&hit_rate)){
 			case 1:

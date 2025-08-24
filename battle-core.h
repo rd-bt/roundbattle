@@ -46,6 +46,7 @@
 #define AF_KEEPALIVE 256
 #define AF_NONHOOKABLE 512
 #define AF_NONHOOKABLE_D 1024
+#define AF_NODERATE 2048
 
 
 #define TYPE_VOID (0)
@@ -538,6 +539,10 @@ struct unit_base {
 	int type0,type1,level,unused;
 	struct move moves[8];
 };
+struct event {
+	const char *id;
+	void (*action)(const struct event *ev,struct unit *src);
+};
 struct effect_base {
 	const char *id;
 	int (*init)(struct effect *e,long level,int round);
@@ -557,6 +562,7 @@ struct effect_base {
 	void (*effect_end)(struct effect *e,struct effect *ep,struct unit *dest,struct unit *src,long level,int round);
 	void (*effect_end0)(struct effect *e,struct effect *ep,struct unit *dest,struct unit *src,long level,int round);
 	void (*effect_endt)(struct effect *e,struct effect *ep);
+	void (*event)(struct effect *e,const struct event *ev,struct unit *src);
 	struct unit *(*gettarget)(struct effect *e,struct unit *u);
 	int (*getprior)(struct effect *e,struct player *p);
 	int (*heal)(struct effect *e,struct unit *dest,long *value);
@@ -596,10 +602,6 @@ struct effect {
 	char data[64];
 };
 
-struct event {
-	const char *id;
-	void (*action)(const struct event *ev,struct unit *src);
-};
 struct unit {
 	unsigned long hp,atk,max_hp;
 	long def;
@@ -748,6 +750,8 @@ int unit_wipeeffect(struct unit *u,int mask);
 int revive(struct unit *u,unsigned long hp);
 
 int revive_nonhookable(struct unit *u,unsigned long hp);
+
+int event_callback(const struct event *ev,struct unit *src);
 
 int event(const struct event *ev,struct unit *src);
 

@@ -192,11 +192,11 @@ const struct effect_base name[1]={{\
 	.update_attr=name##_update_attr,\
 	.flag=EFFECT_ATTR|EFFECT_KEEP,\
 	.prior=64\
-}};
-effect_attr(ATK,atk)
-effect_attr(SPEED,speed)
-effect_attr(HIT,hit)
-effect_attr(AVOID,avoid)
+}}
+effect_attr(ATK,atk);
+effect_attr(SPEED,speed);
+effect_attr(HIT,hit);
+effect_attr(AVOID,avoid);
 #define effect_attr_d(name,attr,step)\
 void name##_update_attr(struct effect *e,struct unit *u){\
 	if(e->dest==u)\
@@ -209,13 +209,13 @@ const struct effect_base name[1]={{\
 	.update_attr=name##_update_attr,\
 	.flag=EFFECT_ATTR|EFFECT_KEEP,\
 	.prior=64\
-}};
-effect_attr_d(DEF,def,0.25*u->def)
-effect_attr_d(CE,crit_effect,0.5)
-effect_attr_d(PDB,physical_bonus,0.25)
-effect_attr_d(MDB,magical_bonus,0.25)
-effect_attr_d(PDD,physical_derate,0.25)
-effect_attr_d(MDD,magical_derate,0.25)
+}}
+effect_attr_d(DEF,def,0.25*u->def);
+effect_attr_d(CE,crit_effect,0.5);
+effect_attr_d(PDB,physical_bonus,0.25);
+effect_attr_d(MDB,magical_bonus,0.25);
+effect_attr_d(PDD,physical_derate,0.25);
+effect_attr_d(MDD,magical_derate,0.25);
 void steel_flywheel(struct unit *s){
 	struct unit *t=gettarget(s);
 	if(hittest(t,s,1.2)){
@@ -370,7 +370,7 @@ const struct event natural_shield_passive_sn[1]={{
 }};
 void kaleido_attack_end0(struct effect *e,struct unit *dest,struct unit *src,unsigned long value,int damage_type,int aflag,int type){
 	unsigned long dmg;
-	if(src!=e->dest||dest->owner!=src->owner->enemy||damage_type!=DAMAGE_PHYSICAL||value<3)
+	if(src!=e->dest||dest->owner!=src->owner->enemy||damage_type!=DAMAGE_PHYSICAL)
 		return;
 	effect_event(e);
 	dmg=0.35*value;
@@ -570,7 +570,7 @@ const struct effect_base primordial_breath[1]={{
 	.prior=-32
 }};
 void primordial_breath_action(struct unit *s){
-	attack(s->osite,s,0,DAMAGE_PHYSICAL,0,TYPE_ICE);
+	attack(s->osite,s,0,DAMAGE_PHYSICAL,AF_NONHOOKABLE|AF_NONHOOKABLE_D|AF_NOINHIBIT|AF_NOFLOAT|AF_EFFECT|AF_WEAK|AF_NODERATE|AF_NODEF,TYPE_ICE);
 }
 void primordial_breath_init(struct unit *s){
 	effect(primordial_breath,s,s,0,-1);
@@ -2393,7 +2393,8 @@ void uniform_base(struct unit *s){
 void uniform_base_a(struct unit *s){
 	struct unit *t=s->osite;
 	long sp=s->spi;
-	attack(t,s,0.75*s->atk+10.24*labs(sp),DAMAGE_PHYSICAL,AF_NOFLOAT|AF_EFFECT|AF_WEAK,TYPE_MACHINE);
+	attack(t,s,0.5*s->atk+7.5*labs(sp),DAMAGE_PHYSICAL,AF_NOFLOAT|AF_EFFECT|AF_WEAK,TYPE_MACHINE);
+	addhp3(t,-(40+(10*SHEAR_COEF)*t->max_hp),HPMOD_SHEAR);
 	setspi(s,0);
 	setspi(t,t->spi+sp);
 }
@@ -3096,7 +3097,7 @@ int protecting_kill(struct effect *e,struct unit *u){
 		//effect_event(e);
 		//sethp(u,1);
 		//effect_event_end(e);
-		return 0;
+		return -1;
 	}
 	return 0;
 }
@@ -3662,7 +3663,7 @@ const struct effect_base san_reduce[1]={{
 void ps_attack_end(struct effect *e,struct unit *dest,struct unit *src,unsigned long value,int damage_type,int aflag,int type){
 	if(e->dest==src&&damage_type!=DAMAGE_REAL&&dest->owner==e->dest->owner->enemy){
 		effect_event(e);
-		effect(san_reduce,dest,src,damage_type==DAMAGE_PHYSICAL?3:2,-1);
+		effect(san_reduce,dest,src,(damage_type==DAMAGE_PHYSICAL?3:2)+!!(aflag&AF_CRIT),-1);
 		effect_event_end(e);
 	}
 }
@@ -3767,6 +3768,83 @@ void missile_support(struct unit *s){
 		attack(t,s,s->atk,DAMAGE_PHYSICAL,0,TYPE_FIRE);
 	effect(missile_support_effect,s,s,0,8);
 	setcooldown(s,s->move_cur,7);
+}
+int cr_attack(struct effect *e,struct unit *dest,struct unit *src,unsigned long *value,int *damage_type,int *aflag,int *type){
+	_Static_assert(ATTR_MAX>0.0,"ATTR_MAX is zero or negative");
+	if(src==e->dest&&*damage_type!=DAMAGE_REAL&&test(e->level/(double)ATTR_MAX))
+		*aflag|=AF_CRIT;
+	return 0;
+}
+const struct effect_base CR[1]={{
+	.id="CR",
+	.init=attr_init,
+	.attack=cr_attack,
+	.flag=EFFECT_ATTR|EFFECT_KEEP,
+}};
+void boomerang(struct unit *s){
+	struct unit *t=gettarget(s);
+	struct effect *e=unit_findeffect(t,gate);
+	if(hittest(t,s,1.3)){
+		if(e){
+			attack(t,s,1.25*s->atk,DAMAGE_PHYSICAL,AF_CRIT,TYPE_STEEL);
+			effect_end(e);
+		}else
+			attack(t,s,1.25*s->atk,DAMAGE_PHYSICAL,0,TYPE_STEEL);
+	}
+	heal(s,0.25*s->atk);
+	effect(CR,s,s,1,-1);
+	setcooldown(s,s->move_cur,4);
+}
+void star_elf_ray(struct unit *s){
+	struct unit *t=gettarget(s);
+	struct move *mp=NULL;
+	int cd;
+	for_each_move(m,s){
+		if(!m->action||m->cooldown<=0)
+			continue;
+		if(!mp||m->cooldown>mp->cooldown){
+			mp=m;
+		}
+	}
+	cd=mp?mp->cooldown:0;
+	if(hittest(t,s,0.9+0.1*(cd+!cd)))
+		attack(t,s,s->atk,DAMAGE_PHYSICAL,0,TYPE_STEEL);
+	if(cd){
+		setcooldown(s,mp,0);
+		setcooldown(s,s->move_cur,cd);
+	}
+}
+void nano_spimod(struct effect *e,struct unit *dest,long hp){
+	if(dest==e->dest){
+		effect_event(e);
+		effect_reinit(e,NULL,-1,-1);
+		if(e->level<=0){
+			effect_end(e);
+			attack(dest,dest,0.4*dest->max_hp,DAMAGE_REAL,0,TYPE_VOID);
+			effect(stunned,dest,dest,0,5);
+		}
+		effect_event_end(e);
+	}
+}
+int nano_init(struct effect *e,long level,int round){
+	e->round=round;
+	if(level>0)
+		e->level=level;
+	else
+		e->level+=level;
+	return 0;
+}
+const struct effect_base nano_shield[1]={{
+	.id="nano_shield",
+	.init=nano_init,
+	.damage=protecting_damage,
+	.kill=protecting_kill,
+	.hpmod=protecting_hpmod,
+	.spimod=nano_spimod,
+	.flag=EFFECT_POSITIVE|EFFECT_UNPURIFIABLE|EFFECT_NONHOOKABLE,
+}};
+void nano_shield_action(struct unit *s){
+	effect(nano_shield,s,s,18,-1);
 }
 //list
 const struct move builtin_moves[]={
@@ -4941,6 +5019,29 @@ const struct move builtin_moves[]={
 		.flag=0,
 		.mlevel=MLEVEL_REGULAR
 	},
+	{
+		.id="boomerang",
+		.action=boomerang,
+		.type=TYPE_STEEL,
+		.prior=0,
+		.flag=0,
+		.mlevel=MLEVEL_REGULAR
+	},
+	{
+		.id="star_elf_ray",
+		.action=star_elf_ray,
+		.type=TYPE_STEEL,
+		.prior=0,
+		.flag=0,
+		.mlevel=MLEVEL_REGULAR
+	},
+	{
+		.id="nano_shield",
+		.action=nano_shield_action,
+		.type=TYPE_MACHINE,
+		.flag=0,
+		.mlevel=MLEVEL_REGULAR
+	},
 	{.id=NULL}
 };
 const size_t builtin_moves_size=sizeof(builtin_moves)/sizeof(builtin_moves[0])-1;
@@ -5042,5 +5143,7 @@ const char *effects[]={
 "psychic_suppress",
 "gate",
 "missile_support",
+"CR",
+"nano_shield",
 NULL};
 const size_t effects_size=sizeof(effects)/sizeof(effects[0])-1;

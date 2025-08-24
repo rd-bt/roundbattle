@@ -240,12 +240,18 @@ unsigned long attack(struct unit *dest,struct unit *src,unsigned long value,int 
 		case DAMAGE_REAL:
 			break;
 		case DAMAGE_PHYSICAL:
+			if(aflag&AF_NODERATE)
+				break;
 			derate=dest->physical_derate;
-			if(src)derate-=src->physical_bonus;
+			if(src)
+				derate-=src->physical_bonus;
 			goto do_derate;
 		case DAMAGE_MAGICAL:
+			if(aflag&AF_NODERATE)
+				break;
 			derate=dest->magical_derate;
-			if(src)derate-=src->magical_bonus;
+			if(src)
+				derate-=src->magical_bonus;
 			goto do_derate;
 do_derate:
 		value*=derate_coef(derate);
@@ -830,6 +836,14 @@ int revive(struct unit *u,unsigned long hp){
 		e->base->revive_end(e,u,hp);
 	}
 	return 0;
+}
+int event_callback(const struct event *ev,struct unit *src){
+	int r=0;
+	for_each_effectf(e,src->owner->field->effects,event){
+		e->base->event(e,ev,src);
+		++r;
+	}
+	return r;
 }
 int event(const struct event *ev,struct unit *src){
 	if(src->state==UNIT_FREEZING_ROARINGED)

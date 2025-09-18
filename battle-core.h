@@ -151,22 +151,29 @@
 #define ATTR_MAX (+8)
 #define ATTR_MIN (-8)
 
-#define EFFECT_ATTR 1
-#define EFFECT_ABNORMAL 2
-#define EFFECT_CONTROL 4
-#define EFFECT_POSITIVE 8
-#define EFFECT_NEGATIVE 16
-#define EFFECT_ENV 32
-#define EFFECT_UNPURIFIABLE 64
-#define EFFECT_ISOLATED 128
-#define EFFECT_KEEP 256
-#define EFFECT_NONHOOKABLE 512
-#define EFFECT_NOCONSTRUCT 1024
-#define EFFECT_ADDLEVEL 2048
-#define EFFECT_ADDROUND 4096
-#define EFFECT_ALLOWFAILED 8192
+#define EFFECT_ATTR (1<<0)
+#define EFFECT_ABNORMAL (1<<1)
+#define EFFECT_CONTROL (1<<2)
+#define EFFECT_POSITIVE (1<<3)
+#define EFFECT_NEGATIVE (1<<4)
+#define EFFECT_ENV (1<<5)
+#define EFFECT_UNPURIFIABLE (1<<6)
+#define EFFECT_ISOLATED (1<<7)
+#define EFFECT_KEEP (1<<8)
+#define EFFECT_NONHOOKABLE (1<<9)
+#define EFFECT_NOCONSTRUCT (1<<10)
+#define EFFECT_ADDLEVEL (1<<11)
+#define EFFECT_ADDROUND (1<<12)
+#define EFFECT_ALLOWFAILED (1<<13)
+#define EFFECT_NODESTRUCT (1<<14)
+#define EFFECT_OVERRIDESRC (1<<15)
+#define EFFECT_REMOVE (1<<16)
+#define EFFECT_FIND (1<<17)
+#define EFFECT_CHECKL (1<<18)
+#define EFFECT_CHECKR (1<<19)
 
 #define EFFECT_PASSIVE (EFFECT_POSITIVE|EFFECT_UNPURIFIABLE|EFFECT_KEEP|EFFECT_NONHOOKABLE|EFFECT_ALLOWFAILED)
+#define EFFECT_OPTS (EFFECT_REMOVE|EFFECT_FIND|EFFECT_CHECKL|EFFECT_CHECKR)
 
 #define STAGE_INIT 0
 #define STAGE_ROUNDSTART 1
@@ -450,6 +457,9 @@
 		_rm?(_e->inevent<_rm):(_e->inevent<EFFECT_RECURSION_DEFAULT);\
 }\
 )
+
+#define effect_size(_base) (sizeof(struct effect)+(_base)->data_size)
+
 #define for_each_effect(_var,_ehead) for(struct effect *_var=(_ehead),*_next=_var?_var->next:NULL;_next=_var?_var->next:NULL,_var;_var=_var->intrash?_next:_var->next)if(!effect_recursion_check(_var))continue;else
 
 #define for_each_effectf(_var,_ehead,_field) for_each_effect(_var,_ehead)if(!_var->base->_field)continue;else
@@ -562,7 +572,7 @@ struct effect_base {
 	void (*effect_end)(struct effect *e,struct effect *ep,struct unit *dest,struct unit *src,long level,int round);
 	void (*effect_end0)(struct effect *e,struct effect *ep,struct unit *dest,struct unit *src,long level,int round);
 	void (*effect_endt)(struct effect *e,struct effect *ep);
-	void (*event)(struct effect *e,const struct event *ev,struct unit *src);
+	int (*event)(struct effect *e,const struct event *ev,struct unit *src);
 	struct unit *(*gettarget)(struct effect *e,struct unit *u);
 	int (*getprior)(struct effect *e,struct player *p);
 	int (*heal)(struct effect *e,struct unit *dest,long *value);
@@ -575,7 +585,6 @@ struct effect_base {
 	int (*move)(struct effect *e,struct unit *u,struct move *m);
 	void (*move_end)(struct effect *e,struct unit *u,struct move *m);
 	int (*purify)(struct effect *e,struct effect *ep);
-	void (*purify_end)(struct effect *e,struct effect *ep);
 	int (*revive)(struct effect *e,struct unit *u,unsigned long *hp);
 	void (*revive_end)(struct effect *e,struct unit *u,unsigned long hp);
 	void (*roundend)(struct effect *e);
@@ -583,12 +592,13 @@ struct effect_base {
 	void (*setcooldown)(struct unit *u,struct move *m,int *round);
 	void (*setcooldown_end)(struct unit *u,struct move *m,int round);
 	void (*spimod)(struct effect *e,struct unit *dest,long spi);
+	void (*statemod)(struct effect *e,struct unit *u,int old);
 	int (*switchunit)(struct effect *e,struct unit *to);
 	void (*switchunit_end)(struct effect *e,struct unit *from);
 	void (*update_attr)(struct effect *e,struct unit *u);
 	void (*update_state)(struct effect *e,struct unit *u,int *state);
-	int flag,prior,unused;
-	unsigned recursion_max;
+	int flag,prior;
+	unsigned int recursion_max,data_size;
 };
 struct effect {
 	const struct effect_base *base;
@@ -599,7 +609,7 @@ struct effect {
 	unsigned int active:1,intrash:1,:0;
 	unsigned int inevent;
 	long level;
-	char data[64];
+	char data[];
 };
 
 struct unit {
@@ -625,6 +635,7 @@ struct player {
 	struct player *enemy;
 	struct battle_field *field;
 	int action;
+	unsigned int move_recursion;
 	unsigned int acted:1,:0;
 	char data[64];
 };
@@ -787,11 +798,17 @@ int setcooldown(struct unit *u,struct move *m,int round);
 
 struct effect *unit_findeffect(const struct unit *u,const struct effect_base *base);
 
-struct effect *unit_findeffect3(const struct unit *u,const struct effect_base *base,int flag);
+struct effect *unit_findeffectf(const struct unit *u,int flag);
+
+struct effect *findeffect(const struct effect *head,const struct effect_base *base);
 
 int effect_isnegative_base(const struct effect_base *base,const struct unit *dest,const struct unit *src,long level);
 
 int effect_isnegative(const struct effect *e);
+
+int effect_ispositive_base(const struct effect_base *base,const struct unit *dest,const struct unit *src,long level);
+
+int effect_ispositive(const struct effect *e);
 
 int unit_hasnegative(const struct unit *u);
 

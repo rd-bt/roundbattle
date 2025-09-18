@@ -100,6 +100,7 @@ void p_unit(void){
 	printf("id: %s ",builtin_species[i].max.id);
 	printf("%s:",ts("move"));
 	listmove(builtin_species+i);
+	printf("(%s)",unit_desc(p->id));
 	printf("\n");
 	}
 }

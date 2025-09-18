@@ -28,7 +28,7 @@
 #define azero(a) memset((a),0,sizeof(a))
 #define REC_SIZE 64
 static char rec[REC_SIZE][129];
-
+int aslp=1;
 size_t strrlen(const char *s){
 	size_t r=0;
 	while(*s){
@@ -483,10 +483,13 @@ void reporter_term(const struct message *msg,const struct player *p){
 					wmf(u->owner==p?0:1,YELLOW "%lu%%[%s]" WHITE,pt,arrow);
 					fred=1;
 				}
-				if(pt==100)
+				if(pt==100){
+					fred=0;
 					goto delay;
+				}
 				goto delayn;
 			}
+			return;
 		default:
 			fred=0;
 			break;
@@ -559,7 +562,7 @@ void reporter_term(const struct message *msg,const struct player *p){
 			break;
 		case MSG_FAIL:
 			wmf(msg->un.u->owner==p?0:1,"[%ld]%s %s",msg->un.u-msg->un.u->owner->units,unit_ts(msg->un.u->base->id),ts("failed"));
-			break;
+			goto delay;
 		case MSG_HEAL:
 			buf1[0]=0;
 			if(msg->un.heal.dest!=msg->un.heal.dest->owner->front){
@@ -590,7 +593,7 @@ void reporter_term(const struct message *msg,const struct player *p){
 			break;
 		case MSG_ROUNDEND:
 			wmf(0,ts("round_end"));
-			break;
+			goto delay;
 		case MSG_SPIMOD:
 			buf1[0]=0;
 			if(msg->un.spimod.dest!=msg->un.spimod.dest->owner->front){
@@ -600,7 +603,7 @@ void reporter_term(const struct message *msg,const struct player *p){
 			goto delay;
 		case MSG_SWITCH:
 			wmf(msg->un.u2.dest->owner==p?0:1,"[%ld]%s",msg->un.u2.dest-msg->un.u2.dest->owner->units,unit_ts(msg->un.u2.dest->base->id));
-			break;
+			goto delay;
 		default:
 			break;
 	}
@@ -608,11 +611,13 @@ void reporter_term(const struct message *msg,const struct player *p){
 	return;
 delay:
 	frash(msg->field->p,stdout,-1);
-	usleep(200000);
+	if(aslp)
+		usleep(200000);
 	return;
 delayn:
 	frash(msg->field->p,stdout,-1);
-	usleep(1414213/f->ht_size);
+	if(aslp)
+		usleep(1414213/f->ht_size);
 	return;
 }
 void print_unit(const struct unit *u){
@@ -865,6 +870,9 @@ refrash:
 				--dep;
 			}
 			//read(STDIN_FILENO,buf,31);
+			goto refrash;
+		case 'm':
+			aslp^=1;
 			goto refrash;
 	}
 	goto refrash;

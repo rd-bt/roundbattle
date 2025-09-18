@@ -126,7 +126,7 @@ int aurora_damage(struct effect *e,struct unit *dest,struct unit *src,unsigned l
 }
 void aurora_end(struct effect *e){
 	if(e->level){
-		attack(e->dest,e->src,e->level,DAMAGE_REAL,0,TYPE_VOID);
+		attack(e->dest,NULL,e->level,DAMAGE_REAL,0,TYPE_VOID);
 	}
 }
 int asleep_damage(struct effect *e,struct unit *dest,struct unit *src,unsigned long *value,int *damage_type,int *aflag,int *type){
@@ -365,9 +365,9 @@ int natural_shield_kill(struct effect *e,struct unit *u){
 	}
 	return 0;
 }
-const struct event natural_shield_passive_sn[1]={{
+/*const struct event natural_shield_passive_sn[1]={{
 	.id="natural_shield_passive_sn",
-}};
+}};*/
 void kaleido_attack_end0(struct effect *e,struct unit *dest,struct unit *src,unsigned long value,int damage_type,int aflag,int type){
 	unsigned long dmg;
 	if(src!=e->dest||dest->owner!=src->owner->enemy||damage_type!=DAMAGE_PHYSICAL)
@@ -375,9 +375,9 @@ void kaleido_attack_end0(struct effect *e,struct unit *dest,struct unit *src,uns
 	effect_event(e);
 	dmg=0.35*value;
 	dmg*=derate_coef(dest->physical_derate-src->physical_bonus);
-	event_start(natural_shield_passive_sn,src);
+	//event_start(natural_shield_passive_sn,src);
 	attack(dest,src,dmg,DAMAGE_MAGICAL,0,TYPE_DEVINEGRASS);	
-	event_end(natural_shield_passive_sn,src);
+	//event_end(natural_shield_passive_sn,src);
 	effect_event_end(e);
 }
 void kaleido_roundend(struct effect *e){
@@ -655,11 +655,12 @@ void freezing_roaring(struct unit *s){
 	report(s->owner->field,MSG_DAMAGE,t,s,hp,DAMAGE_MAGICAL,AF_CRIT,TYPE_ICE);
 	//show as a critical magical damage corresponding with other roarings.
 	unit_setstate(t,UNIT_FREEZING_ROARINGED);
-	for_each_effect(ep,s->owner->field->effects){
+	/*for_each_effect(ep,s->owner->field->effects){
 		if(ep->dest!=s||!effect_isnegative(ep))
 			continue;
 		effect_final(ep);
-	}
+	}*/
+	effectx(NULL,s,NULL,0,0,EFFECT_REMOVE|EFFECT_NEGATIVE|EFFECT_NONHOOKABLE|EFFECT_NODESTRUCT|EFFECT_UNPURIFIABLE);
 	if(mp->cooldown){
 		mp->cooldown=0;
 		report(s->owner->field,MSG_UPDATE,mp);
@@ -1537,7 +1538,9 @@ void nether_roaring(struct unit *s){
 	attack(t,s,(0.6+0.2*n)*s->atk,DAMAGE_MAGICAL,AF_CRIT,TYPE_GHOST);
 	effect(AVOID,s,s,n*2,-1);
 }
-int attr_clear_positive(struct unit *u){
+#define attr_clear(_u) ((int)(size_t)effectx(NULL,(_u),NULL,0,0,EFFECT_REMOVE|EFFECT_ATTR))
+#define attr_clear_positive(_u) ((int)(size_t)effectx(NULL,(_u),NULL,0,0,EFFECT_REMOVE|EFFECT_POSITIVE|EFFECT_ATTR))
+/*int attr_clear_positive(struct unit *u){
 	int r=0;
 	for_each_effect(e,u->owner->field->effects){
 		if(e->dest==u&&(e->base->flag&EFFECT_ATTR)&&e->level>0)
@@ -1554,7 +1557,7 @@ int attr_clear(struct unit *u){
 				++r;
 	}
 	return r;
-}
+}*/
 void tidal(struct unit *s){
 	struct unit *t=gettarget(s);
 	int r=attr_clear_positive(t);
@@ -1651,22 +1654,24 @@ void rest(struct unit *s){
 	;
 }
 void moonlight(struct unit *s){
-	for_each_effect(e,s->owner->field->effects){
+	/*for_each_effect(e,s->owner->field->effects){
 		if(e->dest!=s||!(e->base->flag&EFFECT_ATTR)||e->level>0)
 			continue;
 		purify(e);
-	}
+	}*/
+	effectx(NULL,s,NULL,0,0,EFFECT_REMOVE|EFFECT_NEGATIVE|EFFECT_ATTR);
 
 }
 void byebye(struct unit *s){
 	unit_setstate(s,UNIT_FAILED);
 }
 void scent(struct unit *s){
-	for_each_effect(e,s->owner->field->effects){
+	/*for_each_effect(e,s->owner->field->effects){
 		if(e->dest!=s||!(e->base->flag&EFFECT_ABNORMAL))
 			continue;
 		purify(e);
-	}
+	}*/
+	effectx(NULL,s,NULL,0,0,EFFECT_REMOVE|EFFECT_ABNORMAL);
 
 }
 void synthesis(struct unit *s){
@@ -1892,7 +1897,8 @@ const struct effect_base shield[1]={{
 	.flag=EFFECT_POSITIVE,
 	.init=shield_init,
 	.damage=shield_damage,
-	.roundend=shield_roundend
+	.roundend=shield_roundend,
+	.data_size=sizeof(double),
 }};
 int heal_weak_heal(struct effect *e,struct unit *dest,long *value){
 	double coef;
@@ -1910,6 +1916,7 @@ int heal_weak_heal(struct effect *e,struct unit *dest,long *value){
 const struct effect_base heal_weak[1]={{
 	.id="heal_weak",
 	.heal=heal_weak_heal,
+	.data_size=sizeof(double),
 	.flag=EFFECT_NEGATIVE
 }};
 int heal_bonus_heal(struct effect *e,struct unit *dest,long *value){
@@ -1926,6 +1933,7 @@ int heal_bonus_heal(struct effect *e,struct unit *dest,long *value){
 const struct effect_base heal_bonus[1]={{
 	.id="heal_bonus",
 	.heal=heal_bonus_heal,
+	.data_size=sizeof(double),
 	.flag=EFFECT_POSITIVE
 }};
 void elbow_roundend(struct effect *e){
@@ -1944,6 +1952,7 @@ void elbow_roundend(struct effect *e){
 }
 const struct effect_base elbow_effect[1]={{
 	.roundend=elbow_roundend,
+	.data_size=sizeof(double),
 	.flag=EFFECT_POSITIVE
 }};
 int elbow1_attack(struct effect *e,struct unit *dest,struct unit *src,unsigned long *value,int *damage_type,int *aflag,int *type){
@@ -1960,6 +1969,7 @@ int elbow1_attack(struct effect *e,struct unit *dest,struct unit *src,unsigned l
 }
 const struct effect_base elbow1[1]={{
 	.attack=elbow1_attack,
+	.data_size=sizeof(double),
 	.flag=EFFECT_POSITIVE
 }};
 void elbow2_update_attr(struct effect *e,struct unit *u){
@@ -2076,7 +2086,7 @@ void elbow(struct unit *s){
 		if(e)
 			*(double *)e->data=0.35+0.2*d1;
 	}
-	e=unit_findeffect3(s,NULL,EFFECT_ABNORMAL);
+	e=unit_findeffectf(s,EFFECT_ABNORMAL);
 	if(e){
 		if(e->base==cursed||e->base==radiated){
 			heal(s,0.15*s->max_hp);
@@ -3843,8 +3853,178 @@ const struct effect_base nano_shield[1]={{
 	.spimod=nano_spimod,
 	.flag=EFFECT_POSITIVE|EFFECT_UNPURIFIABLE|EFFECT_NONHOOKABLE,
 }};
+int nano_ava(struct unit *s,struct move *m){
+	return !unit_findeffect(s,nano_shield);
+}
 void nano_shield_action(struct unit *s){
 	effect(nano_shield,s,s,18,-1);
+}
+const struct effect_base bloom_point[1]={{
+	.flag=EFFECT_PASSIVE|EFFECT_ADDLEVEL,
+}};
+struct bloom_state {
+	int cd_p,cd_e;
+	unsigned char u_p[6],u_e[6],unused[4];
+};
+void bloma(const struct event *ev,struct unit *src){
+	effectx(bloom_point,src,src,3,0,EFFECT_ADDLEVEL);
+	event_callback(ev,src);
+}
+const struct event bloom[1]={{
+	.id="bloom",
+	.action=bloma,
+}};
+void try_bloom(struct unit *u);
+void bloms_he(struct effect *e,struct unit *dest,struct unit *src,int hit){
+	if(!hit||!isalive(src->state)||!isfront(src))
+		return;
+	effect_event(e);
+	try_bloom(src);
+	effect_event_end(e);
+}
+void bloms_roundstart(struct effect *e){
+	struct bloom_state *b=(void *)e->data;
+	if(b->cd_p>0)
+		--b->cd_p;
+	if(b->cd_e>0)
+		--b->cd_e;
+}
+const struct effect_base bloom_system[1]={{
+	.roundstart=bloms_roundstart,
+	.hittest_end=bloms_he,
+	.flag=EFFECT_PASSIVE,
+	.data_size=sizeof(struct bloom_state),
+}};
+struct bloom_state *getbloms(struct battle_field *bf){
+	for_each_effect(e,bf->effects){
+		if(e->base==bloom_system)
+			return (void *)e->data;
+	}
+	return NULL;
+}
+int unit_available(struct unit *u){
+	return u->state!=UNIT_FREEZING_ROARINGED&&!unit_findeffect(u,vanished);
+}
+const struct effect_base high_pressure[1]={{
+	.id="high_pressure",
+	.flag=EFFECT_ENV,
+}};
+void blom_me(struct effect *e,struct unit *u,struct move *m){
+	if(e->dest!=u||u->owner->move_recursion+1!=e->level)
+		return;
+	event(bloom,u);
+	effect_end(e);
+}
+const struct effect_base blooming[1]={{
+	.move_end=blom_me,
+	.flag=EFFECT_PASSIVE,
+}};
+void try_bloom(struct unit *u){
+	struct unit *u1;
+	struct player *p;
+	struct battle_field *bf;
+	struct bloom_state *b=getbloms(bf=(p=u->owner)->field);
+	int *cd;
+	unsigned char *a;
+	int r;
+	if(!b)
+		return;
+	cd=(p==bf->p?&b->cd_p:&b->cd_e);
+	if(*cd)
+		return;
+	a=(p==bf->p?b->u_p:b->u_e);
+	u1=(p==bf->p?bf->p->units:bf->e->units);
+	r=0;
+	for(int i=0;i<6;++i,++u1){
+		if(!a[i])
+			continue;
+		if(!unit_available(u1))
+			continue;
+		r=1;
+	}
+	if(!r)
+		return;
+	if(findeffect(bf->effects,high_pressure))
+		*cd=3;
+	else
+		*cd=4;
+	effect(blooming,u,u,u->owner->move_recursion,0);
+}
+void unit_setbloom(struct unit *u){
+	struct battle_field *bf;
+	struct effect *e;
+	struct player *p;
+	unsigned char *a;
+	struct bloom_state *b=getbloms(bf=(p=u->owner)->field);
+	if(!b){
+		e=effect(bloom_system,NULL,u,0,-1);
+		if(!e)
+			return;
+		b=(void *)e->data;
+	}
+	a=(p==bf->p?b->u_p:b->u_e);
+	a[u-p->units]=1;
+}
+#define ckblom {\
+	struct effect *e11;\
+	if(ev!=bloom||src->owner!=e->dest->owner)\
+		return 0;\
+	e11=unit_findeffect(src,bloom_point);\
+	if(!e11)\
+		return 0;\
+	effect_reinit(e11,src,-1,0);\
+	if(e11->level<=0)\
+		return -1;\
+}
+int fairyland_gate_event(struct effect *e,const struct event *ev,struct unit *src){
+	ckblom;
+	effect_event(e);
+	src=e->dest;
+	attack(gettarget(src),src,1.4*src->atk,DAMAGE_PHYSICAL,0,TYPE_NORMAL);
+	effect_event_end(e);
+	return 0;
+}
+const struct effect_base fairyland_gate[1]={{
+	.id="fairyland_gate",
+	.event=fairyland_gate_event,
+	.flag=EFFECT_PASSIVE,
+}};
+void fairyland_gate_p(struct unit *s){
+	unit_setbloom(s);
+	effect(fairyland_gate,s,s,0,-1);
+}
+int flog_event(struct effect *e,const struct event *ev,struct unit *src){
+	ckblom;
+	if(unit_effect_level(src,ATK)>=4)
+		return 0;
+	effect_event(e);
+	src=e->dest;
+	effect(ATK,src,src,1,-1);
+	effect_event_end(e);
+	return 0;
+}
+const struct effect_base flog[1]={{
+	.id="flog",
+	.event=flog_event,
+	.flag=EFFECT_PASSIVE,
+}};
+void flog_p(struct unit *s){
+	unit_setbloom(s);
+	effect(flog,s,s,0,-1);
+}
+void high_pressure_watercannon(struct unit *s){
+	struct unit *t=gettarget(s);
+	if(hittest(t,s,2.0))
+		attack(t,s,1.5*s->atk,DAMAGE_PHYSICAL,0,TYPE_WATER);
+	effect(high_pressure,NULL,s,0,8);
+	setcooldown(s,s->move_cur,11);
+}
+void air_cannon(struct unit *s){
+	struct unit *t=gettarget(s);
+	if(hittest(t,s,1.5))
+		attack(t,s,1.6*s->atk,DAMAGE_PHYSICAL,0,TYPE_WIND);
+	event(bloom,s);
+	setcooldown(s,s->move_cur,6);
 }
 //list
 const struct move builtin_moves[]={
@@ -5038,7 +5218,36 @@ const struct move builtin_moves[]={
 	{
 		.id="nano_shield",
 		.action=nano_shield_action,
+		.available=nano_ava,
 		.type=TYPE_MACHINE,
+		.flag=0,
+		.mlevel=MLEVEL_REGULAR
+	},
+	{
+		.id="fairyland_gate",
+		.init=fairyland_gate_p,
+		.type=TYPE_NORMAL,
+		.flag=0,
+		.mlevel=MLEVEL_REGULAR
+	},
+	{
+		.id="flog",
+		.init=flog_p,
+		.type=TYPE_FIGHTING,
+		.flag=0,
+		.mlevel=MLEVEL_REGULAR
+	},
+	{
+		.id="high_pressure_watercannon",
+		.action=high_pressure_watercannon,
+		.type=TYPE_WATER,
+		.flag=0,
+		.mlevel=MLEVEL_REGULAR
+	},
+	{
+		.id="air_cannon",
+		.action=air_cannon,
+		.type=TYPE_WIND,
 		.flag=0,
 		.mlevel=MLEVEL_REGULAR
 	},
@@ -5145,5 +5354,8 @@ const char *effects[]={
 "missile_support",
 "CR",
 "nano_shield",
+"fairyland_gate",
+"flog",
+"high_pressure",
 NULL};
 const size_t effects_size=sizeof(effects)/sizeof(effects[0])-1;

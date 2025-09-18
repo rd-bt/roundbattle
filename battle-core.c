@@ -20,10 +20,28 @@ static int iffr(const struct unit *u,const struct move *m){
 }
 static void effect_remove(struct effect **head,struct effect *e);
 static void effect_free(struct effect *ep,struct battle_field *f);
+static void unit_state_update(struct unit *u,int new){
+	int old=u->state;
+	u->state=new;
+	report(u->owner->field,(isalive_s(old)&&!isalive_s(new))?MSG_FAIL:MSG_UPDATE,u);
+	switch(new){
+		case UNIT_FAILED:
+			unit_wipeeffect(u,EFFECT_KEEP);
+			break;
+		case UNIT_FREEZING_ROARINGED:
+			unit_wipeeffect(u,0);
+			return;
+		default:
+			break;
+	}
+	for_each_effectf(e,u->owner->field->effects,statemod){
+		e->base->statemod(e,u,old);
+	}
+}
 int unit_setstate(struct unit *u,int state){
 	struct player *p;
 	struct battle_field *bf;
-	int rf,index;
+	int index;
 	switch(state){
 		case UNIT_NORMAL:
 		case UNIT_CONTROLLED:
@@ -31,10 +49,9 @@ int unit_setstate(struct unit *u,int state){
 		case UNIT_FADING:
 			if(u->state==UNIT_FREEZING_ROARINGED)
 				return -1;
-			if(u->state==state)
-				return 0;
-			u->state=state;
-			goto end;
+			if(u->state!=state)
+				unit_state_update(u,state);
+			return 0;
 		case UNIT_FAILED:
 			switch(u->state){
 				case UNIT_FAILED:
@@ -46,57 +63,41 @@ int unit_setstate(struct unit *u,int state){
 			}
 			if(u->hp)
 				clearhp(u);
-			//dealing the freezing_roaring
 			p=u->owner;
-			if(p->acted)
-				goto fr_end;
+			//dealing the freezing_roaring
 			switch((state=p->action)){
 				case ACT_MOVE0 ... ACT_MOVE7:
 					if(p->acted||*p->field->stage>=STAGE_ROUNDEND||!iffr(u,u->moves+state))
 						break;
-					if(u->state==UNIT_FADING)
-						return 1;
-					u->state=UNIT_FADING;
-					goto end1;
+					if(u->state!=UNIT_FADING)
+						unit_state_update(u,UNIT_FADING);
+					return 1;
 				default:
 					break;
 			}
-fr_end:
 			//end
-			u->state=UNIT_FAILED;
 			if(u==p->front)
 				p->action=ACT_ABORT;
-			report(p->field,MSG_FAIL,u);
-			unit_wipeeffect(u,EFFECT_KEEP);
+			unit_state_update(u,UNIT_FAILED);
 			return 0;
 		case UNIT_FREEZING_ROARINGED:
 			switch(u->state){
 				case UNIT_FREEZING_ROARINGED:
 					return 0;
-				case UNIT_FAILED:
-					rf=0;
-					break;
 				default:
-					rf=1;
 					break;
 			}
 			if(u->hp)
 				clearhp(u);
 			p=u->owner;
-			u->state=UNIT_FREEZING_ROARINGED;
-			if(u==p->front)
-				p->action=ACT_ABORT;
-			memset(u->moves,0,8*sizeof(struct move));
 			bf=p->field;
 			if(bf->ht_size){
 				struct unit *u1;
 				index=u-p->units;
 				for(struct history *h=bf->ht,*endh=h+bf->ht_size;h<endh;++h){
 					u1=(p==bf->p?&h->p:&h->e)->units+index;
-					//u1->hp=0;
-					//u1->state=UNIT_FREEZING_ROARINGED;
-					//memset(u1->moves,0,8*sizeof(struct move));
-					memcpy(u1,u,offsetof(struct unit,owner));
+					u1->hp=0;
+					u1->state=UNIT_FREEZING_ROARINGED;
 					for_each_effect(ep,h->effects){
 						if(ep->dest!=u)
 							continue;
@@ -106,18 +107,13 @@ fr_end:
 					report(bf,MSG_UPDATE,u1);
 				}
 			}
-			report(bf,rf?MSG_FAIL:MSG_UPDATE,u);
-			unit_wipeeffect(u,0);
+			if(u==p->front)
+				p->action=ACT_ABORT;
+			unit_state_update(u,UNIT_FREEZING_ROARINGED);
 			return 0;
 		default:
 			return -1;
 	}
-end:
-	report(u->owner->field,MSG_UPDATE,u);
-	return 0;
-end1:
-	report(u->owner->field,MSG_UPDATE,u);
-	return 1;
 }
 int unit_kill(struct unit *u){
 	if(!isalive(u->state)||u->hp)
@@ -278,8 +274,6 @@ do_derate:
 int hittest(struct unit *dest,struct unit *src,double hit_rate){
 	double real_rate;
 	int effect_miss=0;
-	if(!checkalive(dest,src))
-			return 0;
 	if(dest->state==UNIT_SUPPRESSED)
 		return 1;
 	for_each_effectf(e,dest->owner->field->effects,hittest){
@@ -521,16 +515,61 @@ static int checkalive3(struct unit *dest,struct unit *src,int xflag){
 			return 1;
 	}
 }
+static int effect_do_opts(struct effect *e,const struct effect_base *base,struct unit *dest,struct unit *src,long level,int round,int xflag){
+	if((base&&base!=e->base)||dest!=e->dest||(src&&src!=e->src))
+		return -1;
+	if((xflag&EFFECT_CHECKL)&&level!=e->level)
+		return -1;
+	if((xflag&EFFECT_CHECKR)&&round!=e->round)
+		return -1;
+#define ckflag(_fl) \
+	if((xflag&(_fl))&&!(e->base->flag&(_fl)))\
+		return -1
+	ckflag(EFFECT_ATTR);
+	ckflag(EFFECT_ABNORMAL);
+	ckflag(EFFECT_CONTROL);
+	if((xflag&EFFECT_NEGATIVE)&&(xflag&EFFECT_POSITIVE)){
+		if(effect_isnegative(e)||effect_ispositive(e))
+			return -1;
+	}else if((xflag&EFFECT_NEGATIVE)&&!effect_isnegative(e))
+		return -1;
+	else if((xflag&EFFECT_POSITIVE)&&!effect_ispositive(e))
+		return -1;
+	if(xflag&EFFECT_FIND){
+		return 0;
+	}
+	if(xflag&EFFECT_REMOVE){
+		if(!(xflag&EFFECT_UNPURIFIABLE)&&(e->base->flag&EFFECT_UNPURIFIABLE))
+			return -1;
+		if(!(xflag&EFFECT_NONHOOKABLE)){
+			for_each_effectf(v,effect_field(e)->effects,purify){
+				if(v->base->purify(v,e))
+					return -1;
+			}
+		}
+		return ((xflag&EFFECT_NODESTRUCT)?effect_final:effect_end)(e);
+	}
+	return -1;
+}
 struct effect *effectx(const struct effect_base *base,struct unit *dest,struct unit *src,long level,int round,int xflag){
 	struct effect *ep=NULL;
 	struct battle_field *f=NULL;
 	long level_old=0;
 	int round_old=0;
 	int new;
+	size_t sz;
 	if(dest)
 		f=dest->owner->field;
 	else if(src)
 		f=src->owner->field;
+	if(xflag&EFFECT_OPTS){
+		sz=0;
+		for_each_effect(e,f->effects){
+			if(!effect_do_opts(e,base,dest,src,level,round,xflag))
+				++sz;
+		}
+		return (struct effect *)sz;
+	}
 	xflag^=base->flag;
 	if(!checkalive3(dest,src,xflag))
 		return NULL;
@@ -555,10 +594,10 @@ struct effect *effectx(const struct effect_base *base,struct unit *dest,struct u
 		}
 	}
 	if(!ep){
-		ep=malloc(sizeof(struct effect));
+		ep=malloc(sz=effect_size(base));
 		if(!ep)
 			return NULL;
-		memset(ep,0,sizeof(struct effect));
+		memset(ep,0,sz);
 		new=1;
 		ep->base=base;
 		ep->dest=dest;
@@ -566,6 +605,8 @@ struct effect *effectx(const struct effect_base *base,struct unit *dest,struct u
 	}else
 		new=0;
 	ep->src1=src;
+	if(xflag&EFFECT_OVERRIDESRC)
+		ep->src=src;
 	if(!(xflag&EFFECT_NOCONSTRUCT)&&base->init){
 		switch(base->init(ep,level,round)){
 			case 0:
@@ -612,6 +653,9 @@ int effect_reinitx(struct effect *ep,struct unit *src,long level,int round,int x
 	struct battle_field *f=effect_field(ep);
 	long level_old;
 	int round_old;
+	if(xflag&EFFECT_OPTS){
+		return effect_do_opts(ep,NULL,ep->dest,src,level,round,xflag);
+	}
 	level_old=ep->level;
 	round_old=ep->round;
 	xflag^=ep->base->flag;
@@ -626,6 +670,8 @@ int effect_reinitx(struct effect *ep,struct unit *src,long level,int round,int x
 			return -1;
 	}
 	ep->src1=src;
+	if(xflag&EFFECT_OVERRIDESRC)
+		ep->src=src;
 	if(!(xflag&EFFECT_NOCONSTRUCT)&&ep->base->init){
 		switch(ep->base->init(ep,level,round)){
 			case 0:
@@ -699,12 +745,14 @@ int effect_end(struct effect *e){
 	effect_remove(&f->effects,e);
 	update_attr_all(f);
 	report(f,MSG_EFFECT_END,e);
-	if(e->base->end)
+	if(!(e->base->flag&EFFECT_NODESTRUCT)&&e->base->end)
 		e->base->end(e);
 	//printf("FREE1 %p\n",e);
 	effect_free(e,f);
-	for_each_effectf(v,f->effects,effect_endt){
-		v->base->effect_endt(v,e);
+	if(!(e->base->flag&EFFECT_NODESTRUCT)){
+		for_each_effectf(v,f->effects,effect_endt){
+			v->base->effect_endt(v,e);
+		}
 	}
 	return 0;
 }
@@ -722,21 +770,23 @@ int effect_final(struct effect *e){
 }
 struct effect *effect_copyall(struct effect *head){
 	struct effect *r=NULL,*p,*prev;
+	size_t sz;
 	for_each_effect(ep,head){
+			sz=effect_size(ep->base);
 		if(r){
-			p->next=malloc(sizeof(struct effect));
+			p->next=malloc(sz);
 			if(!p->next)
 				break;
 			prev=p;
 			p=p->next;
 		}else {
-			p=malloc(sizeof(struct effect));
+			p=malloc(sz);
 			if(!p)
 				break;
 			prev=NULL;
 			r=p;
 		}
-		memcpy(p,ep,sizeof(struct effect));
+		memcpy(p,ep,sz);
 		p->prev=prev;
 		p->next=NULL;
 	}
@@ -744,7 +794,6 @@ struct effect *effect_copyall(struct effect *head){
 }
 int purify(struct effect *ep){
 	struct battle_field *f;
-	int r;
 	if(ep->base->flag&EFFECT_UNPURIFIABLE)
 		return -1;
 	f=effect_field(ep);
@@ -752,11 +801,7 @@ int purify(struct effect *ep){
 		if(v->base->purify(v,ep))
 			return -1;
 	}
-	r=effect_end(ep);
-	for_each_effectf(v,f->effects,purify_end){
-		v->base->purify_end(v,ep);
-	}
-	return r;
+	return effect_end(ep);
 }
 int unit_wipeeffect(struct unit *u,int mask){
 	int r=0;
@@ -840,8 +885,10 @@ int revive(struct unit *u,unsigned long hp){
 int event_callback(const struct event *ev,struct unit *src){
 	int r=0;
 	for_each_effectf(e,src->owner->field->effects,event){
-		e->base->event(e,ev,src);
-		++r;
+		if(e->base->event(e,ev,src))
+			break;
+		else
+			++r;
 	}
 	return r;
 }
@@ -995,9 +1042,16 @@ struct effect *unit_findeffect(const struct unit *u,const struct effect_base *ba
 	}
 	return NULL;
 }
-struct effect *unit_findeffect3(const struct unit *u,const struct effect_base *base,int flag){
+struct effect *unit_findeffectf(const struct unit *u,int flag){
 	for_each_effect(e,u->owner->field->effects){
-		if((!base||(e->base==base&&e->dest==u))&&(e->base->flag&flag))
+		if(e->base->flag&flag)
+			return e;
+	}
+	return NULL;
+}
+struct effect *findeffect(const struct effect *head,const struct effect_base *base){
+	for_each_effect(e,(struct effect *)head){
+		if(e->base==base)
 			return e;
 	}
 	return NULL;
@@ -1014,6 +1068,19 @@ int effect_isnegative_base(const struct effect_base *base,const struct unit *des
 }
 int effect_isnegative(const struct effect *e){
 	return effect_isnegative_base(e->base,e->dest,e->src,e->level);
+}
+int effect_ispositive_base(const struct effect_base *base,const struct unit *dest,const struct unit *src,long level){
+	if(base->flag&(EFFECT_NEGATIVE|EFFECT_ABNORMAL|EFFECT_CONTROL))
+		return 0;
+	else if(base->flag&EFFECT_POSITIVE)
+		return 1;
+	else if(base->flag&EFFECT_ATTR)
+		return level>0;
+	else
+		return 0;
+}
+int effect_ispositive(const struct effect *e){
+	return effect_ispositive_base(e->base,e->dest,e->src,e->level);
 }
 int unit_hasnegative(const struct unit *u){
 	int r=0;
@@ -1040,6 +1107,7 @@ int unit_hasnegative(const struct unit *u){
 }
 int unit_move_nonhookable(struct unit *u,struct move *m){
 	struct move *backup;
+	struct player *p;
 	switch(u->state){
 		case UNIT_FAILED:
 		case UNIT_FREEZING_ROARINGED:
@@ -1052,7 +1120,10 @@ int unit_move_nonhookable(struct unit *u,struct move *m){
 	report(u->owner->field,MSG_MOVE,u,m);
 	backup=u->move_cur;
 	u->move_cur=m;
+	p=u->owner;
+	++p->move_recursion;
 	m->action(u);
+	--p->move_recursion;
 	u->move_cur=backup;
 	report(u->owner->field,MSG_MOVE_END,u,m);
 	for_each_effectf(e,u->owner->field->effects,move_end){
@@ -1087,8 +1158,11 @@ int unit_move(struct unit *u,struct move *m){
 }
 void unit_move_init(struct unit *u,struct move *m){
 	struct move *backup=u->move_cur;
+	struct player *p=u->owner;
 	u->move_cur=m;
+	++p->move_recursion;
 	m->init(u);
+	--p->move_recursion;
 	u->move_cur=backup;
 }
 int switchunit(struct unit *to){
@@ -1497,7 +1571,7 @@ void field_free(struct battle_field *field){
 int player_hasunit(struct player *p){
 	for(int i=0;i<6;++i){
 		if(!p->units[i].base)
-			break;
+			continue;
 		if(isalive_s(p->units[i].state)){
 			return 1;
 		}
@@ -1534,9 +1608,15 @@ const struct player *getwinner_nonnull(struct battle_field *f){
 	r0=isalive_s(r2=p->front->state);
 	r1=isalive_s(r3=e->front->state);
 	if(!r0)
-		r0=player_hasunit(p);
+		r2=player_hasunit(p);
+	else
+		r2=1;
 	if(!r1)
-		r1=player_hasunit(e);
+		r3=player_hasunit(e);
+	else
+		r3=1;
+	if(r2!=r3)
+		return r2?p:e;
 	if(r0!=r1)
 		return r0?p:e;
 	r0=(r2==UNIT_FREEZING_ROARINGED);

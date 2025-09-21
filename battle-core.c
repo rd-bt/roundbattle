@@ -273,21 +273,18 @@ do_derate:
 
 int hittest(struct unit *dest,struct unit *src,double hit_rate){
 	double real_rate;
-	int effect_miss=0;
-	if(dest->state==UNIT_SUPPRESSED)
-		return 1;
+	if(dest->state==UNIT_SUPPRESSED||hit_rate==-INFINITY)
+		goto hit;
 	for_each_effectf(e,dest->owner->field->effects,hittest){
 		switch(e->base->hittest(e,dest,src,&hit_rate)){
 			case 1:
 				goto hit;
 			case 0:
-				effect_miss=1;
+				goto miss;
 			default:
 				continue;
 		}
 	}
-	if(effect_miss)
-		goto miss;
 	if(!dest->avoid)
 		goto hit;
 	real_rate=hit_rate*(double)src->hit/(double)dest->avoid;
@@ -516,8 +513,22 @@ static int checkalive3(struct unit *dest,struct unit *src,int xflag){
 	}
 }
 static int effect_do_opts(struct effect *e,const struct effect_base *base,struct unit *dest,struct unit *src,long level,int round,int xflag){
-	if((base&&base!=e->base)||dest!=e->dest||(src&&src!=e->src))
+	if(base&&base!=e->base)
 		return -1;
+	if(xflag&EFFECT_SELECTALL){
+		if(dest){
+			if(!e->dest||e->dest->owner!=dest->owner)
+				return -1;
+		}else {
+			if(!e->src||e->src->owner!=src->owner)
+				return -1;
+		}
+	}else {
+		if(((round&1)||dest)&&dest!=e->dest)
+			return -1;
+		if(((round&2)||src)&&src!=e->src)
+			return -1;
+	}
 #define ckflag(_fl) \
 	if((xflag&(_fl))&&!(e->base->flag&(_fl)))\
 		return -1
@@ -569,7 +580,8 @@ struct effect *effectx(const struct effect_base *base,struct unit *dest,struct u
 		}
 		return (struct effect *)sz;
 	}
-	xflag^=base->flag;
+	if(!(xflag&EFFECT_SELECTALL))
+		xflag^=base->flag;
 	if(!checkalive3(dest,src,xflag))
 		return NULL;
 	if(!(xflag&EFFECT_NONHOOKABLE)){
@@ -657,7 +669,8 @@ int effect_reinitx(struct effect *ep,struct unit *src,long level,int round,int x
 	}
 	level_old=ep->level;
 	round_old=ep->round;
-	xflag^=ep->base->flag;
+	if(!(xflag&EFFECT_SELECTALL))
+		xflag^=ep->base->flag;
 	if(!(xflag&EFFECT_NONHOOKABLE)){
 		for_each_effectf(e,f->effects,effect){
 			if(e->base->effect(e,ep->base,ep->dest,src,&level,&round))

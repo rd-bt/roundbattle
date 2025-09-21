@@ -3248,7 +3248,7 @@ int aiming_hittest(struct effect *e,struct unit *dest,struct unit *src,double *h
 const struct effect_base aiming[1]={{
 	.id="aiming",
 	.hittest=aiming_hittest,
-	.prior=0,
+	.prior=1,
 	.flag=EFFECT_POSITIVE,
 }};
 ava_rec(youkai,650);

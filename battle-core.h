@@ -167,13 +167,11 @@
 #define EFFECT_ALLOWFAILED (1<<13)
 #define EFFECT_NODESTRUCT (1<<14)
 #define EFFECT_OVERRIDESRC (1<<15)
-#define EFFECT_REMOVE (1<<16)
-#define EFFECT_FIND (1<<17)
-#define EFFECT_CHECKL (1<<18)
-#define EFFECT_CHECKR (1<<19)
+#define EFFECT_FIND (1<<16)
+#define EFFECT_REMOVE (1<<17)
 
 #define EFFECT_PASSIVE (EFFECT_POSITIVE|EFFECT_UNPURIFIABLE|EFFECT_KEEP|EFFECT_NONHOOKABLE|EFFECT_ALLOWFAILED)
-#define EFFECT_OPTS (EFFECT_REMOVE|EFFECT_FIND|EFFECT_CHECKL|EFFECT_CHECKR)
+#define EFFECT_OPTS (EFFECT_FIND|EFFECT_REMOVE)
 
 #define STAGE_INIT 0
 #define STAGE_ROUNDSTART 1
@@ -496,6 +494,7 @@ enum {
 	MSG_EFFECT_END,
 	MSG_EFFECT_EVENT,
 	MSG_EFFECT_EVENT_END,
+	MSG_EFFECT_ROUNDDEC,
 	MSG_EVENT,
 	MSG_EVENT_END,
 	MSG_FAIL,
@@ -572,7 +571,7 @@ struct effect_base {
 	void (*effect_end)(struct effect *e,struct effect *ep,struct unit *dest,struct unit *src,long level,int round);
 	void (*effect_end0)(struct effect *e,struct effect *ep,struct unit *dest,struct unit *src,long level,int round);
 	void (*effect_endt)(struct effect *e,struct effect *ep);
-	int (*event)(struct effect *e,const struct event *ev,struct unit *src);
+	int (*event)(struct effect *e,const struct event *ev,struct unit *src,void *arg);
 	struct unit *(*gettarget)(struct effect *e,struct unit *u);
 	int (*getprior)(struct effect *e,struct player *p);
 	int (*heal)(struct effect *e,struct unit *dest,long *value);
@@ -655,6 +654,7 @@ struct message {
 		const struct effect *e;
 		struct {
 			const struct effect *e;
+			const struct effect_base *base;
 			long level;
 			int round;
 		} e_init;
@@ -762,7 +762,7 @@ int revive(struct unit *u,unsigned long hp);
 
 int revive_nonhookable(struct unit *u,unsigned long hp);
 
-int event_callback(const struct event *ev,struct unit *src);
+int event_callback(const struct event *ev,struct unit *src,void *arg);
 
 int event(const struct event *ev,struct unit *src);
 
@@ -789,8 +789,6 @@ void unit_effect_in_roundend(struct unit *u);
 void effect_in_roundend(struct effect *effects);
 
 void effect_in_roundstart(struct effect *effects);
-
-void unit_effect_round_decrease(struct unit *u,int round);
 
 void effect_round_decrease(struct effect *effects,int round);
 

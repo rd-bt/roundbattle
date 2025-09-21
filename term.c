@@ -457,6 +457,7 @@ void reporter_term(const struct message *msg,const struct player *p){
 	char buf[128];
 	char buf1[128];
 	char arrow[16];
+	long level;
 	int r;
 	f=msg->field;
 	if(*f->stage==STAGE_BATTLE_END&&msg->type!=MSG_BATTLE_END)
@@ -523,9 +524,10 @@ void reporter_term(const struct message *msg,const struct player *p){
 			if(*msg->field->stage==STAGE_INIT)
 				break;
 			if(msg->un.e->dest&&msg->un.e->base->id){
-
 				if(!isalive(msg->un.e->dest->state))
 					break;
+				level=msg->un.e_init.level;
+attr_end:
 				buf[0]=0;
 				buf[127]=0;
 				r=0;
@@ -533,8 +535,8 @@ void reporter_term(const struct message *msg,const struct player *p){
 				if(msg->un.e->dest!=msg->un.e->dest->owner->front){
 					snprintf(buf1,128,"[%ld]%s ",msg->un.e->dest-msg->un.e->dest->owner->units,unit_ts(msg->un.e->dest->base->id));
 				}
-				if(msg->un.e_init.level)
-					snprintf(buf+r,127-r," %+ld",msg->un.e_init.level);
+				if(level)
+					snprintf(buf+r,127-r," %+ld",level);
 				wmf(msg->un.e->dest->owner==p?0:1,"%s" YELLOW "%s%s (%s:%s)" WHITE,buf1,e2s(msg->un.e->base->id),buf,ts("source"),srcid(msg));
 				goto delay;
 			}
@@ -543,6 +545,10 @@ void reporter_term(const struct message *msg,const struct player *p){
 			if(msg->un.e->dest&&msg->un.e->base->id){
 				if(!isalive(msg->un.e->dest->state))
 					break;
+				if(msg->un.e_init.base->flag&EFFECT_ATTR){
+					level=-msg->un.e_init.level;
+					goto attr_end;
+				}
 				buf[0]=0;
 				buf1[0]=0;
 				if(msg->un.e->dest!=msg->un.e->dest->owner->front){
@@ -555,6 +561,8 @@ void reporter_term(const struct message *msg,const struct player *p){
 		case MSG_EFFECT_EVENT:
 			break;
 		case MSG_EFFECT_EVENT_END:
+			break;
+		case MSG_EFFECT_ROUNDDEC:
 			break;
 		case MSG_EVENT:
 			break;

@@ -552,9 +552,19 @@ const struct effect_base frost_destroying[1]={{
 	.prior=32
 }};
 
+void primordial_breath_roundstart(struct effect *e){
+	e->active=0;
+}
 void primordial_breath_attack_end(struct effect *e,struct unit *dest,struct unit *src,unsigned long value,int damage_type,int aflag,int type){
-	if(e->dest==src&&type==TYPE_ICE&&damage_type==DAMAGE_PHYSICAL&&dest->owner==e->dest->owner->enemy&&!(aflag&AF_CRIT)&&value*2<=dest->max_hp){
+	if(e->dest==src&&
+			type==TYPE_ICE&&
+			damage_type==DAMAGE_PHYSICAL&&
+			dest->owner==e->dest->owner->enemy&&
+			!(aflag&AF_CRIT)&&
+			value*2<=dest->max_hp&&
+			!e->active){
 		effect_event(e);
+		e->active=1;
 		if(unit_findeffect(dest,frost_destroying)){
 			effect(PDD,dest,src,-1,-1);
 		}else {
@@ -566,6 +576,7 @@ void primordial_breath_attack_end(struct effect *e,struct unit *dest,struct unit
 const struct effect_base primordial_breath[1]={{
 	.id="primordial_breath",
 	.attack_end=primordial_breath_attack_end,
+	.roundstart=primordial_breath_roundstart,
 	.flag=EFFECT_PASSIVE,
 	.prior=-32
 }};
@@ -2214,12 +2225,16 @@ const struct effect_base moon_elf_shield_cooldown[1]={{
 	.end=moon_elf_shield_cooldown_end
 }};
 void moon_elf_shield_effect_end(struct effect *e,struct effect *ep,struct unit *dest,struct unit *src,long level,int round){
-	int x=0;
+//	int x=0;
 	if(dest!=e->dest)
 		return;
 	if(unit_findeffect(dest,moon_elf_shield_cooldown))
 		return;
-	for_each_effect(ep2,dest->owner->field->effects){
+	if(!effectx(NULL,e->dest,NULL,0,0,EFFECT_FIND|EFFECT_CONTROL))
+		return;
+	effect_event(e);
+	effectx(NULL,e->dest,NULL,0,0,EFFECT_REMOVE|EFFECT_CONTROL);
+	/*for_each_effect(ep2,dest->owner->field->effects){
 		if((ep2->dest==dest)&&ep2->base->flag&EFFECT_CONTROL){
 			if(!x){
 				effect_event(e);
@@ -2230,7 +2245,7 @@ void moon_elf_shield_effect_end(struct effect *e,struct effect *ep,struct unit *
 	}
 	if(!x){
 		return;
-	}
+	}*/
 	effect_reinit(e,dest,dest->base->def,-1);
 	effect(moon_elf_shield_cooldown,dest,dest,0,3);
 	effect_event_end(e);
@@ -3596,11 +3611,18 @@ void ap_inited(struct effect *e){
 	if(e->level>=36)
 		unit_setstate(e->dest,UNIT_FAILED);
 }
+int ap_end_in_roundend(struct effect *e){
+	if(e->level>=27)
+		effect_reinit(e,e->src,-2,0);
+	return -1;
+}
 const struct effect_base assimilation_progress[1]={{
 	.id="assimilation_progress",
+	.init=maple_init,
 	.inited=ap_inited,
 	.purify=ap_purify,
-	.flag=EFFECT_ADDLEVEL|EFFECT_NONHOOKABLE|EFFECT_NEGATIVE,
+	.end_in_roundend=ap_end_in_roundend,
+	.flag=EFFECT_NONHOOKABLE|EFFECT_NEGATIVE,
 }};
 const struct event elf_light_impact_le[1]={{
 	.id="elf_light_impact_le",
@@ -3610,7 +3632,7 @@ void dyed_amod(struct effect *e,long level){
 		return;
 	event_start(elf_light_impact_le,e->src);
 	attack(e->dest,e->src,0.45*level*e->src->atk,DAMAGE_PHYSICAL,0,TYPE_LIGHT);
-	effect(assimilation_progress,e->dest,e->src,level,-1);
+	effect(assimilation_progress,e->dest,e->src,level,4);
 	if(!e->intrash)
 		++e->unused;
 	event_end(elf_light_impact_le,e->src);
@@ -3868,7 +3890,7 @@ struct bloom_state {
 };
 void bloma(const struct event *ev,struct unit *src){
 	effectx(bloom_point,src,src,3,0,EFFECT_ADDLEVEL);
-	event_callback(ev,src);
+	event_callback(ev,src,NULL);
 }
 const struct event bloom[1]={{
 	.id="bloom",
@@ -3976,7 +3998,7 @@ void unit_setbloom(struct unit *u){
 	if(e11->level<=0)\
 		return -1;\
 }
-int fairyland_gate_event(struct effect *e,const struct event *ev,struct unit *src){
+int fairyland_gate_event(struct effect *e,const struct event *ev,struct unit *src,void *arg){
 	ckblom;
 	effect_event(e);
 	src=e->dest;
@@ -3993,7 +4015,7 @@ void fairyland_gate_p(struct unit *s){
 	unit_setbloom(s);
 	effect(fairyland_gate,s,s,0,-1);
 }
-int flog_event(struct effect *e,const struct event *ev,struct unit *src){
+int flog_event(struct effect *e,const struct event *ev,struct unit *src,void *arg){
 	ckblom;
 	if(unit_effect_level(src,ATK)>=4)
 		return 0;

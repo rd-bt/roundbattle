@@ -518,10 +518,6 @@ static int checkalive3(struct unit *dest,struct unit *src,int xflag){
 static int effect_do_opts(struct effect *e,const struct effect_base *base,struct unit *dest,struct unit *src,long level,int round,int xflag){
 	if((base&&base!=e->base)||dest!=e->dest||(src&&src!=e->src))
 		return -1;
-	if((xflag&EFFECT_CHECKL)&&level!=e->level)
-		return -1;
-	if((xflag&EFFECT_CHECKR)&&round!=e->round)
-		return -1;
 #define ckflag(_fl) \
 	if((xflag&(_fl))&&!(e->base->flag&(_fl)))\
 		return -1
@@ -536,6 +532,9 @@ static int effect_do_opts(struct effect *e,const struct effect_base *base,struct
 	else if((xflag&EFFECT_POSITIVE)&&!effect_ispositive(e))
 		return -1;
 	if(xflag&EFFECT_FIND){
+		if(level){
+			return ((int (*)(struct effect *))level)(e)?-1:0;
+		}
 		return 0;
 	}
 	if(xflag&EFFECT_REMOVE){
@@ -793,7 +792,7 @@ struct effect *effect_copyall(struct effect *head){
 	return r;
 }
 int purify(struct effect *ep){
-	struct battle_field *f;
+	/*struct battle_field *f;
 	if(ep->base->flag&EFFECT_UNPURIFIABLE)
 		return -1;
 	f=effect_field(ep);
@@ -801,7 +800,8 @@ int purify(struct effect *ep){
 		if(v->base->purify(v,ep))
 			return -1;
 	}
-	return effect_end(ep);
+	return effect_end(ep);*/
+	return effect_reinitx(ep,NULL,0,0,EFFECT_REMOVE);
 }
 int unit_wipeeffect(struct unit *u,int mask){
 	int r=0;
@@ -882,10 +882,10 @@ int revive(struct unit *u,unsigned long hp){
 	}
 	return 0;
 }
-int event_callback(const struct event *ev,struct unit *src){
+int event_callback(const struct event *ev,struct unit *src,void *arg){
 	int r=0;
 	for_each_effectf(e,src->owner->field->effects,event){
-		if(e->base->event(e,ev,src))
+		if(e->base->event(e,ev,src,arg))
 			break;
 		else
 			++r;
@@ -1001,7 +1001,7 @@ void unit_effect_in_roundend(struct unit *u){
 			e->base->roundend(e);
 	}
 }
-
+/*
 void unit_effect_round_decrease(struct unit *u,int round){
 	struct battle_field *f=u->owner->field;
 	for_each_effect(v,f->effects){
@@ -1019,7 +1019,7 @@ void unit_effect_round_decrease(struct unit *u,int round){
 				effect_end(v);
 		}
 	}
-}
+}*/
 void effect_round_decrease(struct effect *effects,int round){
 	for_each_effect(v,effects){
 		if(v->round>0){
@@ -1027,7 +1027,7 @@ void effect_round_decrease(struct effect *effects,int round){
 				v->round-=round;
 			else
 				v->round=0;
-			report((v->dest?v->dest:v->src)->owner->field,MSG_UPDATE,v);
+			report(effect_field(v),MSG_EFFECT_ROUNDDEC,v);
 		}
 		if(!v->round){
 			if(!v->base->end_in_roundend||!v->base->end_in_roundend(v))
@@ -1417,6 +1417,7 @@ void report(struct battle_field *f,int type,...){
 			break;
 		case MSG_EFFECT:
 			msg.un.e=va_arg(ap,const struct effect *);
+			msg.un.e_init.base=msg.un.e->base;
 			msg.un.e_init.level=va_arg(ap,long);
 			msg.un.e_init.round=va_arg(ap,int);
 			break;
@@ -1424,6 +1425,9 @@ void report(struct battle_field *f,int type,...){
 		case MSG_EFFECT_EVENT:
 		case MSG_EFFECT_EVENT_END:
 			msg.un.e=va_arg(ap,const struct effect *);
+			msg.un.e_init.base=msg.un.e->base;
+			msg.un.e_init.level=msg.un.e->level;
+			msg.un.e_init.round=msg.un.e->round;
 			break;
 		case MSG_EVENT:
 		case MSG_EVENT_END:
@@ -1503,7 +1507,6 @@ continue0:
 						default:
 							continue;
 					}
-					
 				}
 				goto continue0;
 			default:
@@ -1515,7 +1518,7 @@ continue0:
 const char *message_id(const struct message *msg){
 	switch(msg->type){
 		case MSG_EFFECT_EVENT:
-			return msg->un.e->base->id;
+			return msg->un.e_init.base->id;
 		case MSG_EVENT:
 			return msg->un.event.ev->id;
 		case MSG_MOVE:

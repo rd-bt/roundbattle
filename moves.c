@@ -5,6 +5,7 @@
 #include <limits.h>
 #include <math.h>
 #include <string.h>
+#include "moves.h"
 #define printf (use report() instead.)
 unsigned long gcdul(unsigned long x,unsigned long y){
 	unsigned long r;
@@ -587,8 +588,10 @@ void primordial_breath_init(struct unit *s){
 	effect(primordial_breath,s,s,0,-1);
 }
 void damage_recuring_damage_end(struct effect *e,struct unit *dest,struct unit *src,unsigned long value,int damage_type,int aflag,int type){
+	if(!src||dest==src)
+		return;
 	effect_event(e);
-	addhp(dest->osite,-(long)value);
+	addhp(src,-(long)value);
 	effect_event_end(e);
 }
 const struct effect_base damage_recuring[1]={{
@@ -2299,14 +2302,18 @@ void burn_boat(struct unit *s){
 	effect(stunned,s,s,0,1);
 }
 int burn_boat_kill(struct effect *e,struct unit *u){
-	struct effect *ep;
 	if(u==e->dest&&!e->level){
 		effect_event(e);
-		sethp(u,u->max_hp);
 		effect_setlevel(e,2);
-		ep=unit_findeffect(u,moon_elf_shield_cooldown);
-		if(ep)
-			effect_end(ep);
+		sethp(u,u->max_hp);
+		effectx(moon_elf_shield_cooldown,u,NULL,0,0,EFFECT_REMOVE|EFFECT_NONHOOKABLE|EFFECT_UNPURIFIABLE);
+		effectx(NULL,u,NULL,0,0,EFFECT_REMOVE|EFFECT_NEGATIVE);
+		for_each_move(m,u){
+			if(m->id&&m->action==metal_bomb){
+				event(real_fire_disillusion_fr,u);
+				break;
+			}
+		}
 		effect_event_end(e);
 	}
 	return 0;
@@ -2417,11 +2424,14 @@ void uniform_base(struct unit *s){
 }
 void uniform_base_a(struct unit *s){
 	struct unit *t=s->osite;
-	long sp=s->spi;
-	attack(t,s,0.5*s->atk+7.5*labs(sp),DAMAGE_PHYSICAL,AF_NOFLOAT|AF_EFFECT|AF_WEAK,TYPE_MACHINE);
-	addhp3(t,-(40+(10*SHEAR_COEF)*t->max_hp),HPMOD_SHEAR);
-	setspi(s,0);
-	setspi(t,t->spi+sp);
+	long sd;
+	attack(t,s,0.5*s->atk+7.5*labs(s->spi),DAMAGE_PHYSICAL,AF_NOFLOAT|AF_EFFECT|AF_WEAK,TYPE_MACHINE);
+	sd=40+(8*SHEAR_COEF)*t->max_hp;
+	if(s->spi){
+		sd+=(long)(SHEAR_COEF*t->max_hp*labs(s->spi)+1);
+		setspi(s,0);
+	}
+	addhp3(t,-sd,HPMOD_SHEAR);
 }
 void spatially_shatter_pm(struct unit *s){
 	struct unit *t=s->osite;
@@ -3387,6 +3397,55 @@ void entropy_destroyer_blade(struct unit *s){
 		s->move_cur->type=TYPE_ALKALIFIRE;
 		report(s->owner->field,MSG_UPDATE,s->move_cur);
 	}
+}
+const struct event derate_count[1]={{NULL}};
+struct u_dbl {
+	struct unit *u;
+	double d;
+};
+int physical_derate_counter(struct effect *e,struct unit *dest,struct unit *src,unsigned long *value,int *damage_type,int *aflag,int *type){
+	struct u_dbl ud;
+	double d;
+	if((*aflag&AF_NODERATE)||*damage_type!=DAMAGE_PHYSICAL)
+		return 0;
+	d=dest->physical_derate;
+	if(src)
+		d-=src->physical_bonus;
+	ud.d=d;
+	ud.u=dest;
+	event_callback(derate_count,src,&ud);
+	if(ud.d==d)
+		return 0;
+	*value*=derate_coef(ud.d);
+	*aflag|=AF_NODERATE;
+	return 0;
+}
+const struct effect_base pdcounter[1]={{
+	.attack=physical_derate_counter,
+	.flag=EFFECT_PASSIVE,
+	.prior=-32768,
+}};
+int edb_event(struct effect *e,const struct event *ev,struct unit *src,void *arg){
+	struct u_dbl *ud;
+	static const struct effect_base *const bases[]={burnt,frozen,frost_destroying,sunfyre,alkali_sunfyre,NULL};
+	if(ev!=derate_count)
+		return 0;
+	if(src!=e->dest)
+		return 0;
+	ud=arg;
+	if(!effectx((const void *)bases,ud->u,NULL,0,4,EFFECT_FIND))
+		return 0;
+	ud->d-=0.4;
+	return 0;
+}
+const struct effect_base entropy_destroyer_blade_p[1]={{
+	.id="entropy_destroyer_blade",
+	.event=edb_event,
+	.flag=EFFECT_PASSIVE,
+}};
+void entropy_destroyer_blade_init(struct unit *s){
+	effect(entropy_destroyer_blade_p,s,s,0,-1);
+	effect(pdcounter,NULL,s,0,-1);
 }
 void depositing_roundend(struct effect *e){
 	effect_event(e);
@@ -5106,6 +5165,7 @@ const struct move builtin_moves[]={
 	{
 		.id="entropy_destroyer_blade",
 		.action=entropy_destroyer_blade,
+		.init=entropy_destroyer_blade_init,
 		.type=TYPE_ICE,
 		.flag=0,
 		.mlevel=MLEVEL_REGULAR
@@ -5284,100 +5344,101 @@ const struct move *get_builtin_move_by_id(const char *id){
 	}
 	return NULL;
 }
-const char *effects[]={
-"cursed",
-"radiated",
-"poisoned",
-"burnt",
-"parasitized",
-"frozen",
-"asleep",
-"paralysed",
-"stunned",
-"petrified",
-"aurora",
-"ATK",
-"DEF",
-"SPEED",
-"HIT",
-"AVOID",
-"CE",
-"PDB",
-"MDB",
-"PDD",
-"MDD",
-"natural_shield",
-"alkali_fire_seal",
-"metal_bomb",
-"frost_destroying",
-"primordial_breath",
-"thorns",
-"combo",
-"hitback",
-"blood_moon",
-"hot",
-"wet",
-"cold",
-"black_hole",
-"gravitational_potential",
-"cycle_eden",
-"absolutely_immortal",
-"confused",
-"heat_engine",
-"force_vh",
-"repeat",
-"silent",
-"disarmed",
-"mecha",
-"perish_song",
-"marsh",
-"interfered",
-"hail",
-"maple",
-"shield",
-"heal_weak",
-"heal_bonus",
-"mana",
-"moon_elf_shield",
-"moon_elf_shield_cooldown",
-"anti_def_by_def",
-"burn_boat",
-"uniform_base",
-"spatially_shatter",
-"natural_decay",
-"high_frequency",
-"elasticity_module",
-"anchor_bomb",
-"time_frozen",
-"accumulated",
-"voltage_transforming",
-"youkai",
-"electric",
-"protecting",
-"ingrained",
-"fear",
-"aiming",
-"crater",
-"sunfyre",
-"alkali_sunfyre",
-"depositing",
-"life_limit",
-"moonless_night",
-"cluster_missile_splinter",
-"suppressed",
-"vanished",
-"monoxide",
-"karmic_fire",
-"assimilation_progress",
-"dyed",
-"san_reduce",
-"psychic_suppress",
-"gate",
-"missile_support",
-"CR",
-"nano_shield",
-"fairyland_gate",
-"flog",
-"high_pressure",
+const struct effect_base *effects[]={
+cursed,
+radiated,
+poisoned,
+burnt,
+parasitized,
+frozen,
+asleep,
+paralysed,
+stunned,
+petrified,
+aurora,
+ATK,
+DEF,
+SPEED,
+HIT,
+AVOID,
+CE,
+PDB,
+MDB,
+PDD,
+MDD,
+natural_shield_effect,
+alkali_fire_seal,
+metal_bomb_effect,
+frost_destroying,
+primordial_breath,
+thorns,
+combo,
+hitback,
+blood_moon,
+hot,
+wet,
+cold,
+black_hole,
+gravitational_potential,
+cycle_eden,
+absolutely_immortal_effect,
+confused,
+heat_engine,
+force_vh_effect,
+repeat_effect,
+silent,
+disarmed,
+mecha_effect,
+perish_song_effect,
+marsh,
+interfered,
+hail_effect,
+maple,
+shield,
+heal_weak,
+heal_bonus,
+mana,
+moon_elf_shield,
+moon_elf_shield_cooldown,
+anti_def_by_def,
+burn_boat_effect,
+uniform_base_effect,
+spatially_shatter_effect,
+natural_decay_effect,
+high_frequency,
+elasticity_module,
+anchor_bomb_effect,
+time_frozen,
+accumulated,
+voltage_transforming,
+youkai,
+electric,
+protecting,
+ingrained,
+fear,
+aiming,
+crater,
+sunfyre,
+alkali_sunfyre,
+depositing,
+life_limit,
+moonless_night,
+cm_effect,
+suppressed,
+vanished,
+monoxide,
+karmic_fire,
+assimilation_progress,
+dyed,
+san_reduce,
+psychic_suppress_effect,
+gate,
+missile_support_effect,
+CR,
+nano_shield,
+fairyland_gate,
+flog,
+high_pressure,
+entropy_destroyer_blade_p,
 NULL};
 const size_t effects_size=sizeof(effects)/sizeof(effects[0])-1;

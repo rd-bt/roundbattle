@@ -1027,7 +1027,7 @@ st:
 void effect_menu(struct player_data *pd){
 	ssize_t cur=0,shift=0;
 	const char *p;
-	int nline;
+	int nline,x,flag;
 st:
 	nline=LINES/2;
 	clear();
@@ -1038,7 +1038,7 @@ st:
 		shift=cur-(nline-1);
 	}
 	for(ssize_t i=shift;i-shift<nline&&i<effects_size;++i){
-		p=effects[i];
+		p=effects[i]->id;
 		if(i==cur)
 			attron(COLOR_PAIR(1));
 		printw("%zu:%s",i,e2s(p));
@@ -1051,9 +1051,36 @@ st:
 		addch('=');
 	}
 	attroff(COLOR_PAIR(1));
-	printw("%s\n",e2desc(effects[cur]));
+	printw("%s\n",e2desc(effects[cur]->id));
+	flag=effects[cur]->flag;
+#define show_etype(_fl,_id) \
+		if(flag&_fl){\
+			if(x)\
+				addch(' ');\
+			else\
+				x=1;\
+			addstr(ts(_id));\
+		}
+	if(flag){
+		if((flag&EFFECT_PASSIVE)==EFFECT_PASSIVE)
+			printw("%s:%s",ts("effect_type"),ts("passive"));
+		else {
+			printw("%s:",ts("effect_type"));
+			x=0;
+			show_etype(EFFECT_ATTR,"attr_bonus");
+			show_etype(EFFECT_POSITIVE,"positive");
+			show_etype(EFFECT_NEGATIVE,"negative");
+			show_etype(EFFECT_ABNORMAL,"abnormal");
+			show_etype(EFFECT_CONTROL,"control");
+			show_etype(EFFECT_ENV,"environment");
+			show_etype(EFFECT_UNPURIFIABLE,"unpurifiable");
+			show_etype(EFFECT_NONHOOKABLE,"effect_nonhookable");
+		}
+		addch('\n');
+	}
+	printw("%s:%d\n",ts("effect_prior"),effects[cur]->prior);
 	move(LINES-1,0);
-	printw("id: %s",effects[cur]);
+	printw("id: %s",effects[cur]->id);
 	refresh();
 	switch(getch()){
 		case KEY_DOWN:

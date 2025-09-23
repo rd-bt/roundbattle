@@ -106,9 +106,36 @@ void p_unit(void){
 }
 void p_effect(void){
 	const char *p;
+	int x,flag;
 	for(size_t i=0;i<effects_size;++i){
-		p=effects[i];
-		printf("%s(%s):%s\n",e2s(p),p,e2desc(p));
+		p=effects[i]->id;
+		printf("%s(id:%s",e2s(p),p);
+		flag=effects[i]->flag;
+#define show_etype(_fl,_id) \
+		if(flag&_fl){\
+			if(x)\
+				printf(" ");\
+			else\
+				x=1;\
+			printf("%s",ts(_id));\
+		}
+		if(flag){
+			if((flag&EFFECT_PASSIVE)==EFFECT_PASSIVE)
+				printf(",%s:%s",ts("effect_type"),ts("passive"));
+			else {
+				printf(",%s:",ts("effect_type"));
+				x=0;
+				show_etype(EFFECT_ATTR,"attr_bonus");
+				show_etype(EFFECT_POSITIVE,"positive");
+				show_etype(EFFECT_NEGATIVE,"negative");
+				show_etype(EFFECT_ABNORMAL,"abnormal");
+				show_etype(EFFECT_CONTROL,"control");
+				show_etype(EFFECT_ENV,"environment");
+				show_etype(EFFECT_UNPURIFIABLE,"unpurifiable");
+				show_etype(EFFECT_NONHOOKABLE,"effect_nonhookable");
+			}
+		}
+	printf(",%s:%d):%s\n",ts("effect_prior"),effects[i]->prior,e2desc(p));
 	}
 }
 void p_types(void){

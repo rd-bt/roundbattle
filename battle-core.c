@@ -513,15 +513,36 @@ static int checkalive3(struct unit *dest,struct unit *src,int xflag){
 	}
 }
 static int effect_do_opts(struct effect *e,const struct effect_base *base,struct unit *dest,struct unit *src,long level,int round,int xflag){
-	if(base&&base!=e->base)
-		return -1;
-	if(xflag&EFFECT_SELECTALL){
-		if(dest){
-			if(!e->dest||e->dest->owner!=dest->owner)
-				return -1;
+	const struct effect_base *const *bp;
+	if(base){
+		if(round&4){
+			bp=(const struct effect_base *const *)base;
+			for(;;){
+				if(*bp==e->base)
+					break;
+				++bp;
+				if(!*bp)
+					return -1;
+			}
 		}else {
-			if(!e->src||e->src->owner!=src->owner)
+			if(base!=e->base)
 				return -1;
+		}
+	}
+	if(xflag&EFFECT_SELECTALL){
+		if((round&1)&&dest!=e->dest)
+			return -1;
+		if((round&2)&&src!=e->src)
+			return -1;
+		if(!(round&8)){
+			if(dest){
+				if(!e->dest||e->dest->owner!=dest->owner)
+					return -1;
+			}
+			if(src){
+				if(!e->src||e->src->owner!=src->owner)
+					return -1;
+			}
 		}
 	}else {
 		if(((round&1)||dest)&&dest!=e->dest)
@@ -535,6 +556,7 @@ static int effect_do_opts(struct effect *e,const struct effect_base *base,struct
 	ckflag(EFFECT_ATTR);
 	ckflag(EFFECT_ABNORMAL);
 	ckflag(EFFECT_CONTROL);
+	ckflag(EFFECT_ENV);
 	if((xflag&EFFECT_NEGATIVE)&&(xflag&EFFECT_POSITIVE)){
 		if(effect_isnegative(e)||effect_ispositive(e))
 			return -1;
@@ -543,10 +565,16 @@ static int effect_do_opts(struct effect *e,const struct effect_base *base,struct
 	else if((xflag&EFFECT_POSITIVE)&&!effect_ispositive(e))
 		return -1;
 	if(xflag&EFFECT_FIND){
-		if(level){
-			return ((int (*)(struct effect *))level)(e)?-1:0;
+		if(!level)
+			return 0;
+		switch(((int (*)(struct effect *))level)(e)){
+			case 0:
+				return 0;
+			case 1:
+				break;
+			default:
+				return -1;
 		}
-		return 0;
 	}
 	if(xflag&EFFECT_REMOVE){
 		if(!(xflag&EFFECT_UNPURIFIABLE)&&(e->base->flag&EFFECT_UNPURIFIABLE))
@@ -594,6 +622,8 @@ struct effect *effectx(const struct effect_base *base,struct unit *dest,struct u
 		if((!src||src->owner==dest->owner)&&effect_isnegative_base(base,dest,src,level))
 			return NULL;
 	}
+	if(xflag&EFFECT_TEST)
+		return (struct effect *)1;
 	if(!(xflag&EFFECT_ISOLATED)){
 		for_each_effect(e,f->effects){
 			if(e->dest==dest&&e->base==base){
@@ -681,6 +711,8 @@ int effect_reinitx(struct effect *ep,struct unit *src,long level,int round,int x
 		if((!src||src->owner==ep->dest->owner)&&effect_isnegative_base(ep->base,ep->dest,src,level))
 			return -1;
 	}
+	if(xflag&EFFECT_TEST)
+		return 0;
 	ep->src1=src;
 	if(xflag&EFFECT_OVERRIDESRC)
 		ep->src=src;

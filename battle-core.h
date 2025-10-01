@@ -8,6 +8,7 @@
 #include <math.h>
 
 #define SHEAR_COEF (M_SQRT2/128)
+#define FLOAT_COEF 0.05
 
 #define ROUND_MAX 1024
 
@@ -28,7 +29,10 @@
 #define DAMAGE_REAL 0
 #define DAMAGE_PHYSICAL 1
 #define DAMAGE_MAGICAL 2
-#define DAMAGE_TOTAL 3
+#define DAMAGE_HEAL 3
+#define DAMAGE_SHEAR 4
+#define DAMAGE_VOID 5
+#define DAMAGE_TOTAL (-1)
 
 #define DAMAGE_REAL_FLAG (1<<DAMAGE_REAL)
 #define DAMAGE_PHYSICAL_FLAG (1<<DAMAGE_PHYSICAL)
@@ -47,6 +51,8 @@
 #define AF_NONHOOKABLE 512
 #define AF_NONHOOKABLE_D 1024
 #define AF_NODERATE 2048
+#define AF_NOCALLBACK 4096
+#define AF_NOCALLBACK_D 8192
 
 
 #define TYPE_VOID (0)
@@ -245,7 +251,7 @@
 }\
 )
 
-#define damage_type_check(s) (\
+/*#define damage_type_check(s) (\
 {\
 		int _r;\
 		switch(s){\
@@ -261,6 +267,7 @@
 		_r;\
 }\
 )
+*/
 #define isfront(u) (\
 {\
 		const struct unit *_u=(u);\
@@ -288,6 +295,12 @@
 {\
 		double _d=(d);\
 		_d>0.8?1.0/(5*_d+1):1.0-_d;\
+}\
+)
+#define crit_coef(d) (\
+{\
+		double _k=(d);\
+		_k>0.5?_k:1/(3-2*_k);\
 }\
 )
 #define inhibit_coef(s) (\
@@ -514,16 +527,17 @@ enum {
 
 #define event_start(ev,src) (\
 {\
-		struct unit *_src=(src);\
-		report(_src->owner->field,MSG_EVENT,(ev),_src);\
+		struct unit *__src=(src);\
+		report(__src->owner->field,MSG_EVENT,(ev),__src);\
 }\
 )
 #define event_end(ev,src) (\
 {\
-		struct unit *_src=(src);\
-		report(_src->owner->field,MSG_EVENT_END,(ev),_src);\
+		struct unit *__src=(src);\
+		report(__src->owner->field,MSG_EVENT_END,(ev),__src);\
 }\
 )
+#define event_do(ev,src) for(void *_src=(src),*_ev=(void *)(ev);_src&&(event_start(_ev,_src),1);event_end(_ev,_src),_src=NULL)
 
 struct unit;
 struct player;
@@ -550,6 +564,11 @@ struct unit_base {
 	int type0,type1,level,unused;
 	struct move moves[8];
 };
+struct damage_type {
+	double (*derate_eval)(const struct unit *dest,const struct unit *src);
+	void (*action)(struct unit *dest,struct unit *src,long value,int damage_type,int aflag,int type);
+	int xflag,xflag_d,hpmod_flag,index;
+};
 struct event {
 	const char *id;
 	void (*action)(const struct event *ev,struct unit *src);
@@ -563,12 +582,13 @@ struct effect_base {
 	int (*action)(struct effect *e,struct player *p);
 	void (*action_end)(struct effect *e,struct player *p);
 	void (*action_fail)(struct effect *e,struct player *p);
-	int (*attack)(struct effect *e,struct unit *dest,struct unit *src,unsigned long *value,int *damage_type,int *aflag,int *type);
-	void (*attack_end)(struct effect *e,struct unit *dest,struct unit *src,unsigned long value,int damage_type,int aflag,int type);
-	void (*attack_end0)(struct effect *e,struct unit *dest,struct unit *src,unsigned long value,int damage_type,int aflag,int type);
+	int (*attack)(struct effect *e,struct unit *dest,struct unit *src,long *value,int *damage_type,int *aflag,int *type);
+	int (*attack0)(struct effect *e,struct unit *dest,struct unit *src,long *value,int *damage_type,int *aflag,int *type);
+	void (*attack_end)(struct effect *e,struct unit *dest,struct unit *src,long value,int damage_type,int aflag,int type);
+	void (*attack_end0)(struct effect *e,struct unit *dest,struct unit *src,long value,int damage_type,int aflag,int type);
 	void (*cooldown_decrease)(struct effect *e,struct unit *u,struct move *m,int *round);
-	int (*damage)(struct effect *e,struct unit *dest,struct unit *src,unsigned long *value,int *damage_type,int *aflag,int *type);
-	void (*damage_end)(struct effect *e,struct unit *dest,struct unit *src,unsigned long value,int damage_type,int aflag,int type);
+	int (*damage)(struct effect *e,struct unit *dest,struct unit *src,long *value,int *damage_type,int *aflag,int *type);
+	void (*damage_end)(struct effect *e,struct unit *dest,struct unit *src,long value,int damage_type,int aflag,int type);
 	int (*effect)(struct effect *e,const struct effect_base *base,struct unit *dest,struct unit *src,long *level,int *round);
 	void (*effect_end)(struct effect *e,struct effect *ep,struct unit *dest,struct unit *src,long level,int round);
 	void (*effect_end0)(struct effect *e,struct effect *ep,struct unit *dest,struct unit *src,long level,int round);
@@ -650,7 +670,7 @@ struct message {
 	union {
 		struct {
 			const struct unit *dest,*src;
-			unsigned long value;
+			long value;
 			int damage_type,aflag,type,unused;
 		} damage;
 		const struct effect *e;
@@ -704,9 +724,9 @@ int unit_setstate(struct unit *u,int state);
 
 int unit_kill(struct unit *up);
 
-unsigned long damage(struct unit *dest,struct unit *src,unsigned long value,int damage_type,int aflag,int type);
+long damage(struct unit *dest,struct unit *src,long value,int damage_type,int aflag,int type);
 
-unsigned long attack(struct unit *dest,struct unit *src,unsigned long value,int damage_type,int aflag,int type);
+long attack(struct unit *dest,struct unit *src,long value,int damage_type,int aflag,int type);
 
 int hittest(struct unit *dest,struct unit *src,double hit_rate);
 

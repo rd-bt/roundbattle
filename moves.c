@@ -75,12 +75,12 @@ const struct effect_base name[1]={{\
 	.flag=EFFECT_ABNORMAL|EFFECT_CONTROL|EFFECT_NEGATIVE,\
 }}
 #define COMMA ,
-int poisoned_attack(struct effect *e,struct unit *dest,struct unit *src,unsigned long *value,int *damage_type,int *aflag,int *type){
+int poisoned_attack(struct effect *e,struct unit *dest,struct unit *src,long *value,int *damage_type,int *aflag,int *type){
 	if(src==e->dest&&*damage_type==DAMAGE_MAGICAL)
 		*value*=0.85;
 	return 0;
 }
-int burnt_attack(struct effect *e,struct unit *dest,struct unit *src,unsigned long *value,int *damage_type,int *aflag,int *type){
+int burnt_attack(struct effect *e,struct unit *dest,struct unit *src,long *value,int *damage_type,int *aflag,int *type){
 	if(src==e->dest&&*damage_type==DAMAGE_PHYSICAL)
 		*value*=0.85;
 	return 0;
@@ -116,8 +116,9 @@ const struct effect_base confused[1]={{
 	.gettarget=confused_gettarget,
 	.flag=EFFECT_ABNORMAL|EFFECT_NEGATIVE,
 }};
-int aurora_damage(struct effect *e,struct unit *dest,struct unit *src,unsigned long *value,int *damage_type,int *aflag,int *type){
-	if(dest==e->dest&&*damage_type!=DAMAGE_REAL){
+#define damage_pm(_dt) ((1<<(_dt))&(DAMAGE_PHYSICAL_FLAG|DAMAGE_MAGICAL_FLAG))
+int aurora_damage(struct effect *e,struct unit *dest,struct unit *src,long *value,int *damage_type,int *aflag,int *type){
+	if(dest==e->dest&&damage_pm(*damage_type)){
 		effect_event(e);
 		effect_reinit(e,src,*value,e->round);
 		effect_event_end(e);
@@ -130,22 +131,22 @@ void aurora_end(struct effect *e){
 		attack(e->dest,NULL,e->level,DAMAGE_REAL,0,TYPE_VOID);
 	}
 }
-int asleep_damage(struct effect *e,struct unit *dest,struct unit *src,unsigned long *value,int *damage_type,int *aflag,int *type){
-	if(dest==e->dest&&*damage_type!=DAMAGE_REAL){
+int asleep_damage(struct effect *e,struct unit *dest,struct unit *src,long *value,int *damage_type,int *aflag,int *type){
+	if(dest==e->dest&&damage_pm(*damage_type)){
 		*value*=1.5;
 		effect_end(e);
 	}
 	return 0;
 }
-int frozen_damage(struct effect *e,struct unit *dest,struct unit *src,unsigned long *value,int *damage_type,int *aflag,int *type){
-	if(dest==e->dest&&*damage_type!=DAMAGE_REAL&&(*type&TYPE_FIRE)){
+int frozen_damage(struct effect *e,struct unit *dest,struct unit *src,long *value,int *damage_type,int *aflag,int *type){
+	if(dest==e->dest&&damage_pm(*damage_type)&&(*type&TYPE_FIRE)){
 		*value*=2;
 		effect_end(e);
 	}
 	return 0;
 }
-int petrified_damage(struct effect *e,struct unit *dest,struct unit *src,unsigned long *value,int *damage_type,int *aflag,int *type){
-	if(dest==e->dest&&*damage_type!=DAMAGE_REAL&&(*type&TYPE_FIGHTING)){
+int petrified_damage(struct effect *e,struct unit *dest,struct unit *src,long *value,int *damage_type,int *aflag,int *type){
+	if(dest==e->dest&&damage_pm(*damage_type)&&(*type&TYPE_FIGHTING)){
 		*value*=2;
 		effect_end(e);
 	}
@@ -278,7 +279,7 @@ void double_slash(struct unit *s){
 		vd=40+1.1*s->def;
 		if(vd<60)
 			vd=60;
-		addhp(s->osite,-vd);
+		damage(s->osite,s,vd,DAMAGE_VOID,AF_NONHOOKABLE_D,TYPE_VOID);
 	}
 }
 void petrifying_ray(struct unit *s){
@@ -344,7 +345,7 @@ void spi_fcrack(struct unit *s){
 		ds*=2;
 	setspi(t,t->spi-ds);
 }
-int natural_shield_damage(struct effect *e,struct unit *dest,struct unit *src,unsigned long *value,int *damage_type,int *aflag,int *type){
+int natural_shield_damage(struct effect *e,struct unit *dest,struct unit *src,long *value,int *damage_type,int *aflag,int *type){
 	if(dest!=e->dest||!e->round)
 		return 0;
 	effect_event(e);
@@ -369,7 +370,7 @@ int natural_shield_kill(struct effect *e,struct unit *u){
 /*const struct event natural_shield_passive_sn[1]={{
 	.id="natural_shield_passive_sn",
 }};*/
-void kaleido_attack_end0(struct effect *e,struct unit *dest,struct unit *src,unsigned long value,int damage_type,int aflag,int type){
+void kaleido_attack_end0(struct effect *e,struct unit *dest,struct unit *src,long value,int damage_type,int aflag,int type){
 	unsigned long dmg;
 	if(src!=e->dest||dest->owner!=src->owner->enemy||damage_type!=DAMAGE_PHYSICAL)
 		return;
@@ -526,7 +527,7 @@ void frost_destroying_cd(struct effect *e,struct unit *u,struct move *m,int *rou
 		//effect_event_end(e);
 	}
 }
-int frost_destroying_damage(struct effect *e,struct unit *dest,struct unit *src,unsigned long *value,int *damage_type,int *aflag,int *type){
+int frost_destroying_damage(struct effect *e,struct unit *dest,struct unit *src,long *value,int *damage_type,int *aflag,int *type){
 	if(e->dest==dest&&*damage_type==DAMAGE_PHYSICAL){
 		effect_event(e);
 		*value*=1.125;
@@ -556,7 +557,7 @@ const struct effect_base frost_destroying[1]={{
 void primordial_breath_roundstart(struct effect *e){
 	e->active=0;
 }
-void primordial_breath_attack_end(struct effect *e,struct unit *dest,struct unit *src,unsigned long value,int damage_type,int aflag,int type){
+void primordial_breath_attack_end(struct effect *e,struct unit *dest,struct unit *src,long value,int damage_type,int aflag,int type){
 	if(e->dest==src&&
 			type==TYPE_ICE&&
 			damage_type==DAMAGE_PHYSICAL&&
@@ -587,7 +588,7 @@ void primordial_breath_action(struct unit *s){
 void primordial_breath_init(struct unit *s){
 	effect(primordial_breath,s,s,0,-1);
 }
-void damage_recuring_damage_end(struct effect *e,struct unit *dest,struct unit *src,unsigned long value,int damage_type,int aflag,int type){
+void damage_recuring_damage_end(struct effect *e,struct unit *dest,struct unit *src,long value,int damage_type,int aflag,int type){
 	if(!src||dest==src)
 		return;
 	effect_event(e);
@@ -689,7 +690,7 @@ void triple_cutter(struct unit *s){
 			attack(t,s,0.33*s->atk,DAMAGE_PHYSICAL,0,TYPE_NORMAL);
 	}
 }
-void thorns_damage_end(struct effect *e,struct unit *dest,struct unit *src,unsigned long value,int damage_type,int aflag,int type){
+void thorns_damage_end(struct effect *e,struct unit *dest,struct unit *src,long value,int damage_type,int aflag,int type){
 	unsigned long dmg;
 	if(dest!=e->dest)
 		return;
@@ -714,7 +715,7 @@ void thorns_init(struct unit *s){
 	effect(thorns,s,s,0,-1);
 }
 
-void combo_attack_end(struct effect *e,struct unit *dest,struct unit *src,unsigned long value,int damage_type,int aflag,int type){
+void combo_attack_end(struct effect *e,struct unit *dest,struct unit *src,long value,int damage_type,int aflag,int type){
 	if(!src||src!=e->dest)
 		return;
 	switch(damage_type){
@@ -739,7 +740,7 @@ void combo_init(struct unit *s){
 	effect(combo,s,s,20,-1);
 }
 
-void hitback_attack_end(struct effect *e,struct unit *dest,struct unit *src,unsigned long value,int damage_type,int aflag,int type){
+void hitback_attack_end(struct effect *e,struct unit *dest,struct unit *src,long value,int damage_type,int aflag,int type){
 	if(!src||dest!=e->dest)
 		return;
 	switch(damage_type){
@@ -796,8 +797,8 @@ void thermobaric(struct unit *s){
 	setcooldown(s,s->move_cur,6);
 }
 
-int hot_damage(struct effect *e,struct unit *dest,struct unit *src,unsigned long *value,int *damage_type,int *aflag,int *type){
-	if(!(*type&(TYPE_FIRE|TYPE_ICE))||!(*damage_type&(DAMAGE_PHYSICAL|DAMAGE_MAGICAL)))
+int hot_damage(struct effect *e,struct unit *dest,struct unit *src,long *value,int *damage_type,int *aflag,int *type){
+	if(!(*type&(TYPE_FIRE|TYPE_ICE))||!damage_pm(*damage_type))
 		return 0;
 	effect_event(e);
 	if(*type&TYPE_FIRE)
@@ -821,8 +822,8 @@ void ablaze(struct unit *s){
 	setcooldown(s,s->move_cur,6);
 }
 
-int wet_damage(struct effect *e,struct unit *dest,struct unit *src,unsigned long *value,int *damage_type,int *aflag,int *type){
-	if(!(*type&(TYPE_FIRE|TYPE_WATER))||!(*damage_type&(DAMAGE_PHYSICAL|DAMAGE_MAGICAL)))
+int wet_damage(struct effect *e,struct unit *dest,struct unit *src,long *value,int *damage_type,int *aflag,int *type){
+	if(!(*type&(TYPE_FIRE|TYPE_WATER))||!damage_pm(*damage_type))
 		return 0;
 	effect_event(e);
 	if(*type&TYPE_WATER)
@@ -845,8 +846,8 @@ void spray(struct unit *s){
 		effect(HIT,t,s,-2,-1);
 	setcooldown(s,s->move_cur,6);
 }
-int cold_damage(struct effect *e,struct unit *dest,struct unit *src,unsigned long *value,int *damage_type,int *aflag,int *type){
-	if(!(*type&(TYPE_FIRE|TYPE_ICE))||!(*damage_type&(DAMAGE_PHYSICAL|DAMAGE_MAGICAL)))
+int cold_damage(struct effect *e,struct unit *dest,struct unit *src,long *value,int *damage_type,int *aflag,int *type){
+	if(!(*type&(TYPE_FIRE|TYPE_ICE))||!damage_pm(*damage_type))
 		return 0;
 	effect_event(e);
 	if(*type&TYPE_ICE)
@@ -882,8 +883,8 @@ int gp_init(struct effect *e,long level,int round){
 	return 0;
 }
 //const struct effect_base gravitational_potential[1];
-void gp_damage_end(struct effect *e,struct unit *dest,struct unit *src,unsigned long value,int damage_type,int aflag,int type){
-	if(dest!=e->dest||(damage_type!=DAMAGE_PHYSICAL&&damage_type!=DAMAGE_MAGICAL))
+void gp_damage_end(struct effect *e,struct unit *dest,struct unit *src,long value,int damage_type,int aflag,int type){
+	if(dest!=e->dest||!damage_pm(damage_type))
 		return;
 	effect_event(e);
 	effect_reinit(e,NULL,damage_type==DAMAGE_PHYSICAL?-3:-2,-1);
@@ -952,7 +953,7 @@ void collapse(struct unit *s){
 int duckcheck(const struct unit *u){
 	return !strcmp(u->base->id,"giant_mouth_duck");
 }
-int cyce_damage(struct effect *e,struct unit *dest,struct unit *src,unsigned long *value,int *damage_type,int *aflag,int *type){
+int cyce_damage(struct effect *e,struct unit *dest,struct unit *src,long *value,int *damage_type,int *aflag,int *type){
 	if((*aflag&AF_IDEATH)&&duckcheck(dest)){
 		effect_event(e);
 		effect_event_end(e);
@@ -1341,7 +1342,7 @@ void back(struct player *p,const struct player *h,long ds[6]){
 	}
 }
 void do_shear(struct unit *u,long ds){
-	addhp3(u,-(SHEAR_COEF*u->max_hp*labs(ds)+1),HPMOD_SHEAR);
+	damage(u,NULL,SHEAR_COEF*u->max_hp*labs(ds)+1,DAMAGE_SHEAR,AF_NONHOOKABLE_D,TYPE_MACHINE);
 }
 void time_back(struct unit *s){
 	struct battle_field *f=s->owner->field;
@@ -1857,7 +1858,7 @@ void magical_reflex(struct unit *s){
 		setcooldown(s,s->move_cur,2);
 	}
 }
-int damage_reverse_damage(struct effect *e,struct unit *dest,struct unit *src,unsigned long *value,int *damage_type,int *aflag,int *type){
+int damage_reverse_damage(struct effect *e,struct unit *dest,struct unit *src,long *value,int *damage_type,int *aflag,int *type){
 	if(dest!=e->dest)
 		return 0;
 	effect_event(e);
@@ -1873,7 +1874,7 @@ void damage_reverse(struct unit *s){
 	effect(damage_reverse_effect,s,s,0,1);
 	setcooldown(s,s->move_cur,4);
 }
-int shield_damage(struct effect *e,struct unit *dest,struct unit *src,unsigned long *value,int *damage_type,int *aflag,int *type){
+int shield_damage(struct effect *e,struct unit *dest,struct unit *src,long *value,int *damage_type,int *aflag,int *type){
 	if(dest!=e->dest)
 		return 0;
 	if(*value>e->level){
@@ -1969,7 +1970,7 @@ const struct effect_base elbow_effect[1]={{
 	.data_size=sizeof(double),
 	.flag=EFFECT_POSITIVE
 }};
-int elbow1_attack(struct effect *e,struct unit *dest,struct unit *src,unsigned long *value,int *damage_type,int *aflag,int *type){
+int elbow1_attack(struct effect *e,struct unit *dest,struct unit *src,long *value,int *damage_type,int *aflag,int *type){
 	double coef;
 	if(dest==e->dest&&*dest->owner->field->stage==STAGE_ROUNDEND){
 		coef=1-*(double *)e->data;
@@ -2170,7 +2171,7 @@ void razor_carrot(struct unit *s){
 	}
 	setcooldown(s,s->move_cur,8);
 }
-int moon_elf_shield_damage(struct effect *e,struct unit *dest,struct unit *src,unsigned long *value,int *damage_type,int *aflag,int *type){
+int moon_elf_shield_damage(struct effect *e,struct unit *dest,struct unit *src,long *value,int *damage_type,int *aflag,int *type){
 	if(dest!=e->dest||!e->level)
 		return 0;
 	if(*aflag&AF_IDEATH){
@@ -2263,9 +2264,9 @@ const struct effect_base moon_elf_shield[1]={{
 void moon_elf_shield_p(struct unit *s){
 	effect(moon_elf_shield,s,s,0,-1);
 }
-int adbd_attack(struct effect *e,struct unit *dest,struct unit *src,unsigned long *value,int *damage_type,int *aflag,int *type){
+int adbd_attack(struct effect *e,struct unit *dest,struct unit *src,long *value,int *damage_type,int *aflag,int *type){
 	long pdef;
-	if(src==e->dest&&*damage_type!=DAMAGE_REAL&&!(*aflag&AF_NODEF)){
+	if(src==e->dest&&damage_pm(*damage_type)&&!(*aflag&AF_NODEF)){
 		pdef=src->def;
 		if(pdef>2){
 			pdef*=0.35;
@@ -2318,7 +2319,7 @@ int burn_boat_kill(struct effect *e,struct unit *u){
 	}
 	return 0;
 }
-int burn_boat_damage(struct effect *e,struct unit *dest,struct unit *src,unsigned long *value,int *damage_type,int *aflag,int *type){
+int burn_boat_damage(struct effect *e,struct unit *dest,struct unit *src,long *value,int *damage_type,int *aflag,int *type){
 	unsigned long dmg;
 	if(dest==e->dest){
 		/*if(e->level&&(*aflag&AF_IDEATH)){
@@ -2396,7 +2397,7 @@ void metal_syncretize(struct unit *s){
 	attack(t,s,s->atk,DAMAGE_PHYSICAL,0,TYPE_ALKALIFIRE);
 	effect(PDB,s,s,1,-1);
 }
-int uniform_base_damage(struct effect *e,struct unit *dest,struct unit *src,unsigned long *value,int *damage_type,int *aflag,int *type){
+int uniform_base_damage(struct effect *e,struct unit *dest,struct unit *src,long *value,int *damage_type,int *aflag,int *type){
 	unsigned long dmg,x;
 	if(dest!=e->dest)
 		return 0;
@@ -2431,7 +2432,7 @@ void uniform_base_a(struct unit *s){
 		sd+=(long)(SHEAR_COEF*t->max_hp*labs(s->spi)+1);
 		setspi(s,0);
 	}
-	addhp3(t,-sd,HPMOD_SHEAR);
+	damage(t,s,sd,DAMAGE_SHEAR,AF_NONHOOKABLE_D,TYPE_MACHINE);
 }
 void spatially_shatter_pm(struct unit *s){
 	struct unit *t=s->osite;
@@ -2439,7 +2440,7 @@ void spatially_shatter_pm(struct unit *s){
 	long atk=s->atk;
 	if(vdmg<atk)
 		vdmg=atk;
-	addhp(t,-vdmg);
+	damage(t,s,vdmg,DAMAGE_VOID,AF_NONHOOKABLE_D,TYPE_VOID);
 }
 const struct move spatially_shatter_p={
 	.id="spatially_shatter",
@@ -2684,7 +2685,7 @@ void attacking_defensive_combine(struct unit *s){
 	effect(high_frequency,s,s,0,5);
 	setcooldown(s,s->move_cur,11);
 }
-void elasticity_module_damage_end(struct effect *e,struct unit *dest,struct unit *src,unsigned long value,int damage_type,int aflag,int type){
+void elasticity_module_damage_end(struct effect *e,struct unit *dest,struct unit *src,long value,int damage_type,int aflag,int type){
 	if((src!=e->dest&&dest!=e->dest)||e->unused>1||damage_type!=DAMAGE_PHYSICAL)
 		return;
 	effect_event(e);
@@ -2695,7 +2696,7 @@ void elasticity_module_damage_end(struct effect *e,struct unit *dest,struct unit
 void elasticity_module_roundstart(struct effect *e){
 	e->unused=0;
 }
-int elasticity_module_attack(struct effect *e,struct unit *dest,struct unit *src,unsigned long *value,int *damage_type,int *aflag,int *type){
+int elasticity_module_attack(struct effect *e,struct unit *dest,struct unit *src,long *value,int *damage_type,int *aflag,int *type){
 	if(src==e->dest&&*damage_type==DAMAGE_PHYSICAL)
 		*value*=1.02+0.0075*labs(src->spi);
 	return 0;
@@ -2961,7 +2962,7 @@ int time_frozen_move(struct effect *e,struct unit *u,struct move *m){
 		return 0;
 	return -1;
 }
-int time_frozen_damage(struct effect *e,struct unit *dest,struct unit *src,unsigned long *value,int *damage_type,int *aflag,int *type){
+int time_frozen_damage(struct effect *e,struct unit *dest,struct unit *src,long *value,int *damage_type,int *aflag,int *type){
 	if(dest==e->src)
 		return 0;
 	return -1;
@@ -2996,8 +2997,8 @@ void squeeze(struct unit *s){
 	effect(ATK,s,s,n,-1);
 	setcooldown(s,s->move_cur,6);
 }
-int accumulated_attack(struct effect *e,struct unit *dest,struct unit *src,unsigned long *value,int *damage_type,int *aflag,int *type){
-	if(src==e->dest&&*damage_type!=DAMAGE_REAL&&!(*type&TYPES_DEVINE)&&!(*aflag&AF_CRIT)){
+int accumulated_attack(struct effect *e,struct unit *dest,struct unit *src,long *value,int *damage_type,int *aflag,int *type){
+	if(src==e->dest&&damage_pm(*damage_type)&&!(*type&TYPES_DEVINE)&&!(*aflag&AF_CRIT)){
 		effect_event(e);
 		*aflag|=AF_CRIT;
 		effect_event_end(e);
@@ -3014,7 +3015,7 @@ void accumulate(struct unit *s){
 	effect(accumulated,s,s,0,2);
 	setcooldown(s,s->move_cur,2);
 }
-int voltage_transforming_attack(struct effect *e,struct unit *dest,struct unit *src,unsigned long *value,int *damage_type,int *aflag,int *type){
+int voltage_transforming_attack(struct effect *e,struct unit *dest,struct unit *src,long *value,int *damage_type,int *aflag,int *type){
 	if(src==e->dest&&*damage_type==DAMAGE_PHYSICAL&&!(*type&TYPES_DEVINE)&&!(*aflag&AF_CRIT)&&e->level==1&&labs(src->spi)>=8){
 		effect_event(e);
 		setspi(src,abs_add(src->spi,-8));
@@ -3023,7 +3024,7 @@ int voltage_transforming_attack(struct effect *e,struct unit *dest,struct unit *
 	}
 	return 0;
 }
-void voltage_transforming_attack_end0(struct effect *e,struct unit *dest,struct unit *src,unsigned long value,int damage_type,int aflag,int type){
+void voltage_transforming_attack_end0(struct effect *e,struct unit *dest,struct unit *src,long value,int damage_type,int aflag,int type){
 	if(src==e->dest&&damage_type==DAMAGE_PHYSICAL&&!(type&TYPES_DEVINE)&&e->level==2){
 		effect_event(e);
 		setspi(src,src->spi+6);
@@ -3143,7 +3144,7 @@ void protecting_hpmod(struct effect *e,struct unit *dest,long hp,int flag){
 		effect_event_end(e);
 	}
 }
-int protecting_damage(struct effect *e,struct unit *dest,struct unit *src,unsigned long *value,int *damage_type,int *aflag,int *type){
+int protecting_damage(struct effect *e,struct unit *dest,struct unit *src,long *value,int *damage_type,int *aflag,int *type){
 	if(dest==e->dest){
 		effect_event(e);
 		effect_event_end(e);
@@ -3403,7 +3404,7 @@ struct u_dbl {
 	struct unit *u;
 	double d;
 };
-int physical_derate_counter(struct effect *e,struct unit *dest,struct unit *src,unsigned long *value,int *damage_type,int *aflag,int *type){
+int physical_derate_counter(struct effect *e,struct unit *dest,struct unit *src,long *value,int *damage_type,int *aflag,int *type){
 	struct u_dbl ud;
 	double d;
 	if((*aflag&AF_NODERATE)||*damage_type!=DAMAGE_PHYSICAL)
@@ -3490,8 +3491,8 @@ int mln_init(struct effect *e,long level,int round){
 	e->level=level;
 	return 0;
 }
-int mln_damage(struct effect *e,struct unit *dest,struct unit *src,unsigned long *value,int *damage_type,int *aflag,int *type){
-	if(!(*type&(TYPE_GRASS|TYPE_LIGHT))||!(*damage_type&(DAMAGE_PHYSICAL|DAMAGE_MAGICAL)))
+int mln_damage(struct effect *e,struct unit *dest,struct unit *src,long *value,int *damage_type,int *aflag,int *type){
+	if(!(*type&(TYPE_GRASS|TYPE_LIGHT))||!damage_pm(*damage_type))
 		return 0;
 	effect_event(e);
 	if(*type&TYPE_LIGHT)
@@ -3689,12 +3690,12 @@ const struct event elf_light_impact_le[1]={{
 void dyed_amod(struct effect *e,long level){
 	if(e->unused>=3)
 		return;
-	event_start(elf_light_impact_le,e->src);
-	attack(e->dest,e->src,0.45*level*e->src->atk,DAMAGE_PHYSICAL,0,TYPE_LIGHT);
-	effect(assimilation_progress,e->dest,e->src,level,4);
-	if(!e->intrash)
-		++e->unused;
-	event_end(elf_light_impact_le,e->src);
+	event_do(elf_light_impact_le,e->src){
+		attack(e->dest,e->src,0.45*level*e->src->atk,DAMAGE_PHYSICAL,0,TYPE_LIGHT);
+		effect(assimilation_progress,e->dest,e->src,level,4);
+		if(!e->intrash)
+			++e->unused;
+	}
 }
 void dyed_effect_endt(struct effect *e,struct effect *ep){
 	long level;
@@ -3739,8 +3740,8 @@ void sr_switchunit_end(struct effect *e,struct unit *from){
 		purify(e);
 	}
 }
-int sr_attack(struct effect *e,struct unit *dest,struct unit *src,unsigned long *value,int *damage_type,int *aflag,int *type){
-	if(dest==e->dest&&*damage_type!=DAMAGE_REAL)
+int sr_attack(struct effect *e,struct unit *dest,struct unit *src,long *value,int *damage_type,int *aflag,int *type){
+	if(dest==e->dest&&damage_pm(*damage_type))
 		*value*=1+(*damage_type==DAMAGE_PHYSICAL?0.03:0.02)*e->level;
 	return 0;
 }
@@ -3751,8 +3752,8 @@ const struct effect_base san_reduce[1]={{
 	.switchunit_end=sr_switchunit_end,
 	.flag=EFFECT_NEGATIVE
 }};
-void ps_attack_end(struct effect *e,struct unit *dest,struct unit *src,unsigned long value,int damage_type,int aflag,int type){
-	if(e->dest==src&&damage_type!=DAMAGE_REAL&&dest->owner==e->dest->owner->enemy){
+void ps_attack_end(struct effect *e,struct unit *dest,struct unit *src,long value,int damage_type,int aflag,int type){
+	if(e->dest==src&&damage_pm(damage_type)&&dest->owner==e->dest->owner->enemy){
 		effect_event(e);
 		effect(san_reduce,dest,src,(damage_type==DAMAGE_PHYSICAL?3:2)+!!(aflag&AF_CRIT),-1);
 		effect_event_end(e);
@@ -3838,7 +3839,7 @@ void gate_key(struct unit *s){
 		setcooldown(s,s->move_cur,14);
 	}
 }
-void ms_attack_end0(struct effect *e,struct unit *dest,struct unit *src,unsigned long value,int damage_type,int aflag,int type){
+void ms_attack_end0(struct effect *e,struct unit *dest,struct unit *src,long value,int damage_type,int aflag,int type){
 	if(e->dest==src&&dest->owner==e->dest->owner->enemy&&e->unused<2){
 		effect_event(e);
 		++e->unused;
@@ -3860,9 +3861,9 @@ void missile_support(struct unit *s){
 	effect(missile_support_effect,s,s,0,8);
 	setcooldown(s,s->move_cur,7);
 }
-int cr_attack(struct effect *e,struct unit *dest,struct unit *src,unsigned long *value,int *damage_type,int *aflag,int *type){
+int cr_attack(struct effect *e,struct unit *dest,struct unit *src,long *value,int *damage_type,int *aflag,int *type){
 	_Static_assert(ATTR_MAX>0.0,"ATTR_MAX is zero or negative");
-	if(src==e->dest&&*damage_type!=DAMAGE_REAL&&test(e->level/(double)ATTR_MAX))
+	if(src==e->dest&&damage_pm(*damage_type)&&test(e->level/(double)ATTR_MAX))
 		*aflag|=AF_CRIT;
 	return 0;
 }
@@ -4106,6 +4107,39 @@ void air_cannon(struct unit *s){
 		attack(t,s,1.6*s->atk,DAMAGE_PHYSICAL,0,TYPE_WIND);
 	event(bloom,s);
 	setcooldown(s,s->move_cur,6);
+}
+void air_force(struct unit *s){
+	struct unit *t=gettarget(s);
+	switch(randi()%5){
+		case 0:
+			if(hittest(t,s,2.0)){
+				attack(t,s,2*s->atk,DAMAGE_MAGICAL,0,TYPE_POISON);
+				effect(poisoned,t,s,0,5);
+			}
+			break;
+		case 1:
+			if(hittest(t,s,2.0)){
+				attack(t,s,2*s->atk,DAMAGE_PHYSICAL,0,TYPE_LIGHT);
+				effect(stunned,t,s,0,4);
+			}
+			break;
+		case 2:
+			if(hittest(t,s,2.0))
+				attack(t,s,2*s->atk,DAMAGE_PHYSICAL,0,TYPE_FIRE);
+			effect(blood_moon,NULL,s,0,8);
+			break;
+		case 3:
+			if(hittest(t,s,2.0))
+				attack(t,s,2*s->atk,DAMAGE_PHYSICAL,0,TYPE_MACHINE);
+			setspi(t,t->spi>0?t->spi-20:t->spi+20);
+			break;
+		case 4:
+			if(hittest(t,s,2.0))
+				attack(t,s,2*s->atk,DAMAGE_PHYSICAL,0,TYPE_ALKALIFIRE);
+			event(real_fire_disillusion_fr,s);
+			break;
+	}
+	setcooldown(s,s->move_cur,11);
 }
 //list
 const struct move builtin_moves[]={
@@ -5330,6 +5364,13 @@ const struct move builtin_moves[]={
 		.id="air_cannon",
 		.action=air_cannon,
 		.type=TYPE_WIND,
+		.flag=0,
+		.mlevel=MLEVEL_REGULAR
+	},
+	{
+		.id="air_force",
+		.action=air_force,
+		.type=TYPE_MACHINE,
 		.flag=0,
 		.mlevel=MLEVEL_REGULAR
 	},

@@ -428,7 +428,7 @@ void tm_end(void){
 }
 static int cur=ACT_NORMALATTACK;
 //static const int dtc[3]={'R','P','M'};
-static const char *dtco[3]={YELLOW,RED,CYAN};
+static const char *dtco[]={YELLOW,RED,CYAN,GREEN,WHITE,WHITE};
 const char *srcid(const struct message *msg){
 	const char *p;
 	msg=message_findsource(msg);
@@ -504,7 +504,7 @@ void reporter_term(const struct message *msg,const struct player *p){
 			break;
 		case MSG_DAMAGE:
 			if(msg->un.damage.damage_type==DAMAGE_TOTAL){
-				wmf(msg->un.damage.dest->owner==p?0:1,"%s -%lu",ts("total"),msg->un.damage.value);
+				wmf(msg->un.damage.dest->owner==p?0:1,"%s %+ld",ts("total"),-msg->un.damage.value);
 			}else {
 				buf[0]=0;
 				buf1[0]=0;

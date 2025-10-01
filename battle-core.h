@@ -720,6 +720,10 @@ struct battle_field {
 	const volatile int *stage;
 	int end_round,unused;
 };
+extern const struct damage_type damage_types[];
+extern size_t damage_types_size;
+extern const struct event spi_modified[];
+
 int unit_setstate(struct unit *u,int state);
 
 int unit_kill(struct unit *up);
@@ -853,8 +857,6 @@ struct player *getprior(struct player *p,struct player *e);
 void report(struct battle_field *f,int type,...);
 
 const struct message *message_findsource(const struct message *msg);
-
-const char *message_id(const struct message *msg);
 
 void history_add(struct battle_field *f);
 

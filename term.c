@@ -429,6 +429,22 @@ void tm_end(void){
 static int cur=ACT_NORMALATTACK;
 //static const int dtc[3]={'R','P','M'};
 static const char *dtco[]={YELLOW,RED,CYAN,GREEN,WHITE,WHITE};
+const char *message_id(const struct message *msg){
+	switch(msg->type){
+		case MSG_EFFECT_EVENT:
+			return msg->un.e_init.base->id;
+		case MSG_EVENT:
+			if(msg->un.event.ev==spi_modified)
+				return "spi_modified";
+			return msg->un.event.ev->id;
+		case MSG_MOVE:
+			if(*msg->un.move.m->id==0)
+				return "normal_attack";
+			return msg->un.move.m->id;
+		default:
+			return NULL;
+	}
+}
 const char *srcid(const struct message *msg){
 	const char *p;
 	msg=message_findsource(msg);
@@ -565,8 +581,12 @@ attr_end:
 		case MSG_EFFECT_ROUNDDEC:
 			break;
 		case MSG_EVENT:
+//			wmf(0,"event %p",msg->un.event.ev);
+//			goto delay;
 			break;
 		case MSG_EVENT_END:
+//			wmf(0,"event_end %p",msg->un.event.ev);
+//			goto delay;
 			break;
 		case MSG_FAIL:
 			wmf(msg->un.u->owner==p?0:1,"[%ld]%s %s",msg->un.u-msg->un.u->owner->units,unit_ts(msg->un.u->base->id),ts("failed"));

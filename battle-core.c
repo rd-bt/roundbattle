@@ -20,6 +20,17 @@ static int iffr(const struct unit *u,const struct move *m){
 }
 static void effect_remove(struct effect **head,struct effect *e);
 static void effect_free(struct effect *ep,struct battle_field *f);
+static int frindex(const struct unit *u){
+	const struct move *m;
+	for(int i=0;i<8;++i){
+		m=u->moves+i;
+		if(!m->id)
+			continue;
+		if(m->mlevel&MLEVEL_FREEZING_ROARING)
+			return i;
+	}
+	return -1;
+}
 static void unit_state_update(struct unit *u,int new){
 	int old=u->state;
 	u->state=new;
@@ -65,15 +76,28 @@ int unit_setstate(struct unit *u,int state){
 				clearhp(u);
 			p=u->owner;
 			//dealing the freezing_roaring
-			switch((state=p->action)){
-				case ACT_MOVE0 ... ACT_MOVE7:
-					if(p->acted||*p->field->stage>=STAGE_ROUNDEND||!iffr(u,u->moves+state))
-						break;
-					if(u->state!=UNIT_FADING)
-						unit_state_update(u,UNIT_FADING);
-					return 1;
+			switch(*p->field->stage){
+				case STAGE_ROUNDSTART:
+					if(frindex(u)>=0&&unit_hasnegative(u))
+						goto set_fading;
+					break;
+				case STAGE_PRIOR:
+				case STAGE_LATTER:
+					switch((state=p->action)){
+						case ACT_MOVE0 ... ACT_MOVE7:
+							if(p->acted||!iffr(u,u->moves+state))
+								break;
+							goto set_fading;
+						default:
+							break;
+					}
+					break;
 				default:
 					break;
+set_fading:
+				if(u->state!=UNIT_FADING)
+					unit_state_update(u,UNIT_FADING);
+				return 1;
 			}
 			//end
 			if(u==p->front)
@@ -160,7 +184,8 @@ static void heal_action(struct unit *dest,struct unit *src,long value,int damage
 	dest->hp=limit((long)dest->hp+value,0,(long)dest->max_hp);
 	report(dest->owner->field,MSG_HEAL,dest,value);
 }
-static const struct damage_type damage_types[]={
+#define arrsize(arr) (sizeof(arr)/sizeof(*arr))
+const struct damage_type damage_types[]={
 	[DAMAGE_REAL]={
 		.derate_eval=derate_eval_always_1,
 		.action=damage_action_default,
@@ -201,6 +226,7 @@ static const struct damage_type damage_types[]={
 		.index=DAMAGE_VOID,
 	},
 };
+size_t damage_types_size=arrsize(damage_types);
 long damage(struct unit *dest,struct unit *src,long value,int damage_type,int aflag,int type){
 	unsigned long ohp;
 	const struct damage_type *dtp;
@@ -350,7 +376,7 @@ static void do_normal_attack(struct unit *src){
 }
 void normal_attack(struct unit *src){
 	struct move am;
-	am.id="normal_attack";
+	am.id="";
 	am.action=do_normal_attack;
 	am.init=NULL;
 	am.getprior=NULL;
@@ -442,6 +468,8 @@ int sethp(struct unit *dest,unsigned long hp){
 int addhp(struct unit *dest,long hp){
 	return addhp3(dest,hp,HPMOD_SETHP);
 }
+const struct event spi_modified[]={{
+.id=NULL}};
 int setspi(struct unit *dest,long spi){
 	long ospi,ds;
 	if(!isalive(dest->state))
@@ -456,7 +484,8 @@ int setspi(struct unit *dest,long spi){
 	dest->spi=spi;
 	ds=spi-ospi;
 	report(dest->owner->field,MSG_SPIMOD,dest,ds);
-	damage(dest,NULL,SHEAR_COEF*dest->max_hp*labs(ds)+1,DAMAGE_SHEAR,AF_NONHOOKABLE_D,TYPE_MACHINE);
+	event_do(spi_modified,dest)
+		damage(dest,NULL,SHEAR_COEF*dest->max_hp*labs(ds)+1,DAMAGE_SHEAR,AF_NONHOOKABLE_D,TYPE_MACHINE);
 	//addhp3(dest,-(SHEAR_COEF*dest->max_hp*labs(ds)+1),HPMOD_SHEAR);
 	for_each_effectf(e,dest->owner->field->effects,spimod){
 		e->base->spimod(e,dest,ds);
@@ -517,17 +546,6 @@ static void effect_insert(struct effect *ep,struct battle_field *f){
 		e->next=ep;
 		return;
 	}
-}
-static int frindex(const struct unit *u){
-	const struct move *m;
-	for(int i=0;i<8;++i){
-		m=u->moves+i;
-		if(!m->id)
-			continue;
-		if(m->mlevel&MLEVEL_FREEZING_ROARING)
-			return i;
-	}
-	return -1;
 }
 struct effect *effect(const struct effect_base *base,struct unit *dest,struct unit *src,long level,int round){
 	return effectx(base,dest,src,level,round,0);
@@ -1594,18 +1612,6 @@ continue0:
 		}
 	}
 	return NULL;
-}
-const char *message_id(const struct message *msg){
-	switch(msg->type){
-		case MSG_EFFECT_EVENT:
-			return msg->un.e_init.base->id;
-		case MSG_EVENT:
-			return msg->un.event.ev->id;
-		case MSG_MOVE:
-			return msg->un.move.m->id;
-		default:
-			return NULL;
-	}
 }
 void history_add(struct battle_field *f){
 	struct history *h;

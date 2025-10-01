@@ -279,7 +279,7 @@ void double_slash(struct unit *s){
 		vd=40+1.1*s->def;
 		if(vd<60)
 			vd=60;
-		damage(s->osite,s,vd,DAMAGE_VOID,AF_NONHOOKABLE_D,TYPE_VOID);
+		damage(s->osite,s,vd,DAMAGE_VOID,0,TYPE_VOID);
 	}
 }
 void petrifying_ray(struct unit *s){
@@ -1342,7 +1342,7 @@ void back(struct player *p,const struct player *h,long ds[6]){
 	}
 }
 void do_shear(struct unit *u,long ds){
-	damage(u,NULL,SHEAR_COEF*u->max_hp*labs(ds)+1,DAMAGE_SHEAR,AF_NONHOOKABLE_D,TYPE_MACHINE);
+	damage(u,NULL,SHEAR_COEF*u->max_hp*labs(ds)+1,DAMAGE_SHEAR,0,TYPE_MACHINE);
 }
 void time_back(struct unit *s){
 	struct battle_field *f=s->owner->field;
@@ -2432,7 +2432,7 @@ void uniform_base_a(struct unit *s){
 		sd+=(long)(SHEAR_COEF*t->max_hp*labs(s->spi)+1);
 		setspi(s,0);
 	}
-	damage(t,s,sd,DAMAGE_SHEAR,AF_NONHOOKABLE_D,TYPE_MACHINE);
+	damage(t,s,sd,DAMAGE_SHEAR,0,TYPE_MACHINE);
 }
 void spatially_shatter_pm(struct unit *s){
 	struct unit *t=s->osite;
@@ -2440,7 +2440,7 @@ void spatially_shatter_pm(struct unit *s){
 	long atk=s->atk;
 	if(vdmg<atk)
 		vdmg=atk;
-	damage(t,s,vdmg,DAMAGE_VOID,AF_NONHOOKABLE_D,TYPE_VOID);
+	damage(t,s,vdmg,DAMAGE_VOID,0,TYPE_VOID);
 }
 const struct move spatially_shatter_p={
 	.id="spatially_shatter",

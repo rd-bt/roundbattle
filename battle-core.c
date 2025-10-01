@@ -435,7 +435,7 @@ long heal3(struct unit *dest,long value,int aflag){
 long heal(struct unit *dest,long value){
 	return heal3(dest,value,0);
 }
-unsigned long instant_death(struct unit *dest){
+long instant_death(struct unit *dest){
 	return damage(dest,NULL,dest->max_hp*64,DAMAGE_REAL,AF_IDEATH,TYPE_VOID);
 }
 int addhp3(struct unit *dest,long hp,int flag){
@@ -1512,7 +1512,7 @@ void report(struct battle_field *f,int type,...){
 		case MSG_DAMAGE:
 			msg.un.damage.dest=va_arg(ap,const struct unit *);
 			msg.un.damage.src=va_arg(ap,const struct unit *);
-			msg.un.damage.value=va_arg(ap,unsigned long);
+			msg.un.damage.value=va_arg(ap,long);
 			msg.un.damage.damage_type=va_arg(ap,int);
 			msg.un.damage.aflag=va_arg(ap,int);
 			msg.un.damage.type=va_arg(ap,int);

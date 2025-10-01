@@ -241,13 +241,13 @@ void ground_force(struct unit *s){
 }
 void spoony_spell(struct unit *s){
 	struct unit *t=s->osite;
-	unsigned long dmg=2.1*s->atk+0.3*s->max_hp;
+	long dmg=2.1*s->atk+0.3*s->max_hp;
 	dmg=attack(t,s,dmg,DAMAGE_REAL,0,TYPE_SOIL);
 	attack(s,s,dmg,DAMAGE_REAL,0,TYPE_SOIL);
 }
 void self_explode(struct unit *s){
 	struct unit *t=s->osite;
-	unsigned long dmg=2.5*s->atk+0.4*s->max_hp;
+	long dmg=2.5*s->atk+0.4*s->max_hp;
 	attack(t,s,dmg,DAMAGE_PHYSICAL,0,TYPE_NORMAL);
 	attack(t,s,dmg,DAMAGE_MAGICAL,0,TYPE_NORMAL);
 	sethp(s,0);
@@ -332,7 +332,7 @@ void angry(struct unit *s){
 }
 void spi_fcrack(struct unit *s){
 	struct unit *t=gettarget(s);
-	unsigned long x=0,y=0;
+	long x=0,y=0;
 	long ds;
 	if(hittest(t,s,1.0)){
 		x=attack(t,s,0.45*s->atk,DAMAGE_PHYSICAL,0,TYPE_MACHINE);
@@ -371,7 +371,7 @@ int natural_shield_kill(struct effect *e,struct unit *u){
 	.id="natural_shield_passive_sn",
 }};*/
 void kaleido_attack_end0(struct effect *e,struct unit *dest,struct unit *src,long value,int damage_type,int aflag,int type){
-	unsigned long dmg;
+	long dmg;
 	if(src!=e->dest||dest->owner!=src->owner->enemy||damage_type!=DAMAGE_PHYSICAL)
 		return;
 	effect_event(e);
@@ -446,7 +446,7 @@ const struct effect_base alkali_fire_seal[1]={{
 	.prior=-5
 }};
 void real_fire_disillusion_fr_action(const struct event *ev,struct unit *src){
-	unsigned long def=src->def>16?src->def:16;
+	long def=src->def>16?src->def:16;
 	struct player *p=src->owner->enemy;
 	for_each_unit(u,p){
 		if(u!=p->front&&!unit_findeffect(u,alkali_fire_seal))
@@ -458,8 +458,9 @@ const struct event real_fire_disillusion_fr[1]={{
 	.id="real_fire_disillusion_fr",
 	.action=real_fire_disillusion_fr_action,
 }};
+extern const struct effect_base wet[1];
 void metal_bomb_inited(struct effect *e){
-	if((unit_type(e->dest)|unit_type(e->src))&TYPE_WATER)
+	if(effectx(wet,e->dest,NULL,0,8,EFFECT_FIND|EFFECT_SELECTALL))
 		effect_end(e);
 }
 void metal_bomb_end(struct effect *e){
@@ -640,7 +641,7 @@ void thunder_roaring(struct unit *s){
 	struct unit *t;
 	struct effect *e;
 	long n,n1;
-	unsigned long dmg;
+	long dmg;
 	n=unit_hasnegative(s);
 	if(n<=0){
 		roaring_common_a(TYPE_ELECTRIC)
@@ -667,7 +668,7 @@ void freezing_roaring(struct unit *s){
 	t=s->osite;
 	hp=t->hp;
 	t->hp=0;
-	report(s->owner->field,MSG_DAMAGE,t,s,hp,DAMAGE_MAGICAL,AF_CRIT,TYPE_ICE);
+	report(s->owner->field,MSG_DAMAGE,t,s,(long)hp,DAMAGE_MAGICAL,AF_CRIT,TYPE_ICE);
 	//show as a critical magical damage corresponding with other roarings.
 	unit_setstate(t,UNIT_FREEZING_ROARINGED);
 	/*for_each_effect(ep,s->owner->field->effects){
@@ -691,13 +692,13 @@ void triple_cutter(struct unit *s){
 	}
 }
 void thorns_damage_end(struct effect *e,struct unit *dest,struct unit *src,long value,int damage_type,int aflag,int type){
-	unsigned long dmg;
+	long dmg;
 	if(dest!=e->dest)
 		return;
 	switch(damage_type){
 		case DAMAGE_PHYSICAL:
 		case DAMAGE_MAGICAL:
-			if(src&&(dmg=value*0.20))
+			if(src&&(dmg=value*0.20)>0)
 				break;
 		default:
 			return;
@@ -907,7 +908,7 @@ int bh_su(struct effect *e,struct unit *u){
 	return -1;
 }
 void bh_end(struct effect *e){
-	unsigned long gp0,gp1;
+	long gp0,gp1;
 	struct unit *s=e->src->owner->front;
 	struct unit *t=s->osite;
 	struct effect *ep;
@@ -1223,9 +1224,9 @@ found:
 fail:
 	setcooldown(s,s->move_cur,4);
 }
-unsigned long damage_get_in_round(struct unit *s,int round,int damage_types){
+long damage_get_in_round(struct unit *s,int round,int damage_types){
 	struct battle_field *f=s->owner->field;
-	unsigned long dmg=0;
+	long dmg=0;
 	for(const struct message *p=f->rec+f->rec_size-1;p>=f->rec;--p){
 		if(p->type!=MSG_DAMAGE
 		||!(damage_types&(1<<p->un.damage.damage_type))
@@ -1238,7 +1239,7 @@ unsigned long damage_get_in_round(struct unit *s,int round,int damage_types){
 	return dmg;
 }
 void do_star_move(struct unit *s){
-	unsigned long dmg=damage_get_in_round(s,*s->owner->field->round,DAMAGE_ALL_FLAG);
+	long dmg=damage_get_in_round(s,*s->owner->field->round,DAMAGE_ALL_FLAG);
 	if(dmg){
 		attack(s->osite,s,dmg,DAMAGE_REAL,0,TYPE_VOID);
 		heal(s,dmg);
@@ -1838,21 +1839,21 @@ void amuck(struct unit *s){
 		attack(t,s,s->atk,DAMAGE_PHYSICAL,0,TYPE_NORMAL);
 }
 void reflex(struct unit *s){
-	unsigned long dmg=damage_get_in_round(s,*s->owner->field->round,DAMAGE_ALL_FLAG);
+	long dmg=damage_get_in_round(s,*s->owner->field->round,DAMAGE_ALL_FLAG);
 	if(dmg){
 		attack(s->osite,s,1.5*dmg,DAMAGE_REAL,0,TYPE_VOID);
 		setcooldown(s,s->move_cur,2);
 	}
 }
 void physical_reflex(struct unit *s){
-	unsigned long dmg=damage_get_in_round(s,*s->owner->field->round,DAMAGE_PHYSICAL_FLAG);
+	long dmg=damage_get_in_round(s,*s->owner->field->round,DAMAGE_PHYSICAL_FLAG);
 	if(dmg){
 		attack(s->osite,s,2*dmg,DAMAGE_REAL,0,TYPE_VOID);
 		setcooldown(s,s->move_cur,2);
 	}
 }
 void magical_reflex(struct unit *s){
-	unsigned long dmg=damage_get_in_round(s,*s->owner->field->round,DAMAGE_MAGICAL_FLAG);
+	long dmg=damage_get_in_round(s,*s->owner->field->round,DAMAGE_MAGICAL_FLAG);
 	if(dmg){
 		attack(s->osite,s,2*dmg,DAMAGE_REAL,0,TYPE_VOID);
 		setcooldown(s,s->move_cur,2);
@@ -2033,7 +2034,7 @@ void elbow(struct unit *s){
 	struct unit *t=gettarget(s);
 	struct effect *e;
 	int x;
-	unsigned long dmg=0.75*s->atk;
+	long dmg=0.75*s->atk;
 	long l;
 	double d0,d1;
 	if(hittest(t,s,1.0))
@@ -2288,7 +2289,7 @@ void burn_boat(struct unit *s){
 	struct unit *t=gettarget(s);
 	struct effect *e;
 	double d0;
-	unsigned long dmg;
+	long dmg;
 	if(hittest(t,s,1.5)){
 		d0=(double)s->hp/(double)s->max_hp;
 		dmg=(3.0-2.0*d0)*s->atk;
@@ -2320,7 +2321,7 @@ int burn_boat_kill(struct effect *e,struct unit *u){
 	return 0;
 }
 int burn_boat_damage(struct effect *e,struct unit *dest,struct unit *src,long *value,int *damage_type,int *aflag,int *type){
-	unsigned long dmg;
+	long dmg;
 	if(dest==e->dest){
 		/*if(e->level&&(*aflag&AF_IDEATH)){
 			effect_event(e);
@@ -2399,7 +2400,7 @@ void metal_syncretize(struct unit *s){
 }
 int uniform_base_damage(struct effect *e,struct unit *dest,struct unit *src,long *value,int *damage_type,int *aflag,int *type){
 	unsigned long dmg,x;
-	if(dest!=e->dest)
+	if(dest!=e->dest||*value<=0)
 		return 0;
 	dmg=*value;
 	if(!(dmg&(dmg-1)))

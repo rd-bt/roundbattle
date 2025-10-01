@@ -746,7 +746,7 @@ long heal3(struct unit *dest,long value,int aflag);
 
 long heal(struct unit *dest,long value);
 
-unsigned long instant_death(struct unit *dest);
+long instant_death(struct unit *dest);
 
 int addhp3(struct unit *dest,long hp,int flag);
 

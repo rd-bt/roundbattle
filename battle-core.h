@@ -589,7 +589,7 @@ struct effect_base {
 	void (*cooldown_decrease)(struct effect *e,struct unit *u,struct move *m,int *round);
 	int (*damage)(struct effect *e,struct unit *dest,struct unit *src,long *value,int *damage_type,int *aflag,int *type);
 	void (*damage_end)(struct effect *e,struct unit *dest,struct unit *src,long value,int damage_type,int aflag,int type);
-	int (*effect)(struct effect *e,const struct effect_base *base,struct unit *dest,struct unit *src,long *level,int *round);
+	int (*effect)(struct effect *e,const struct effect_base *base,struct unit *dest,struct unit *src,long *level,int *round,int *xflag);
 	void (*effect_end)(struct effect *e,struct effect *ep,struct unit *dest,struct unit *src,long level,int round);
 	void (*effect_end0)(struct effect *e,struct effect *ep,struct unit *dest,struct unit *src,long level,int round);
 	void (*effect_endt)(struct effect *e,struct effect *ep);

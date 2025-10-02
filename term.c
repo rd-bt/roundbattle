@@ -613,7 +613,7 @@ attr_end:
 			if(msg->un.move.u!=msg->un.move.u->owner->front){
 				snprintf(buf1,128,"[%ld]%s ",msg->un.move.u-msg->un.move.u->owner->units,unit_ts(msg->un.move.u->base->id));
 			}
-			wmf(msg->un.move.u->owner==p?0:1,"%s" CYAN "%s" WHITE,buf1,move_ts(msg->un.move.m->id));
+			wmf(msg->un.move.u->owner==p?0:1,"%s" CYAN "%s" WHITE,buf1,move_ts(*msg->un.move.m->id?msg->un.move.m->id:"normal_attack"));
 			goto delay;
 		case MSG_MOVE_END:
 			break;

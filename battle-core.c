@@ -436,7 +436,7 @@ long heal(struct unit *dest,long value){
 	return heal3(dest,value,0);
 }
 long instant_death(struct unit *dest){
-	return damage(dest,NULL,dest->max_hp*64,DAMAGE_REAL,AF_IDEATH,TYPE_VOID);
+	return damage(dest,NULL,dest->max_hp*64,DAMAGE_REAL,AF_IDEATH|AF_NOINHIBIT,TYPE_VOID);
 }
 int addhp3(struct unit *dest,long hp,int flag){
 	unsigned long ohp;
@@ -671,7 +671,7 @@ struct effect *effectx(const struct effect_base *base,struct unit *dest,struct u
 		return NULL;
 	if(!(xflag&EFFECT_NONHOOKABLE)){
 		for_each_effectf(e,f->effects,effect){
-			if(e->base->effect(e,base,dest,src,&level,&round))
+			if(e->base->effect(e,base,dest,src,&level,&round,&xflag))
 				return NULL;
 		}
 	}
@@ -760,7 +760,7 @@ int effect_reinitx(struct effect *ep,struct unit *src,long level,int round,int x
 		xflag^=ep->base->flag;
 	if(!(xflag&EFFECT_NONHOOKABLE)){
 		for_each_effectf(e,f->effects,effect){
-			if(e->base->effect(e,ep->base,ep->dest,src,&level,&round))
+			if(e->base->effect(e,ep->base,ep->dest,src,&level,&round,&xflag))
 				return -1;
 		}
 	}

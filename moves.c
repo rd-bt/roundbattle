@@ -2175,17 +2175,15 @@ void razor_carrot(struct unit *s){
 int moon_elf_shield_damage(struct effect *e,struct unit *dest,struct unit *src,long *value,int *damage_type,int *aflag,int *type){
 	if(dest!=e->dest||!e->level)
 		return 0;
-	if(*aflag&AF_IDEATH){
-		effect_event(e);
-		effect_event_end(e);
-		return -1;
-	}
 	if(*type){
 		if(*type&e->unused){
 			if(*value>1)
 				*value=1;
 		}else if(e->unused==TYPE_STEEL){
-			e->unused=*type;
+			int t;
+			t=*type;
+			t|=((t&TYPES_DEVINE)>>17)|((t&(TYPE_GRASS|TYPE_FIRE|TYPE_WATER))<<17);
+			e->unused=t;
 			if(*value>1)
 				*value=1;
 		}
@@ -2198,7 +2196,7 @@ int moon_elf_shield_damage(struct effect *e,struct unit *dest,struct unit *src,l
 		return 0;
 	}
 	effect_event(e);
-	effect_reinit(e,src,-(long)*value,-1);
+	effect_reinit(e,src,-*value,-1);
 	effect_event_end(e);
 	return -1;
 }
@@ -2251,8 +2249,8 @@ void moon_elf_shield_effect_end(struct effect *e,struct effect *ep,struct unit *
 	if(!x){
 		return;
 	}*/
-	effect_reinit(e,dest,dest->base->def,-1);
-	effect(moon_elf_shield_cooldown,dest,dest,0,3);
+	effect_reinit(e,dest,3*dest->base->def,-1);
+	effect(moon_elf_shield_cooldown,dest,dest,0,5);
 	effect_event_end(e);
 }
 const struct effect_base moon_elf_shield[1]={{
@@ -2321,7 +2319,7 @@ int burn_boat_kill(struct effect *e,struct unit *u){
 	return 0;
 }
 int burn_boat_damage(struct effect *e,struct unit *dest,struct unit *src,long *value,int *damage_type,int *aflag,int *type){
-	long dmg;
+	long dmg,def;
 	if(dest==e->dest){
 		/*if(e->level&&(*aflag&AF_IDEATH)){
 			effect_event(e);
@@ -2332,11 +2330,14 @@ int burn_boat_damage(struct effect *e,struct unit *dest,struct unit *src,long *v
 			case 2:
 				return -1;
 			case 1:
-				dmg=dest->max_hp/6;
+				dmg=0.4*dest->max_hp;
+				def=e->dest->def;
+				if(def)
+					dmg*=def_coef(def);
 				if(*value>dmg){
-					effect_event(e);
+					//effect_event(e);
 					*value=dmg;
-					effect_event_end(e);
+					//effect_event_end(e);
 				}
 				break;
 			default:
@@ -2345,16 +2346,18 @@ int burn_boat_damage(struct effect *e,struct unit *dest,struct unit *src,long *v
 	}
 	return 0;
 }
-int burn_boat_effect1(struct effect *e,const struct effect_base *base,struct unit *dest,struct unit *src,long *level,int *round){
+int burn_boat_effect1(struct effect *e,const struct effect_base *base,struct unit *dest,struct unit *src,long *level,int *round,int *xflag){
 	struct effect *ep;
 	if(dest==e->dest&&e->level){
 		if(base==moon_elf_shield_cooldown)
 			return -1;
 		if(base->flag&EFFECT_CONTROL){
+			if(*xflag&EFFECT_TEST)
+				return -1;
 			effect_event(e);
 			ep=unit_findeffect(dest,moon_elf_shield);
 			if(ep)
-				effect_reinit(ep,dest,dest->base->def,-1);
+				effect_reinit(ep,dest,3*dest->base->def,-1);
 			effect_event_end(e);
 			return -1;
 		}
@@ -2623,10 +2626,10 @@ void dmts_pulse(struct unit *s){
 			setcooldown(s,s->move_cur,6);
 	}
 }
-int anticontrol(struct effect *e,const struct effect_base *base,struct unit *dest,struct unit *src,long *level,int *round){
+int anticontrol(struct effect *e,const struct effect_base *base,struct unit *dest,struct unit *src,long *level,int *round,int *xflag){
 	if(dest==e->dest&&(base->flag&EFFECT_CONTROL)){
-		effect_event(e);
-		effect_event_end(e);
+//		effect_event(e);
+//		effect_event_end(e);
 		return -1;
 	}
 	return 0;
@@ -3124,7 +3127,7 @@ void wind_blade(struct unit *s){
 		attack(t,s,2*s->atk,DAMAGE_PHYSICAL,0,TYPE_WIND);
 	}
 }
-int protecting_effect(struct effect *e,const struct effect_base *base,struct unit *dest,struct unit *src,long *level,int *round){
+int protecting_effect(struct effect *e,const struct effect_base *base,struct unit *dest,struct unit *src,long *level,int *round,int *xflag){
 	if(dest==e->dest&&effect_isnegative_base(base,dest,src,*level))
 		return -1;
 	return 0;

@@ -2172,6 +2172,76 @@ void razor_carrot(struct unit *s){
 	}
 	setcooldown(s,s->move_cur,8);
 }
+
+
+const struct event derate_count[1]={{NULL}};
+const struct event def_count[1]={{NULL}};
+struct u_dbl {
+	struct unit *u;
+	double d;
+	int damage_type,type;
+};
+struct u_l {
+	struct unit *u;
+	long l;
+	int damage_type,type;
+};
+int derate_counter(struct effect *e,struct unit *dest,struct unit *src,long *value,int *damage_type,int *aflag,int *type){
+	struct u_dbl ud;
+	double d;
+	if(*aflag&AF_NODERATE)
+		return 0;
+	switch(*damage_type){
+		case DAMAGE_PHYSICAL:
+			d=dest->physical_derate;
+			if(src)
+				d-=src->physical_bonus;
+			break;
+		case DAMAGE_MAGICAL:
+			d=dest->magical_derate;
+			if(src)
+				d-=src->magical_bonus;
+			break;
+		default:
+			d=0.0;
+			break;
+	}
+	ud.d=d;
+	ud.u=dest;
+	ud.damage_type=*damage_type;
+	ud.type=*type;
+	event_callback(derate_count,src,&ud);
+	*value*=derate_coef(ud.d);
+	*aflag|=AF_NODERATE;
+	return 0;
+}
+int def_counter(struct effect *e,struct unit *dest,struct unit *src,long *value,int *damage_type,int *aflag,int *type){
+	struct u_l ul;
+	long def;
+	if(*aflag&AF_NODEF)
+		return 0;
+	def=dest->def+dest->level-src->level;
+	ul.l=def;
+	ul.u=dest;
+	ul.damage_type=*damage_type;
+	ul.type=*type;
+	event_callback(def_count,src,&ul);
+	*value*=def_coef(ul.l);
+	*aflag|=AF_NODEF;
+	return 0;
+}
+const struct effect_base dcounter[1]={{
+	.attack=derate_counter,
+	.flag=EFFECT_PASSIVE,
+	.prior=-32768,
+}};
+const struct effect_base defcounter[1]={{
+	.attack=def_counter,
+	.flag=EFFECT_PASSIVE,
+	.prior=-32768,
+}};
+
+
 int moon_elf_shield_damage(struct effect *e,struct unit *dest,struct unit *src,long *value,int *damage_type,int *aflag,int *type){
 	if(dest!=e->dest||!e->level)
 		return 0;
@@ -2263,7 +2333,7 @@ const struct effect_base moon_elf_shield[1]={{
 void moon_elf_shield_p(struct unit *s){
 	effect(moon_elf_shield,s,s,0,-1);
 }
-int adbd_attack(struct effect *e,struct unit *dest,struct unit *src,long *value,int *damage_type,int *aflag,int *type){
+/*int adbd_attack(struct effect *e,struct unit *dest,struct unit *src,long *value,int *damage_type,int *aflag,int *type){
 	long pdef;
 	if(src==e->dest&&damage_pm(*damage_type)&&!(*aflag&AF_NODEF)){
 		pdef=src->def;
@@ -2274,14 +2344,29 @@ int adbd_attack(struct effect *e,struct unit *dest,struct unit *src,long *value,
 		}
 	}
 	return 0;
+}*/
+int adbd_event(struct effect *e,const struct event *ev,struct unit *src,void *arg){
+	struct u_l *ul;
+	if(ev!=def_count)
+		return 0;
+	if(src!=e->dest)
+		return 0;
+	ul=arg;
+	if(!damage_pm(ul->damage_type))
+		return 0;
+	if(src->def<3)
+		return 0;
+	ul->l-=0.35*src->def;
+	return 0;
 }
 const struct effect_base anti_def_by_def[1]={{
 	.id="anti_def_by_def",
+	.event=adbd_event,
 	.flag=EFFECT_PASSIVE,
-	.attack=adbd_attack,
 }};
 void anti_def_by_def_p(struct unit *s){
 	effect(anti_def_by_def,s,s,0,-1);
+	effect(defcounter,NULL,s,0,-1);
 }
 void burn_boat(struct unit *s){
 	struct unit *t=gettarget(s);
@@ -3410,33 +3495,6 @@ void entropy_destroyer_blade(struct unit *s){
 		report(s->owner->field,MSG_UPDATE,s->move_cur);
 	}
 }
-const struct event derate_count[1]={{NULL}};
-struct u_dbl {
-	struct unit *u;
-	double d;
-};
-int physical_derate_counter(struct effect *e,struct unit *dest,struct unit *src,long *value,int *damage_type,int *aflag,int *type){
-	struct u_dbl ud;
-	double d;
-	if((*aflag&AF_NODERATE)||*damage_type!=DAMAGE_PHYSICAL)
-		return 0;
-	d=dest->physical_derate;
-	if(src)
-		d-=src->physical_bonus;
-	ud.d=d;
-	ud.u=dest;
-	event_callback(derate_count,src,&ud);
-	if(ud.d==d)
-		return 0;
-	*value*=derate_coef(ud.d);
-	*aflag|=AF_NODERATE;
-	return 0;
-}
-const struct effect_base pdcounter[1]={{
-	.attack=physical_derate_counter,
-	.flag=EFFECT_PASSIVE,
-	.prior=-32768,
-}};
 int edb_event(struct effect *e,const struct event *ev,struct unit *src,void *arg){
 	struct u_dbl *ud;
 	static const struct effect_base *const bases[]={burnt,frozen,frost_destroying,sunfyre,alkali_sunfyre,NULL};
@@ -3445,6 +3503,8 @@ int edb_event(struct effect *e,const struct event *ev,struct unit *src,void *arg
 	if(src!=e->dest)
 		return 0;
 	ud=arg;
+	if(ud->damage_type!=DAMAGE_PHYSICAL)
+		return 0;
 	if(!effectx((const void *)bases,ud->u,NULL,0,4,EFFECT_FIND))
 		return 0;
 	ud->d-=0.4;
@@ -3457,7 +3517,7 @@ const struct effect_base entropy_destroyer_blade_p[1]={{
 }};
 void entropy_destroyer_blade_init(struct unit *s){
 	effect(entropy_destroyer_blade_p,s,s,0,-1);
-	effect(pdcounter,NULL,s,0,-1);
+	effect(dcounter,NULL,s,0,-1);
 }
 void depositing_roundend(struct effect *e){
 	effect_event(e);

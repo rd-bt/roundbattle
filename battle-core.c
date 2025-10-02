@@ -1577,6 +1577,44 @@ void report(struct battle_field *f,int type,...){
 	if((rr=f->e->reporter))
 		rr(&msg,f->e);
 }
+const struct message *message_find(const struct battle_field *field,int types){
+	const struct message *p=field->rec,*p1;
+	size_t sz=field->rec_size;
+	int r=*field->round;
+	p1=p+sz-1;
+	for(;p1>=p;--p1){
+continue0:
+		if(p1->round!=r)
+			return NULL;
+		if((1<<p1->type)&types)
+			return p1;
+		switch(p1->type){
+			case MSG_EFFECT_EVENT_END:
+			case MSG_EVENT_END:
+			case MSG_MOVE_END:
+				--p1;
+				for(size_t d=1;d&&p1>=p;--p1){
+					switch(p1->type){
+						case MSG_EFFECT_EVENT:
+						case MSG_EVENT:
+						case MSG_MOVE:
+							--d;
+							continue;
+						case MSG_EFFECT_EVENT_END:
+						case MSG_EVENT_END:
+						case MSG_MOVE_END:
+							++d;
+						default:
+							continue;
+					}
+				}
+				goto continue0;
+			default:
+				continue;
+		}
+	}
+	return NULL;
+}
 const struct message *message_findsource(const struct message *msg){
 	const struct message *p=msg->field->rec,*p1;
 	size_t sz=msg->field->rec_size;

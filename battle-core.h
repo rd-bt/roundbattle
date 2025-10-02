@@ -856,6 +856,8 @@ struct player *getprior(struct player *p,struct player *e);
 
 void report(struct battle_field *f,int type,...);
 
+const struct message *message_find(const struct battle_field *field,int types);
+
 const struct message *message_findsource(const struct message *msg);
 
 void history_add(struct battle_field *f);

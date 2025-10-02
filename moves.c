@@ -2634,8 +2634,15 @@ int anticontrol(struct effect *e,const struct effect_base *base,struct unit *des
 	}
 	return 0;
 }
+
 void hf_hpmod(struct effect *e,struct unit *dest,long hp,int flag){
-	if(dest==e->dest&&!(flag&HPMOD_SHEAR)&&((e->unused&3)<1)){
+	const struct message *msg;
+	if(dest==e->dest&&((e->unused&3)<2)){
+		msg=message_find(dest->owner->field,(1<<MSG_HPMOD)|(1<<MSG_HEAL)|(1<<MSG_DAMAGE));
+		if(msg&&(msg=message_findsource(msg))){
+			if(msg->type==MSG_EVENT&&msg->un.event.ev==spi_modified)
+				return;
+		}
 		effect_event(e);
 		++e->unused;
 		effect(ATK,dest,dest,1,-1);

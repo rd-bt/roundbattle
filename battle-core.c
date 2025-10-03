@@ -120,7 +120,6 @@ set_fading:
 				index=u-p->units;
 				for(struct history *h=bf->ht,*endh=h+bf->ht_size;h<endh;++h){
 					u1=(p==bf->p?&h->p:&h->e)->units+index;
-					u1->hp=0;
 					u1->state=UNIT_FREEZING_ROARINGED;
 					for_each_effect(ep,h->effects){
 						if(ep->dest!=u)
@@ -189,19 +188,21 @@ const struct damage_type damage_types[]={
 	[DAMAGE_REAL]={
 		.derate_eval=derate_eval_always_1,
 		.action=damage_action_default,
-		.xflag=AF_NODEF|AF_EFFECT|AF_WEAK|AF_NOFLOAT,
+		.xflag=AF_NODEF|AF_EFFECT|AF_WEAK|AF_NOFLOAT|AF_POSITIVE,
 		.hpmod_flag=HPMOD_DAMAGE,
 		.index=DAMAGE_REAL,
 	},
 	[DAMAGE_PHYSICAL]={
 		.derate_eval=derate_eval_physical,
 		.action=damage_action_default,
+		.xflag=AF_POSITIVE,
 		.hpmod_flag=HPMOD_DAMAGE,
 		.index=DAMAGE_PHYSICAL,
 	},
 	[DAMAGE_MAGICAL]={
 		.derate_eval=derate_eval_magical,
 		.action=damage_action_default,
+		.xflag=AF_POSITIVE,
 		.hpmod_flag=HPMOD_DAMAGE,
 		.index=DAMAGE_MAGICAL,
 	},
@@ -316,7 +317,7 @@ long attack(struct unit *dest,struct unit *src,long value,int damage_type,int af
 		value*=inhibit_coef(dest->spi);
 	if(!(aflag&AF_NOFLOAT))
 		value*=1+FLOAT_COEF*(2.0*rand01()-1.0);
-	if(!value)
+	if((aflag&AF_POSITIVE)&&value<=0)
 		value=1;
 	if((aflag&AF_IDEATH)&&value<dest->hp&&value_backup>=dest->hp)
 		value=dest->hp;
@@ -1344,6 +1345,22 @@ int canaction2(const struct player *p,int act){
 	}
 }
 
+int player_select(struct player *p){
+	int r=p->selector(p);
+	int r1;
+	r1=r&0xff;
+	switch(r1){
+		case ACT_MOVE0 ... ACT_UNIT5:
+			break;
+		default:
+			return -1;
+	}
+	if(!canaction2(p,r1))
+		return -1;
+	p->action=r1;
+	p->arg=r>>8;
+	return 0;
+}
 void player_action(struct player *p){
 	int r,nonh=0;
 	if(p->acted)

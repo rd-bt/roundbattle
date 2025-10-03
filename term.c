@@ -97,6 +97,7 @@ void wmf_o(int who,const char *fmt,...){
 	wm_o(who,buf);
 	va_end(ap);
 }
+static int cur=ACT_NORMALATTACK,arg=0;
 static const char *sstr[6]={"normal","controlled","spuuressed","fading","failed","freezing_roaringed"};
 void frash(const struct player *p,FILE *fp,int current){
 	struct player *e=p->enemy;
@@ -295,6 +296,8 @@ void frash(const struct player *p,FILE *fp,int current){
 	switch(current){
 		case ACT_MOVE0 ... ACT_MOVE7:
 			r1=snprintf(buf,buflen,"prior:%d",u->moves[current].prior);
+			if(arg)
+				r1+=snprintf(buf+r1,buflen-r1," %d",(arg-1)/2);
 			break;
 		case ACT_UNIT0 ... ACT_UNIT5:
 			r1=p->units[current-ACT_UNIT0].base?
@@ -426,7 +429,6 @@ void tm_end(void){
 	fputs("\033[?1049l",stdout);
 	fflush(stdout);
 }
-static int cur=ACT_NORMALATTACK;
 //static const int dtc[3]={'R','P','M'};
 static const char *dtco[]={YELLOW,RED,CYAN,GREEN,WHITE,WHITE};
 const char *message_id(const struct message *msg){
@@ -691,6 +693,7 @@ int term_selector(const struct player *p){
 	char buf[32];
 	ssize_t r;
 	static int dep=0;
+	int x;
 	if(!canaction2(p,cur)){
 		if(isalive(p->front->state)){
 			if(canaction2(p,ACT_NORMALATTACK)){
@@ -806,7 +809,12 @@ refrash:
 		case '\n':
 			if(canaction2(p,cur)){
 				azero(rec);
-				return cur;
+				x=cur;
+				if(arg){
+					x|=arg<<8;
+					arg=0;
+				}
+				return x;
 			}else {
 				wmf(0,RED "the action is unavailable" WHITE);
 				goto refrash;
@@ -901,6 +909,23 @@ refrash:
 			goto refrash;
 		case 'm':
 			aslp^=1;
+			goto refrash;
+		case 'n':
+			switch(arg){
+				case 0:
+					arg=1;
+					break;
+				case 1:
+				case 3:
+				case 5:
+				case 7:
+				case 9:
+					arg+=2;
+					break;
+				default:
+					arg=0;
+					break;
+			}
 			goto refrash;
 	}
 	goto refrash;

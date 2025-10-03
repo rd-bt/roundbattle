@@ -53,6 +53,7 @@
 #define AF_NODERATE 2048
 #define AF_NOCALLBACK 4096
 #define AF_NOCALLBACK_D 8192
+#define AF_POSITIVE 16384
 
 
 #define TYPE_VOID (0)
@@ -655,8 +656,8 @@ struct player {
 	struct unit *front;
 	struct player *enemy;
 	struct battle_field *field;
-	int action;
 	unsigned int move_recursion;
+	int action,arg;
 	unsigned int acted:1,:0;
 	char data[64];
 };
@@ -845,6 +846,8 @@ void unit_move_init(struct unit *u,struct move *m);
 int switchunit(struct unit *to);
 
 int canaction2(const struct player *p,int act);
+
+int player_select(struct player *p);
 
 void player_action(struct player *p);
 

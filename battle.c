@@ -193,20 +193,14 @@ int battle(struct player *p,struct player *e,struct battle_field *bf,void (*init
 		player_update_state(prior);
 		player_update_state(latter);
 		stage=STAGE_SELECT;
-		prior->action=prior->selector(prior);
-		if((unsigned int)prior->action>=ACT_GIVEUP){
+		if(player_select(prior)){
 			ret=prior==p?1:0;
 			goto out;
 		}
-		if(!canaction(prior))
-			prior->action=ACT_ABORT;
-		latter->action=latter->selector(latter);
-		if((unsigned int)latter->action>=ACT_GIVEUP){
+		if(player_select(latter)){
 			ret=latter==p?1:0;
 			goto out;
 		}
-		if(!canaction(latter))
-			latter->action=ACT_ABORT;
 		latter=(prior=getprior(p,e))->enemy;
 		stage=STAGE_PRIOR;
 		player_action(prior);

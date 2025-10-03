@@ -654,6 +654,23 @@ void thunder_roaring(struct unit *s){
 		attack(t,s,0.15*dmg+n*0.06*u->max_hp,DAMAGE_REAL,0,TYPE_ELECTRIC);
 	}
 }
+static struct unit *get_unit_by_arg(struct player *p,int isenemy){
+	int a=p->arg;
+	struct unit *t;
+	switch(a){
+		case 1:
+		case 3:
+		case 5:
+		case 7:
+		case 9:
+		case 11:
+			t=(isenemy?p->enemy:p)->units+(a-1)/2;
+			if(t->base)
+				return t;
+		default:
+			return NULL;
+	}
+}
 void freezing_roaring(struct unit *s){
 	struct unit *t;
 	struct effect *e;
@@ -665,7 +682,9 @@ void freezing_roaring(struct unit *s){
 			effect(SPEED,t,s,-1,-1);
 		roaring_common_b;
 	}
-	t=s->osite;
+	t=get_unit_by_arg(s->owner,1);
+	if(!t)
+		t=s->osite;
 	hp=t->hp;
 	t->hp=0;
 	report(s->owner->field,MSG_DAMAGE,t,s,(long)hp,DAMAGE_MAGICAL,AF_CRIT,TYPE_ICE);
@@ -1022,6 +1041,9 @@ void cycle_erode_init(struct unit *s){
 void soul_back(struct unit *s){
 	struct battle_field *f=s->owner->field;
 	struct unit *t;
+	t=get_unit_by_arg(s->owner,0);
+	if(t)
+		goto found;
 	for(const struct message *p=f->rec+f->rec_size-1;p>=f->rec;--p){
 		if(p->type!=MSG_FAIL
 		||p->un.u->owner!=s->owner

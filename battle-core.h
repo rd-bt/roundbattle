@@ -32,6 +32,8 @@
 #define DAMAGE_HEAL 3
 #define DAMAGE_SHEAR 4
 #define DAMAGE_VOID 5
+#define DAMAGE_ADDHP 6
+#define DAMAGE_ADDSPI 7
 #define DAMAGE_TOTAL (-1)
 
 #define DAMAGE_REAL_FLAG (1<<DAMAGE_REAL)
@@ -39,22 +41,26 @@
 #define DAMAGE_MAGICAL_FLAG (1<<DAMAGE_MAGICAL)
 #define DAMAGE_ALL_FLAG (DAMAGE_REAL_FLAG|DAMAGE_PHYSICAL_FLAG|DAMAGE_MAGICAL_FLAG)
 
-#define AF_CRIT 1
-#define AF_NODEF 2
-#define AF_EFFECT 4
-#define AF_WEAK 8
-#define AF_NORMAL 16
-#define AF_NOFLOAT 32
-#define AF_IDEATH 64
-#define AF_NOINHIBIT 128
-#define AF_KEEPALIVE 256
-#define AF_NONHOOKABLE 512
-#define AF_NONHOOKABLE_D 1024
-#define AF_NODERATE 2048
-#define AF_NOCALLBACK 4096
-#define AF_NOCALLBACK_D 8192
-#define AF_POSITIVE 16384
+#define AF_CRIT (1<<0)
+#define AF_NODEF (1<<1)
+#define AF_EFFECT (1<<2)
+#define AF_WEAK (1<<3)
+#define AF_NORMAL (1<<4)
+#define AF_FLOAT (1<<5)
+#define AF_IDEATH (1<<6)
+#define AF_INHIBIT (1<<7)
+#define DF_KEEPALIVE (1<<8)
+#define AF_NONHOOKABLE (1<<9)
+#define DF_NONHOOKABLE (1<<10)
+#define AF_NODERATE (1<<11)
+#define AF_NOCALLBACK (1<<12)
+#define DF_NOCALLBACK (1<<13)
+#define AF_POSITIVE (1<<14)
+#define DF_IGNOREHP (1<<15)
+#define DF_TEST (1<<15)
 
+#define ADF_NONHOOKABLE (AF_NONHOOKABLE|DF_NONHOOKABLE)
+#define ADF_NOCALLBACK (AF_NOCALLBACK|DF_NOCALLBACK)
 
 #define TYPE_VOID (0)
 #define TYPE_GRASS (1<<0)
@@ -498,8 +504,8 @@
 )
 #define effect_field(e) (\
 {\
-		const struct effect *_e=(e);\
-		(_e->dest?_e->dest:_e->src)->owner->field;\
+		const struct effect *___e=(e);\
+		(___e->dest?___e->dest:___e->src)->owner->field;\
 }\
 )
 enum {
@@ -540,6 +546,22 @@ enum {
 )
 #define event_do(ev,src) for(void *_src=(src),*_ev=(void *)(ev);_src&&(event_start(_ev,_src),1);event_end(_ev,_src),_src=NULL)
 
+#define effect_event(e) (\
+{\
+	struct effect *__e=(e);\
+	++__e->inevent;\
+	report(effect_field(__e),MSG_EFFECT_EVENT,__e);\
+}\
+)
+#define effect_event_end(e) (\
+{\
+	struct effect *__e=(e);\
+	--__e->inevent;\
+	report(effect_field(__e),MSG_EFFECT_EVENT_END,__e);\
+}\
+)
+#define effect_ev(e) for(void *_e=(e);_e&&(effect_event(_e),1);effect_event_end(_e),_e=NULL)
+
 struct unit;
 struct player;
 struct battle_field;
@@ -568,7 +590,8 @@ struct unit_base {
 struct damage_type {
 	double (*derate_eval)(const struct unit *dest,const struct unit *src);
 	void (*action)(struct unit *dest,struct unit *src,long value,int damage_type,int aflag,int type);
-	int xflag,xflag_d,hpmod_flag,index;
+	size_t index;
+	int xflag,hpmod_flag;
 };
 struct event {
 	const char *id;
@@ -749,13 +772,13 @@ long heal(struct unit *dest,long value);
 
 long instant_death(struct unit *dest);
 
-int addhp3(struct unit *dest,long hp,int flag);
+void sethp(struct unit *dest,unsigned long hp);
 
-int sethp(struct unit *dest,unsigned long hp);
+void addhp(struct unit *dest,long hp);
 
-int addhp(struct unit *dest,long hp);
+void setspi(struct unit *dest,long spi);
 
-int setspi(struct unit *dest,long spi);
+void addspi(struct unit *dest,long spi);
 
 struct effect *effect(const struct effect_base *base,struct unit *dest,struct unit *src,long level,int round);
 
@@ -792,10 +815,6 @@ int revive_nonhookable(struct unit *u,unsigned long hp);
 int event_callback(const struct event *ev,struct unit *src,void *arg);
 
 int event(const struct event *ev,struct unit *src);
-
-void effect_event(struct effect *e);
-
-void effect_event_end(struct effect *e);
 
 struct unit *gettarget(struct unit *u);
 

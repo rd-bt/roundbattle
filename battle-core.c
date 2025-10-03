@@ -9,6 +9,7 @@
 #include <stdarg.h>
 #include <string.h>
 #define printf (use report() instead.)
+const struct event spi_modified[]={{NULL}};
 static void clearhp(struct unit *u){
 	long hp;
 	hp=(long)u->hp;
@@ -81,6 +82,7 @@ int unit_setstate(struct unit *u,int state){
 					if(frindex(u)>=0&&unit_hasnegative(u))
 						goto set_fading;
 					break;
+				case STAGE_SELECT:
 				case STAGE_PRIOR:
 				case STAGE_LATTER:
 					switch((state=p->action)){
@@ -172,9 +174,6 @@ static double derate_eval_magical(const struct unit *dest,const struct unit *src
 		derate-=src->magical_bonus;
 	return derate_coef(derate);
 }
-static double derate_eval_always_1(const struct unit *dest,const struct unit *src){
-	return 1.0;
-}
 static void damage_action_default(struct unit *dest,struct unit *src,long value,int damage_type,int aflag,int type){
 	dest->hp=limit((long)dest->hp-value,0,(long)dest->max_hp);
 	report(dest->owner->field,MSG_DAMAGE,dest,src,value,damage_type,aflag,type);
@@ -183,49 +182,78 @@ static void heal_action(struct unit *dest,struct unit *src,long value,int damage
 	dest->hp=limit((long)dest->hp+value,0,(long)dest->max_hp);
 	report(dest->owner->field,MSG_HEAL,dest,value);
 }
+static void addhp_action(struct unit *dest,struct unit *src,long value,int damage_type,int aflag,int type){
+	dest->hp=limit((long)dest->hp+value,0,(long)dest->max_hp);
+	report(dest->owner->field,MSG_HPMOD,dest,value);
+}
+static void addspi_action(struct unit *dest,struct unit *src,long value,int damage_type,int aflag,int type){
+	long ospi,spi,ds;
+	ospi=dest->spi;
+	spi=limit(ospi+value,-dest->max_spi,dest->max_spi);
+	if(spi==ospi)
+		return;
+	dest->spi=spi;
+	ds=spi-ospi;
+	report(dest->owner->field,MSG_SPIMOD,dest,value);
+	event_do(spi_modified,dest)
+		damage(dest,NULL,SHEAR_COEF*dest->max_hp*labs(ds)+1,DAMAGE_SHEAR,0,TYPE_MACHINE);
+	if(type!=TYPE_VOID){
+		for_each_effectf(e,dest->owner->field->effects,spimod){
+			e->base->spimod(e,dest,ds);
+		}
+	}
+}
 #define arrsize(arr) (sizeof(arr)/sizeof(*arr))
 const struct damage_type damage_types[]={
 	[DAMAGE_REAL]={
-		.derate_eval=derate_eval_always_1,
 		.action=damage_action_default,
-		.xflag=AF_NODEF|AF_EFFECT|AF_WEAK|AF_NOFLOAT|AF_POSITIVE,
+		.xflag=AF_INHIBIT|AF_NODEF|AF_EFFECT|AF_WEAK|AF_POSITIVE,
 		.hpmod_flag=HPMOD_DAMAGE,
 		.index=DAMAGE_REAL,
 	},
 	[DAMAGE_PHYSICAL]={
 		.derate_eval=derate_eval_physical,
 		.action=damage_action_default,
-		.xflag=AF_POSITIVE,
+		.xflag=AF_INHIBIT|AF_FLOAT|AF_POSITIVE,
 		.hpmod_flag=HPMOD_DAMAGE,
 		.index=DAMAGE_PHYSICAL,
 	},
 	[DAMAGE_MAGICAL]={
 		.derate_eval=derate_eval_magical,
 		.action=damage_action_default,
-		.xflag=AF_POSITIVE,
+		.xflag=AF_INHIBIT|AF_FLOAT|AF_POSITIVE,
 		.hpmod_flag=HPMOD_DAMAGE,
 		.index=DAMAGE_MAGICAL,
 	},
 	[DAMAGE_HEAL]={
-		.derate_eval=derate_eval_always_1,
 		.action=heal_action,
-		.xflag=AF_NODEF|AF_EFFECT|AF_WEAK|AF_NOFLOAT|AF_NODERATE|AF_NONHOOKABLE|AF_NONHOOKABLE_D|AF_NOCALLBACK|AF_NOCALLBACK_D,
+		.xflag=AF_INHIBIT|AF_NODEF|AF_EFFECT|AF_WEAK|AF_NODERATE|ADF_NONHOOKABLE|ADF_NOCALLBACK,
 		.hpmod_flag=HPMOD_HEAL,
 		.index=DAMAGE_HEAL,
 	},
 	[DAMAGE_SHEAR]={
-		.derate_eval=derate_eval_always_1,
 		.action=damage_action_default,
-		.xflag=AF_NONHOOKABLE_D|AF_NOCALLBACK_D,
+		.xflag=DF_NONHOOKABLE|DF_NOCALLBACK,
 		.hpmod_flag=HPMOD_SHEAR,
 		.index=DAMAGE_SHEAR,
 	},
 	[DAMAGE_VOID]={
-		.derate_eval=derate_eval_always_1,
 		.action=damage_action_default,
-		.xflag=AF_NONHOOKABLE_D,
+		.xflag=DF_NONHOOKABLE,
 		.hpmod_flag=HPMOD_SETHP,
 		.index=DAMAGE_VOID,
+	},
+	[DAMAGE_ADDHP]={
+		.action=addhp_action,
+		.xflag=DF_NONHOOKABLE|DF_NOCALLBACK,
+		.hpmod_flag=HPMOD_SETHP,
+		.index=DAMAGE_ADDHP,
+	},
+	[DAMAGE_ADDSPI]={
+		.action=addspi_action,
+		.xflag=DF_NONHOOKABLE|DF_NOCALLBACK|DF_IGNOREHP,
+		.hpmod_flag=0,
+		.index=DAMAGE_ADDSPI,
 	},
 };
 size_t damage_types_size=arrsize(damage_types);
@@ -235,24 +263,26 @@ long damage(struct unit *dest,struct unit *src,long value,int damage_type,int af
 	if(!checkalive(dest,src))
 			return 0;
 	dtp=damage_types+damage_type;
-	if(!((aflag^dtp->xflag_d)&AF_NONHOOKABLE_D)){
+	if(!((aflag^dtp->xflag)&DF_NONHOOKABLE)){
 		for_each_effectf(e,dest->owner->field->effects,damage){
 			if(e->base->damage(e,dest,src,&value,&damage_type,&aflag,&type))
 				return 0;
 		}
 	}
 	dtp=damage_types+damage_type;
-	aflag^=dtp->xflag_d;
+	aflag^=dtp->xflag;
+	if(aflag&DF_TEST)
+		return value;
 	ohp=dest->hp;
 	dtp->action(dest,src,value,damage_type,aflag,type);
-	if(!(aflag&AF_KEEPALIVE)&&!dest->hp)
+	if(!(aflag&DF_KEEPALIVE)&&!dest->hp)
 		unit_kill(dest);
-	if(dest->hp!=ohp){
+	if(!(aflag&DF_IGNOREHP)&&dest->hp!=ohp){
 		for_each_effectf(e,dest->owner->field->effects,hpmod){
 			e->base->hpmod(e,dest,(long)dest->hp-(long)ohp,dtp->hpmod_flag);
 		}
 	}
-	if(!(aflag&AF_NOCALLBACK_D)){
+	if(!(aflag&DF_NOCALLBACK)){
 		for_each_effectf(e,dest->owner->field->effects,damage_end){
 			e->base->damage_end(e,dest,src,value,damage_type,aflag,type);
 		}
@@ -311,17 +341,19 @@ long attack(struct unit *dest,struct unit *src,long value,int damage_type,int af
 			x+=dest->level-src->level;
 		value*=def_coef(x);
 	}
-	if(!(aflag&AF_NODERATE))
+	if(!(aflag&AF_NODERATE)&&dtp->derate_eval)
 		value*=dtp->derate_eval(dest,src);
-	if(!(aflag&AF_NOINHIBIT)&&dest->spi)
+	if((aflag&AF_INHIBIT)&&dest->spi)
 		value*=inhibit_coef(dest->spi);
-	if(!(aflag&AF_NOFLOAT))
+	if(aflag&AF_FLOAT)
 		value*=1+FLOAT_COEF*(2.0*rand01()-1.0);
 	if((aflag&AF_POSITIVE)&&value<=0)
 		value=1;
 	if((aflag&AF_IDEATH)&&value<dest->hp&&value_backup>=dest->hp)
 		value=dest->hp;
 	value=damage(dest,src,value,damage_type,aflag,type);
+	if(aflag&DF_TEST)
+		return value;
 	if(!(aflag&AF_NOCALLBACK)){
 		for_each_effectf(e,dest->owner->field->effects,attack_end){
 			e->base->attack_end(e,dest,src,value,damage_type,aflag,type);
@@ -394,8 +426,6 @@ void normal_attack(struct unit *src){
 	unit_move(src,&am);
 }
 long heal3(struct unit *dest,long value,int aflag){
-//	unsigned long ohp;
-//	long hp;
 	if(!isalive(dest->state))
 			return 0;
 	if(!(aflag&AF_NONHOOKABLE)){
@@ -405,29 +435,6 @@ long heal3(struct unit *dest,long value,int aflag){
 		}
 	}
 	value=attack(dest,NULL,value,DAMAGE_HEAL,aflag,TYPE_VOID);
-	/*
-	if(!(aflag&AF_NOINHIBIT)&&dest->spi)
-		value*=inhibit_coef(dest->spi);
-	ohp=dest->hp;
-	if(ohp>=dest->max_hp&&value>=0)
-		hp=(long)ohp;
-	else {
-		hp=(long)ohp+value;
-		if(hp>(long)dest->max_hp)
-			hp=(long)dest->max_hp;
-		if(hp<0)
-			hp=0;
-	}
-	dest->hp=hp;
-	report(dest->owner->field,MSG_HEAL,dest,value);
-	if(hp!=ohp){
-		for_each_effectf(e,dest->owner->field->effects,hpmod){
-			e->base->hpmod(e,dest,(long)hp-(long)ohp,HPMOD_HEAL);
-		}
-	}
-	if(!dest->hp&&!(aflag&AF_KEEPALIVE))
-		unit_kill(dest);
-	*/
 	for_each_effectf(e,dest->owner->field->effects,heal_end){
 		e->base->heal_end(e,dest,value);
 	}
@@ -437,65 +444,27 @@ long heal(struct unit *dest,long value){
 	return heal3(dest,value,0);
 }
 long instant_death(struct unit *dest){
-	return damage(dest,NULL,dest->max_hp*64,DAMAGE_REAL,AF_IDEATH|AF_NOINHIBIT,TYPE_VOID);
+	return damage(dest,NULL,dest->max_hp*64,DAMAGE_REAL,AF_IDEATH|AF_INHIBIT,TYPE_VOID);
 }
-int addhp3(struct unit *dest,long hp,int flag){
-	unsigned long ohp;
-	long rhp;
-	if(!isalive(dest->state))
-		return -1;
+void addhp(struct unit *dest,long hp){
 	if(!hp)
-		return 0;
-	ohp=dest->hp;
-	if(ohp>=dest->max_hp&&hp>=0)
-		rhp=(long)ohp;
-	else {
-		rhp=(long)ohp+hp;
-		if(rhp>(long)dest->max_hp)
-			rhp=(long)dest->max_hp;
-		if(rhp<0)
-			rhp=0;
-	}
-	dest->hp=(unsigned long)rhp;
-	report(dest->owner->field,MSG_HPMOD,dest,hp);
-	if(rhp!=ohp){
-		for_each_effectf(e,dest->owner->field->effects,hpmod){
-			e->base->hpmod(e,dest,rhp-(long)ohp,flag);
-		}
-	}
-	if(!dest->hp)
-		unit_kill(dest);
-	return 0;
+		return;
+	damage(dest,NULL,hp,DAMAGE_ADDHP,0,TYPE_VOID);
 }
-int sethp(struct unit *dest,unsigned long hp){
-	return addhp3(dest,hp-(long)dest->hp,HPMOD_SETHP);
+void sethp(struct unit *dest,unsigned long hp){
+	if(hp==dest->hp)
+		return;
+	damage(dest,NULL,hp-(long)dest->hp,DAMAGE_ADDHP,0,TYPE_VOID);
 }
-int addhp(struct unit *dest,long hp){
-	return addhp3(dest,hp,HPMOD_SETHP);
+void addspi(struct unit *dest,long spi){
+	if(!spi)
+		return;
+	damage(dest,NULL,spi,DAMAGE_ADDSPI,0,TYPE_MACHINE);
 }
-const struct event spi_modified[]={{
-.id=NULL}};
-int setspi(struct unit *dest,long spi){
-	long ospi,ds;
-	if(!isalive(dest->state))
-		return -1;
-	ospi=dest->spi;
-	if(spi>dest->max_spi)
-		spi=dest->max_spi;
-	if(spi<-dest->max_spi)
-		spi=-dest->max_spi;
-	if(spi==ospi)
-		return 0;
-	dest->spi=spi;
-	ds=spi-ospi;
-	report(dest->owner->field,MSG_SPIMOD,dest,ds);
-	event_do(spi_modified,dest)
-		damage(dest,NULL,SHEAR_COEF*dest->max_hp*labs(ds)+1,DAMAGE_SHEAR,0,TYPE_MACHINE);
-	//addhp3(dest,-(SHEAR_COEF*dest->max_hp*labs(ds)+1),HPMOD_SHEAR);
-	for_each_effectf(e,dest->owner->field->effects,spimod){
-		e->base->spimod(e,dest,ds);
-	}
-	return 0;
+void setspi(struct unit *dest,long spi){
+	if(spi==dest->spi)
+		return;
+	damage(dest,NULL,spi-dest->spi,DAMAGE_ADDSPI,0,TYPE_MACHINE);
 }
 struct unit *gettarget(struct unit *u){
 	struct unit *r;
@@ -943,18 +912,6 @@ void wipetrash(struct battle_field *f){
 	}
 	f->trash=NULL;
 }
-void effect_event(struct effect *e){
-	struct battle_field *f=effect_field(e);
-	++e->inevent;
-	report(f,MSG_EFFECT_EVENT,e);
-	//printf("effect event %s\n",e->base->id);
-}
-void effect_event_end(struct effect *e){
-	struct battle_field *f=effect_field(e);
-	--e->inevent;
-	report(f,MSG_EFFECT_EVENT_END,e);
-	//printf("effect event %s end\n",e->base->id);
-}
 int revive_nonhookable(struct unit *u,unsigned long hp){
 	if(isalive(u->state))
 		return -1;
@@ -1059,6 +1016,8 @@ void update_attr(struct unit *u){
 	for_each_effectf(e,u->owner->field->effects,update_attr){
 		e->base->update_attr(e,u);
 	}
+	u->hp=limit(u->hp,0,u->max_hp);
+	u->spi=limit(u->spi,-u->max_spi,u->max_spi);
 	report(u->owner->field,MSG_UPDATE,u);
 }
 void update_attr_all(struct battle_field *f){

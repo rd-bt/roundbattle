@@ -535,7 +535,7 @@ void reporter_term(const struct message *msg,const struct player *p){
 					strcat(buf," E");
 				if(msg->un.damage.aflag&AF_WEAK)
 					strcat(buf," W");
-				wmf(msg->un.damage.dest->owner==p?0:1,"%s%s-%lu%s (%s:%s,%s:%s)" WHITE,buf1,dtco[msg->un.damage.damage_type],msg->un.damage.value,buf,ts("type"),type2str(msg->un.damage.type),ts("source"),srcid(msg));
+				wmf(msg->un.damage.dest->owner==p?0:1,"%s%s%+ld%s (%s:%s,%s:%s)" WHITE,buf1,dtco[msg->un.damage.damage_type],-msg->un.damage.value,buf,ts("type"),type2str(msg->un.damage.type),ts("source"),srcid(msg));
 			}
 			goto delay;
 		case MSG_EFFECT:

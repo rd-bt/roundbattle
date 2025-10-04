@@ -36,6 +36,9 @@ int isprime(unsigned long n){
 		if(!(n%i))return 0;
 	return 1;
 }
+long instant_death(struct unit *dest){
+	return damage(dest,NULL,dest->max_hp*64,DAMAGE_REAL,AF_IDEATH|AF_INHIBIT,TYPE_VOID);
+}
 int abnormal_init(struct effect *e,long level,int round){
 	if(!e->round)
 		e->round=round;
@@ -3742,7 +3745,7 @@ long getsan(const struct unit *u){
 }
 void resetcd(struct unit *u,void (*ma)(struct unit *)){
 	for_each_move(m,u){
-		if(m->action==ma){
+		if(m->cooldown&&m->action==ma){
 			setcooldown(u,m,0);
 		}
 	}
@@ -4107,7 +4110,7 @@ void spi_gather(struct unit *s){
 const struct effect_base reduced[1];
 void reduced_inited(struct effect *e){
 	for_each_unit(u,e->dest->owner){
-		if(isalive(u->state)&&!unit_findeffect(u,reduced))
+		if(isalive_s(u->state)&&!unit_findeffect(u,reduced))
 			return;
 	}
 	setwinner(effect_field(e),e->dest->owner->enemy);
@@ -4123,6 +4126,48 @@ void red_lotus(struct unit *s){
 		attack(t,s,0.4*s->atk,DAMAGE_PHYSICAL,0,TYPE_FIRE);
 		effect(reduced,t,s,0,5);
 	}
+}
+void air_breaking_thorn_a(struct unit *s);
+void air_breaking_thorn_effect_end(struct effect *e,struct effect *ep,struct unit *dest,struct unit *src,long level,int round){
+	if(!(ep->base->flag&EFFECT_ENV)||src->owner==e->dest->owner||!isfront(e->dest))
+		return;
+	effect_ev(e){
+		effect_setround(e,2);
+		resetcd(e->dest,air_breaking_thorn_a);
+	}
+}
+const struct effect_base air_breaking_thorn[1]={{
+	.effect_end=air_breaking_thorn_effect_end,
+	.end_in_roundend=kaleido_end_in_roundend,
+	.flag=EFFECT_PASSIVE,
+}};
+long oxidate(struct unit *dest){
+	struct effect *e=unit_findeffect(dest,reduced);
+	if(e){
+		effect_end(e);
+		return damage(dest,NULL,dest->max_hp/3,DAMAGE_MAGICAL,0,TYPE_POISON);
+	}
+	return damage(dest,NULL,64*dest->max_hp,DAMAGE_MAGICAL,AF_IDEATH|AF_CRIT,TYPE_POISON);
+}
+void air_breaking_thorn_i(struct unit *s){
+	effect(air_breaking_thorn,s,s,0,0);
+}
+void air_breaking_thorn_a(struct unit *s){
+	struct unit *t;
+	long dmg;
+	if(unit_effect_round(s,air_breaking_thorn)){
+		oxidate(t=s->osite);
+		heal(s,s->max_hp/2);
+		effectx(NULL,NULL,t,0,0,EFFECT_REMOVE|EFFECT_SELECTALL|EFFECT_ENV);
+	}else {
+		t=gettarget(s);
+		if(hittest(t,s,1.5)){
+			dmg=attack(t,s,1.4*s->atk,DAMAGE_PHYSICAL,AF_NODEF,TYPE_WIND);
+			if(dmg>128)
+				heal(s,dmg-128);
+		}
+	}
+	setcooldown(s,s->move_cur,6);
 }
 //list
 const struct move builtin_moves[]={
@@ -5368,6 +5413,14 @@ const struct move builtin_moves[]={
 		.id="red_lotus",
 		.action=red_lotus,
 		.type=TYPE_FIRE,
+		.flag=0,
+		.mlevel=MLEVEL_REGULAR
+	},
+	{
+		.id="air_breaking_thorn",
+		.action=air_breaking_thorn_a,
+		.init=air_breaking_thorn_i,
+		.type=TYPE_WIND,
 		.flag=0,
 		.mlevel=MLEVEL_REGULAR
 	},

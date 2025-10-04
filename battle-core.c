@@ -328,12 +328,12 @@ long attack(struct unit *dest,struct unit *src,long value,int damage_type,int af
 	}else {
 		x=effect_weak_level(dest->type0|dest->type1,type);
 		if(x<0){
-			value/=(1-x);
+			value/=sqrt(1-x);
 			aflag|=AF_WEAK;
 		}else if(x>0){
 			if(x>1&&(type&TYPES_DEVINE))
 				x=1;
-			value*=1+x;
+			value*=sqrt(1+x);
 			aflag|=AF_EFFECT;
 		}
 	}
@@ -444,9 +444,6 @@ long heal3(struct unit *dest,long value,int aflag){
 }
 long heal(struct unit *dest,long value){
 	return heal3(dest,value,0);
-}
-long instant_death(struct unit *dest){
-	return damage(dest,NULL,dest->max_hp*64,DAMAGE_REAL,AF_IDEATH|AF_INHIBIT,TYPE_VOID);
 }
 void addhp(struct unit *dest,long hp){
 	if(!hp)

@@ -728,3 +728,5 @@ move.spi_gather.name=灵力汇聚
 move.spi_gather.desc=随机获得5-15点灵力。
 move.red_lotus.name=红莲
 move.red_lotus.desc=命中后造成(40%攻击力)点物理伤害并还原目标5回合。
+move.air_breaking_thorn.name=破空之刺
+move.air_breaking_thorn.desc=命中后造成(140%攻击力)点无视防御的物理伤害并基于伤害值超出128的部分回复自身的生命值。强化状态：直接斩杀(O-R)对方并回复自身50%的生命值，清除场上由敌方单位创造的环境。敌方单位创造环境时，如果自身处于场上，技能会进入强化状态并重置冷却时间，强化状态持续至下回合结束。冷却5回合。

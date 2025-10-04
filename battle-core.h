@@ -496,6 +496,12 @@
 		_e?_e->level:0l;\
 }\
 )
+#define unit_effect_round(u,E) (\
+{\
+		const struct effect *_e=unit_findeffect((u),(E));\
+		_e?_e->round:0;\
+}\
+)
 #define unit_type(u) (\
 {\
 		const struct unit *_u=(u);\
@@ -770,8 +776,6 @@ void normal_attack(struct unit *src);
 long heal3(struct unit *dest,long value,int aflag);
 
 long heal(struct unit *dest,long value);
-
-long instant_death(struct unit *dest);
 
 void sethp(struct unit *dest,unsigned long hp);
 

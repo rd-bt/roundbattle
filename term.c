@@ -97,6 +97,30 @@ void wmf_o(int who,const char *fmt,...){
 	wm_o(who,buf);
 	va_end(ap);
 }
+static const char *enc[]={"freezing_roaring","spi_shattering_slash","air_breaking_thorn",NULL};
+ptrdiff_t findindex(const char **vec,const char *s){
+	ptrdiff_t r=0;
+	do {
+		if(!strcmp(*vec,s))
+			return r;
+		else
+			++r;
+	}while(*(++vec));
+	return -1;
+}
+int move_enchanced(const struct unit *u,const struct move *m){
+	extern const struct effect_base air_breaking_thorn[1];
+	switch(findindex(enc,m->id)){
+		case 0:
+			return (m->mlevel&MLEVEL_FREEZING_ROARING)&&unit_hasnegative(u);
+		case 1:
+			return !!u->spi;
+		case 2:
+			return !!unit_effect_round(u,air_breaking_thorn);
+		default:
+			return 0;
+	}
+}
 static int cur=ACT_NORMALATTACK,arg=0;
 static const char *sstr[6]={"normal","controlled","spuuressed","fading","failed","freezing_roaringed"};
 void frash(const struct player *p,FILE *fp,int current){
@@ -333,7 +357,10 @@ void frash(const struct player *p,FILE *fp,int current){
 			r1=u->moves[i].cooldown<0?snprintf(buf+r,buflen-r,"[inf]"):snprintf(buf+r,buflen-r,"[%d]",u->moves[i].cooldown);
 		else if(!c&&u->moves[i].action){
 				strncpy(buf+r,"[X]",buflen-r);
+				r+=3;
 		}
+		if(move_enchanced(u,u->moves+i))
+			strncpy(buf+r,"*",buflen-r);
 no_move:
 		s1-=strrlen(buf);
 		if(current==i)

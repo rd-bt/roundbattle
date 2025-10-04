@@ -652,6 +652,7 @@ void freezing_roaring(struct unit *s){
 	long n,n1;
 	unsigned long hp;
 	struct move *mp;
+	struct player **p1;
 	if(!((mp=s->move_cur)->mlevel&MLEVEL_FREEZING_ROARING)||!unit_hasnegative(s)){
 		roaring_common_a(TYPE_ICE)
 			effect(SPEED,t,s,-1,-1);
@@ -666,6 +667,10 @@ void freezing_roaring(struct unit *s){
 	//show as a critical magical damage corresponding with other roarings.
 	unit_setstate(t,UNIT_FREEZING_ROARINGED);
 	effectx(NULL,s,NULL,0,0,EFFECT_REMOVE|EFFECT_NEGATIVE|EFFECT_NONHOOKABLE|EFFECT_NODESTRUCT|EFFECT_UNPURIFIABLE);
+	p1=&s->owner->field->winner;
+	if(*p1==t->owner){
+		*p1=NULL;
+	}
 	if(mp->cooldown){
 		mp->cooldown=0;
 		report(s->owner->field,MSG_UPDATE,mp);
@@ -1806,7 +1811,7 @@ void damage_reverse(struct unit *s){
 	setcooldown(s,s->move_cur,4);
 }
 int shield_damage(struct effect *e,struct unit *dest,struct unit *src,long *value,int *damage_type,int *aflag,int *type){
-	if(dest!=e->dest)
+	if(dest!=e->dest||*value<0)
 		return 0;
 	if(*value>e->level){
 		effect_ev(e){
@@ -1819,7 +1824,7 @@ int shield_damage(struct effect *e,struct unit *dest,struct unit *src,long *valu
 	if(*aflag&DF_TEST)
 		return -1;
 	effect_ev(e){
-		effect_reinit(e,src,-(long)*value,-1);
+		effect_reinit(e,src,-*value,-1);
 	}
 	return -1;
 }
@@ -2170,7 +2175,7 @@ const struct effect_base defcounter[1]={{
 
 
 int moon_elf_shield_damage(struct effect *e,struct unit *dest,struct unit *src,long *value,int *damage_type,int *aflag,int *type){
-	if(dest!=e->dest||!e->level)
+	if(dest!=e->dest||!e->level||*value<0)
 		return 0;
 	if(*type){
 		if(*type&e->unused){
@@ -4112,10 +4117,12 @@ const struct effect_base reduced[1]={{
 	.inited=reduced_inited,
 	.flag=EFFECT_NONHOOKABLE|EFFECT_NEGATIVE,
 }};
-void reduce(struct unit *s){
+void red_lotus(struct unit *s){
 	struct unit *t=gettarget(s);
-	if(hittest(t,s,1.0))
+	if(hittest(t,s,1.0)){
+		attack(t,s,0.4*s->atk,DAMAGE_PHYSICAL,0,TYPE_FIRE);
 		effect(reduced,t,s,0,5);
+	}
 }
 //list
 const struct move builtin_moves[]={
@@ -5358,9 +5365,9 @@ const struct move builtin_moves[]={
 		.mlevel=MLEVEL_REGULAR
 	},
 	{
-		.id="reduce",
-		.action=reduce,
-		.type=TYPE_ELECTRIC,
+		.id="red_lotus",
+		.action=red_lotus,
+		.type=TYPE_FIRE,
 		.flag=0,
 		.mlevel=MLEVEL_REGULAR
 	},

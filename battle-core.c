@@ -50,6 +50,27 @@ static void unit_state_update(struct unit *u,int new){
 		e->base->statemod(e,u,old);
 	}
 }
+static int checkfr(struct unit *u){
+	struct player *p;
+	int act;
+	switch(*u->owner->field->stage){
+		case STAGE_ROUNDSTART:
+			if(frindex(u)>=0&&unit_hasnegative(u))
+				return 1;
+		case STAGE_SELECT:
+		case STAGE_PRIOR:
+		case STAGE_LATTER:
+			switch((act=(p=u->owner)->action)){
+				case ACT_MOVE0 ... ACT_MOVE7:
+					if(!p->acted&&iffr(u,u->moves+act))
+						return 1;
+				default:
+					return 0;
+			}
+		default:
+			return 0;
+		}
+}
 int unit_setstate(struct unit *u,int state){
 	struct player *p;
 	struct battle_field *bf;
@@ -77,26 +98,7 @@ int unit_setstate(struct unit *u,int state){
 				clearhp(u);
 			p=u->owner;
 			//dealing the freezing_roaring
-			switch(*p->field->stage){
-				case STAGE_ROUNDSTART:
-					if(frindex(u)>=0&&unit_hasnegative(u))
-						goto set_fading;
-					break;
-				case STAGE_SELECT:
-				case STAGE_PRIOR:
-				case STAGE_LATTER:
-					switch((state=p->action)){
-						case ACT_MOVE0 ... ACT_MOVE7:
-							if(p->acted||!iffr(u,u->moves+state))
-								break;
-							goto set_fading;
-						default:
-							break;
-					}
-					break;
-				default:
-					break;
-set_fading:
+			if(checkfr(u)){
 				if(u->state!=UNIT_FADING)
 					unit_state_update(u,UNIT_FADING);
 				return 1;
@@ -1697,8 +1699,11 @@ const struct player *getwinner(struct battle_field *f){
 		r0=player_hasunit(p);
 	if(!r1)
 		r1=player_hasunit(e);
-	if(r0&&r1)
-		return f->winner;
+	if(r0&&r1){
+		if(f->winner&&!checkfr(f->winner->enemy->front))
+			return f->winner;
+		return NULL;
+	}
 	if(r0!=r1)
 		return r0?p:e;
 	r0=(r2==UNIT_FREEZING_ROARINGED);

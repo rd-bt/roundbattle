@@ -204,6 +204,7 @@ int battle(struct player *p,struct player *e,struct battle_field *bf,void (*init
 		}
 		latter=(prior=getprior(p,e))->enemy;
 		reap_fading(&field);
+		deadcheck;
 		stage=STAGE_PRIOR;
 		player_action(prior);
 		deadcheck;

@@ -476,12 +476,12 @@ struct unit *gettarget(struct unit *u){
 }
 int setcooldown(struct unit *u,struct move *m,int round){
 	for_each_effectf(e,u->owner->field->effects,setcooldown){
-		e->base->setcooldown(u,m,&round);
+		e->base->setcooldown(e,u,m,&round);
 	}
 	m->cooldown=round;
 	report(u->owner->field,MSG_UPDATE,m);
 	for_each_effectf(e,u->owner->field->effects,setcooldown_end){
-		e->base->setcooldown_end(u,m,round);
+		e->base->setcooldown_end(e,u,m,round);
 	}
 	return round;
 }
@@ -1698,7 +1698,7 @@ const struct player *getwinner(struct battle_field *f){
 	if(!r1)
 		r1=player_hasunit(e);
 	if(r0&&r1)
-		return NULL;
+		return f->winner;
 	if(r0!=r1)
 		return r0?p:e;
 	r0=(r2==UNIT_FREEZING_ROARINGED);
@@ -1734,4 +1734,24 @@ const struct player *getwinner_nonnull(struct battle_field *f){
 	cmpfld(speed);
 	return test(0.5)?p:e;
 }
-
+int setwinner(struct battle_field *f,struct player *p){
+	for_each_effectf(e,f->effects,setwinner){
+		switch(e->base->setwinner(e,p)){
+			case 0:
+				break;
+			case 1:
+				goto break2;
+			case 2:
+				p=p->enemy;
+				break;
+			case 3:
+				p=p->enemy;
+				goto break2;
+			default:
+				return -1;
+		}
+	}
+break2:
+	f->winner=p;
+	return 0;
+}

@@ -148,6 +148,7 @@ int battle(struct player *p,struct player *e,struct battle_field *bf,void (*init
 	p->enemy=e;
 	field.p=p;
 	field.e=e;
+	field.winner=NULL;
 	field.effects=NULL;
 	field.trash=NULL;
 	field.round=&round;
@@ -228,7 +229,8 @@ int battle(struct player *p,struct player *e,struct battle_field *bf,void (*init
 	}
 out:
 	stage=STAGE_BATTLE_END;
-	report(&field,MSG_BATTLE_END,ret?e:p);
+	field.winner=ret?e:p;
+	report(&field,MSG_BATTLE_END,field.winner);
 	if(bf){
 		field.end_round=round;
 		memcpy(bf,&field,sizeof(struct battle_field));

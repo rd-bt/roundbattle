@@ -510,9 +510,14 @@ int frost_destroying_damage(struct effect *e,struct unit *dest,struct unit *src,
 	return 0;
 }
 void frost_destroying_move_end(struct effect *e,struct unit *u,struct move *m){
-	if(e->dest==u&&m->cooldown>=0){
+	if(e->dest==u&&!m->cooldown){
 		effect_ev(e)
-			setcooldown(u,m,m->cooldown+1);
+			setcooldown(u,m,0);
+	}
+}
+void fd_scd(struct effect *e,struct unit *u,struct move *m,int *round){
+	if(e->dest==u&&m->cooldown>=0){
+		++(*round);
 	}
 }
 const struct effect_base frost_destroying[1]={{
@@ -520,6 +525,7 @@ const struct effect_base frost_destroying[1]={{
 	.init=frost_destroying_init,
 	.damage=frost_destroying_damage,
 	.cooldown_decrease=frost_destroying_cd,
+	.setcooldown=fd_scd,
 	.move_end=frost_destroying_move_end,
 	.flag=EFFECT_NEGATIVE|EFFECT_KEEP,
 	.prior=32
@@ -4093,6 +4099,24 @@ void air_force(struct unit *s){
 void spi_gather(struct unit *s){
 	addspi(s,5+randi()%11);
 }
+const struct effect_base reduced[1];
+void reduced_inited(struct effect *e){
+	for_each_unit(u,e->dest->owner){
+		if(isalive(u->state)&&!unit_findeffect(u,reduced))
+			return;
+	}
+	setwinner(effect_field(e),e->dest->owner->enemy);
+}
+const struct effect_base reduced[1]={{
+	.id="reduced",
+	.inited=reduced_inited,
+	.flag=EFFECT_NONHOOKABLE|EFFECT_NEGATIVE,
+}};
+void reduce(struct unit *s){
+	struct unit *t=gettarget(s);
+	if(hittest(t,s,1.0))
+		effect(reduced,t,s,0,5);
+}
 //list
 const struct move builtin_moves[]={
 	{
@@ -5333,6 +5357,13 @@ const struct move builtin_moves[]={
 		.flag=0,
 		.mlevel=MLEVEL_REGULAR
 	},
+	{
+		.id="reduce",
+		.action=reduce,
+		.type=TYPE_ELECTRIC,
+		.flag=0,
+		.mlevel=MLEVEL_REGULAR
+	},
 	{.id=NULL}
 };
 const size_t builtin_moves_size=sizeof(builtin_moves)/sizeof(builtin_moves[0])-1;
@@ -5440,5 +5471,6 @@ fairyland_gate,
 flog,
 high_pressure,
 entropy_destroyer_blade_p,
+reduced,
 NULL};
 const size_t effects_size=sizeof(effects)/sizeof(effects[0])-1;

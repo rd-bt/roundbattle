@@ -634,8 +634,9 @@ struct effect_base {
 	void (*revive_end)(struct effect *e,struct unit *u,unsigned long hp);
 	void (*roundend)(struct effect *e);
 	void (*roundstart)(struct effect *e);
-	void (*setcooldown)(struct unit *u,struct move *m,int *round);
-	void (*setcooldown_end)(struct unit *u,struct move *m,int round);
+	void (*setcooldown)(struct effect *e,struct unit *u,struct move *m,int *round);
+	void (*setcooldown_end)(struct effect *e,struct unit *u,struct move *m,int round);
+	int (*setwinner)(struct effect *e,struct player *p);
 	void (*spimod)(struct effect *e,struct unit *dest,long spi);
 	void (*statemod)(struct effect *e,struct unit *u,int old);
 	int (*switchunit)(struct effect *e,struct unit *to);
@@ -734,7 +735,7 @@ struct message {
 };
 
 struct battle_field {
-	struct player *p,*e;
+	struct player *p,*e,*winner;
 	struct effect *effects,*trash;
 	struct message *rec;
 	size_t rec_size,rec_length;
@@ -891,5 +892,7 @@ int player_hasunit(struct player *p);
 const struct player *getwinner(struct battle_field *f);
 
 const struct player *getwinner_nonnull(struct battle_field *f);
+
+int setwinner(struct battle_field *f,struct player *p);
 
 #endif

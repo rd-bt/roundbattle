@@ -328,12 +328,12 @@ long attack(struct unit *dest,struct unit *src,long value,int damage_type,int af
 	}else {
 		x=effect_weak_level(dest->type0|dest->type1,type);
 		if(x<0){
-			value/=sqrt(1-x);
+			value*=effect_weak_coef(x);
 			aflag|=AF_WEAK;
 		}else if(x>0){
 			if(x>1&&(type&TYPES_DEVINE))
 				x=1;
-			value*=sqrt(1+x);
+			value*=effect_weak_coef(x);
 			aflag|=AF_EFFECT;
 		}
 	}
@@ -1232,13 +1232,13 @@ void unit_move_init(struct unit *u,struct move *m){
 }
 int switchunit(struct unit *to){
 	struct unit *f=to->owner->front;
-	int enforce;
-	if(f==to||!isalive(to->state))
+	if(f==to||!isalive(to->state)||checkfr(f))
 		return -1;
-	enforce=!isalive(f->state);
-	for_each_effectf(e,to->owner->field->effects,switchunit){
-		if(e->base->switchunit(e,to)&&!enforce)
-			return -1;
+	if(isalive(f->state)){
+		for_each_effectf(e,to->owner->field->effects,switchunit){
+			if(e->base->switchunit(e,to))
+				return -1;
+		}
 	}
 	to->owner->action=ACT_ABORT;
 	to->owner->front=to;

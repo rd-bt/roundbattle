@@ -373,10 +373,11 @@ int natural_shield_kill(struct effect *e,struct unit *u){
 }
 void kaleido_move_end(struct effect *e,struct unit *u,struct move *m){
 	struct player *p;
-	if(u!=e->dest||(p=u->owner)->move_recursion||isalive(p->enemy->front->state))
+	if(e->active||u!=e->dest||(p=u->owner)->move_recursion||isalive(p->enemy->front->state))
 		return;
 	effect_ev(e)
 		heal(u,(u->max_hp-u->hp)/2);
+	e->active=1;
 }
 void kaleido_attack_end0(struct effect *e,struct unit *dest,struct unit *src,long value,int damage_type,int aflag,int type){
 	long dmg;
@@ -389,18 +390,25 @@ void kaleido_attack_end0(struct effect *e,struct unit *dest,struct unit *src,lon
 		attack(dest,src,dmg,DAMAGE_MAGICAL,0,TYPE_DEVINEGRASS);	
 }
 void kaleido_roundend(struct effect *e){
-	long v=(long)e->dest->max_hp-(long)e->dest->hp;
+	long v;
 	if(isfront(e->dest)&&e->unused>0)
 		--e->unused;
+	if(e->active)
+		return;
+	v=(long)e->dest->max_hp-(long)e->dest->hp;
 	if(!v)
 		return;
 	if(v<25)
 		v=25;
 	effect_ev(e)
 		heal(e->dest,v*4/25);
+	e->active=1;
 }
 int kaleido_end_in_roundend(struct effect *e){
 	return -1;
+}
+void kaleido_roundstart(struct effect *e){
+	e->active=0;
 }
 const struct effect_base natural_shield_effect[1]={{
 	.id="natural_shield",
@@ -410,6 +418,7 @@ const struct effect_base natural_shield_effect[1]={{
 	.move_end=kaleido_move_end,
 	.damage=natural_shield_damage,
 	.kill=natural_shield_kill,
+	.roundstart=kaleido_roundstart,
 	.flag=EFFECT_PASSIVE,
 	.prior=-128,
 }};
@@ -542,9 +551,6 @@ const struct effect_base frost_destroying[1]={{
 	.prior=32
 }};
 
-void primordial_breath_roundstart(struct effect *e){
-	e->active=0;
-}
 void primordial_breath_attack_end(struct effect *e,struct unit *dest,struct unit *src,long value,int damage_type,int aflag,int type){
 	if(e->dest==src&&
 			type==TYPE_ICE&&
@@ -566,7 +572,7 @@ void primordial_breath_attack_end(struct effect *e,struct unit *dest,struct unit
 const struct effect_base primordial_breath[1]={{
 	.id="primordial_breath",
 	.attack_end=primordial_breath_attack_end,
-	.roundstart=primordial_breath_roundstart,
+	.roundstart=kaleido_roundstart,
 	.flag=EFFECT_PASSIVE,
 	.prior=-32
 }};
@@ -4117,10 +4123,15 @@ void spi_gather(struct unit *s){
 }
 const struct effect_base reduced[1];
 void reduced_inited(struct effect *e){
+	int r=0;
 	for_each_unit(u,e->dest->owner){
+		if(unit_available(u))
+			++r;
 		if(isalive_s(u->state)&&!unit_findeffect(u,reduced))
 			return;
 	}
+	if(r<2)
+		return;
 	effect_ev(e)
 		setwinner(effect_field(e),e->dest->owner->enemy);
 }
@@ -4129,11 +4140,15 @@ const struct effect_base reduced[1]={{
 	.inited=reduced_inited,
 	.flag=EFFECT_NONHOOKABLE|EFFECT_NEGATIVE,
 }};
+void reduce(struct unit *dest,struct unit *src,int round){
+	effect(reduced,dest,src,0,round);
+	damage(src,dest,dest->hp/16,DAMAGE_MAGICAL,0,TYPE_POISON);
+}
 void red_lotus(struct unit *s){
 	struct unit *t=gettarget(s);
 	if(hittest(t,s,1.0)){
 		attack(t,s,0.4*s->atk,DAMAGE_PHYSICAL,0,TYPE_FIRE);
-		effect(reduced,t,s,0,5);
+		reduce(t,s,5);
 	}
 }
 void air_breaking_thorn_a(struct unit *s);
@@ -4150,13 +4165,14 @@ const struct effect_base air_breaking_thorn[1]={{
 	.end_in_roundend=kaleido_end_in_roundend,
 	.flag=EFFECT_PASSIVE,
 }};
-long oxidate(struct unit *dest){
+void oxidate(struct unit *dest,struct unit *src){
 	struct effect *e=unit_findeffect(dest,reduced);
 	if(e){
 		effect_end(e);
-		return damage(dest,NULL,dest->max_hp/3,DAMAGE_MAGICAL,0,TYPE_POISON);
-	}
-	return damage(dest,NULL,64*dest->max_hp,DAMAGE_MAGICAL,AF_IDEATH|AF_CRIT,TYPE_POISON);
+		damage(dest,src,dest->max_hp/3,DAMAGE_MAGICAL,0,TYPE_POISON);
+	}else
+		damage(dest,src,64*dest->max_hp,DAMAGE_MAGICAL,AF_IDEATH|AF_CRIT,TYPE_POISON);
+	effect(reduced,src,dest,0,4);
 }
 void air_breaking_thorn_i(struct unit *s){
 	effect(air_breaking_thorn,s,s,0,0);
@@ -4165,7 +4181,7 @@ void air_breaking_thorn_a(struct unit *s){
 	struct unit *t;
 	long dmg;
 	if(unit_effect_round(s,air_breaking_thorn)){
-		oxidate(t=s->osite);
+		oxidate(t=s->osite,s);
 		heal(s,s->max_hp/2);
 		effectx(NULL,NULL,t,0,0,EFFECT_REMOVE|EFFECT_SELECTALL|EFFECT_ENV);
 	}else {

@@ -316,6 +316,34 @@
 		1.0/(2.0-1.0/(1+_s*_s));\
 }\
 )
+#define effect_weak_coef(level) (\
+{\
+	long _x;\
+	double _r;\
+	_x=(level);\
+	switch(_x){\
+		case 0:\
+			_r=1.0;\
+			break;\
+		case 1:\
+			_r=1.5;\
+			break;\
+		case 2:\
+			_r=1.7;\
+			break;\
+		case -1:\
+			_r=0.75;\
+			break;\
+		case -2:\
+			_r=0.6;\
+			break;\
+		default:\
+			_r=_x>0?1.5+0.1*_x:1.0/(1.7-0.1*_x);\
+			break;\
+	}\
+	_r;\
+}\
+)
 #define abs_add(d,v) (\
 {\
 		__auto_type _d=(d);\

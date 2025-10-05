@@ -632,7 +632,7 @@ attr_end:
 			if(msg->un.hpmod.dest!=msg->un.hpmod.dest->owner->front){
 				snprintf(buf1,128,"[%ld]%s ",msg->un.hpmod.dest-msg->un.hpmod.dest->owner->units,unit_ts(msg->un.hpmod.dest->base->id));
 			}
-			wmf(msg->un.hpmod.dest->owner==p?0:1,"%s%+ld",buf1,msg->un.hpmod.value);
+			wmf(msg->un.hpmod.dest->owner==p?0:1,"%s%+ld (%s:%s)",buf1,msg->un.hpmod.value,ts("source"),srcid(msg));
 			goto delay;
 		case MSG_MISS:
 			wmf(msg->un.u2.dest->owner==p?0:1,ts("miss"));
@@ -656,7 +656,7 @@ attr_end:
 			if(msg->un.spimod.dest!=msg->un.spimod.dest->owner->front){
 				snprintf(buf1,128,"[%ld]%s ",msg->un.spimod.dest-msg->un.spimod.dest->owner->units,unit_ts(msg->un.spimod.dest->base->id));
 			}
-			wmf(msg->un.spimod.dest->owner==p?0:1,"%s%+ld S",buf1,msg->un.spimod.value);
+			wmf(msg->un.spimod.dest->owner==p?0:1,"%s%+ld S (%s:%s)",buf1,msg->un.spimod.value,ts("source"),srcid(msg));
 			goto delay;
 		case MSG_SWITCH:
 			wmf(msg->un.u2.dest->owner==p?0:1,"[%ld]%s",msg->un.u2.dest-msg->un.u2.dest->owner->units,unit_ts(msg->un.u2.dest->base->id));

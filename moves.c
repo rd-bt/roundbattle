@@ -371,6 +371,13 @@ int natural_shield_kill(struct effect *e,struct unit *u){
 	}
 	return 0;
 }
+void kaleido_move_end(struct effect *e,struct unit *u,struct move *m){
+	struct player *p;
+	if(u!=e->dest||(p=u->owner)->move_recursion||isalive(p->enemy->front->state))
+		return;
+	effect_ev(e)
+		heal(u,(u->max_hp-u->hp)/2);
+}
 void kaleido_attack_end0(struct effect *e,struct unit *dest,struct unit *src,long value,int damage_type,int aflag,int type){
 	long dmg;
 	if(src!=e->dest||dest->owner!=src->owner->enemy||damage_type!=DAMAGE_PHYSICAL)
@@ -400,6 +407,7 @@ const struct effect_base natural_shield_effect[1]={{
 	.attack_end0=kaleido_attack_end0,
 	.roundend=kaleido_roundend,
 	.end_in_roundend=kaleido_end_in_roundend,
+	.move_end=kaleido_move_end,
 	.damage=natural_shield_damage,
 	.kill=natural_shield_kill,
 	.flag=EFFECT_PASSIVE,
@@ -4113,7 +4121,8 @@ void reduced_inited(struct effect *e){
 		if(isalive_s(u->state)&&!unit_findeffect(u,reduced))
 			return;
 	}
-	setwinner(effect_field(e),e->dest->owner->enemy);
+	effect_ev(e)
+		setwinner(effect_field(e),e->dest->owner->enemy);
 }
 const struct effect_base reduced[1]={{
 	.id="reduced",

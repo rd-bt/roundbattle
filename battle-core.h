@@ -57,7 +57,7 @@
 #define DF_NOCALLBACK (1<<13)
 #define AF_POSITIVE (1<<14)
 #define DF_IGNOREHP (1<<15)
-#define DF_TEST (1<<15)
+#define DF_TEST (1<<16)
 
 #define ADF_NONHOOKABLE (AF_NONHOOKABLE|DF_NONHOOKABLE)
 #define ADF_NOCALLBACK (AF_NOCALLBACK|DF_NOCALLBACK)
@@ -697,6 +697,7 @@ struct history {
 };
 struct message {
 	int type,round;
+	ptrdiff_t index;
 	const struct battle_field *field;
 	union {
 		struct {

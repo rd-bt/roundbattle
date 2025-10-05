@@ -436,9 +436,13 @@ long heal3(struct unit *dest,long value,int aflag){
 				return 0;
 		}
 	}
-	value=attack(dest,NULL,value,DAMAGE_HEAL,aflag,TYPE_VOID);
-	for_each_effectf(e,dest->owner->field->effects,heal_end){
-		e->base->heal_end(e,dest,value);
+	else
+		aflag&=~AF_NONHOOKABLE;
+	value=attack(dest,NULL,value,DAMAGE_HEAL,aflag&~AF_NOCALLBACK,TYPE_VOID);
+	if(!(aflag&AF_NOCALLBACK)){
+		for_each_effectf(e,dest->owner->field->effects,heal_end){
+			e->base->heal_end(e,dest,value);
+		}
 	}
 	return value;
 }
@@ -1545,8 +1549,12 @@ void report(struct battle_field *f,int type,...){
 			break;
 	}
 	va_end(ap);
-	if(msg.type!=MSG_UPDATE)
+	if(msg.type!=MSG_UPDATE){
+		msg.index=f->rec_size;
 		message_add(f,&msg);
+	}else {
+		msg.index=-1;
+	}
 	if((rr=f->p->reporter))
 		rr(&msg,f->p);
 	if((rr=f->e->reporter))
@@ -1591,10 +1599,14 @@ continue0:
 	return NULL;
 }
 const struct message *message_findsource(const struct message *msg){
-	const struct message *p=msg->field->rec,*p1;
+	const struct message *p,*p1;
 	size_t sz=msg->field->rec_size;
-	int r=msg->round;
-	p1=msg->type==MSG_UPDATE?p+sz-1:p+sz-2;
+	int r;
+	if(msg->index<0||msg->index>=sz)
+		return NULL;
+	p=msg->field->rec;
+	r=msg->round;
+	p1=p+msg->index;
 	for(;p1>=p;--p1){
 continue0:
 		if(p1->round!=r)

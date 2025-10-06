@@ -42,7 +42,7 @@
 #define DAMAGE_ALL_FLAG (DAMAGE_REAL_FLAG|DAMAGE_PHYSICAL_FLAG|DAMAGE_MAGICAL_FLAG)
 
 #define AF_CRIT (1<<0)
-#define AF_NODEF (1<<1)
+#define AF_DEF (1<<1)
 #define AF_EFFECT (1<<2)
 #define AF_WEAK (1<<3)
 #define AF_NORMAL (1<<4)
@@ -58,6 +58,7 @@
 #define AF_POSITIVE (1<<14)
 #define DF_IGNOREHP (1<<15)
 #define DF_TEST (1<<16)
+#define AF_TYPE (1<<17)
 
 #define ADF_NONHOOKABLE (AF_NONHOOKABLE|DF_NONHOOKABLE)
 #define ADF_NOCALLBACK (AF_NOCALLBACK|DF_NOCALLBACK)
@@ -508,7 +509,8 @@
 
 #define effect_size(_base) (sizeof(struct effect)+(_base)->data_size)
 
-#define for_each_effect(_var,_ehead) for(struct effect *_var=(_ehead),*_next=_var?_var->next:NULL;_next=_var?_var->next:NULL,_var;_var=_var->intrash?_next:_var->next)if(!effect_recursion_check(_var))continue;else
+#define for_all_effect(_var,_ehead) for(struct effect *_var=(_ehead),*_next=_var?_var->next:NULL;_next=_var?_var->next:NULL,_var;_var=_var->intrash?_next:_var->next)
+#define for_each_effect(_var,_ehead) for_all_effect(_var,_ehead)if(!effect_recursion_check(_var))continue;else
 
 #define for_each_effectf(_var,_ehead,_field) for_each_effect(_var,_ehead)if(!_var->base->_field)continue;else
 
@@ -832,7 +834,7 @@ int effect_end(struct effect *e);
 
 int effect_final(struct effect *e);
 
-void effect_freeall(struct effect **head,struct battle_field *bf);
+void effect_freeall(struct effect **head);
 
 void wipetrash(struct battle_field *f);
 

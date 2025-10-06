@@ -16,11 +16,6 @@ static void clearhp(struct unit *u){
 	u->hp=0;
 	report(u->owner->field,MSG_HPMOD,u,-hp);
 }
-static int iffr(const struct unit *u,const struct move *m){
-	return m->id&&(m->mlevel&MLEVEL_FREEZING_ROARING)&&unit_hasnegative(u);
-}
-static void effect_remove(struct effect **head,struct effect *e);
-static void effect_free(struct effect *ep,struct battle_field *f);
 static int frindex(const struct unit *u){
 	const struct move *m;
 	for(int i=0;i<8;++i){
@@ -50,8 +45,11 @@ static void unit_state_update(struct unit *u,int new){
 		e->base->statemod(e,u,old);
 	}
 }
-static int checkfr(struct unit *u){
-	struct player *p;
+static int iffr(const struct unit *u,const struct move *m){
+	return m->id&&(m->mlevel&MLEVEL_FREEZING_ROARING)&&unit_hasnegative(u);
+}
+static int checkfr(const struct unit *u){
+	const struct player *p;
 	int act;
 	switch(*u->owner->field->stage){
 		case STAGE_ROUNDSTART:
@@ -71,10 +69,32 @@ static int checkfr(struct unit *u){
 			return 0;
 		}
 }
+static void effect_remove(struct effect **head,struct effect *e);
+static void effect_free(struct effect *ep,struct battle_field *f);
+static void unit_set_freezing_roaringed_in_each_history(struct unit *u){
+	struct battle_field *bf;
+	struct player *p;
+	struct unit *u1;
+	int index;
+	p=u->owner;
+	bf=p->field;
+	if(!bf->ht_size)
+		return;
+	index=u-p->units;
+	for(struct history *h=bf->ht,*endh=h+bf->ht_size;h<endh;++h){
+		u1=(p==bf->p?&h->p:&h->e)->units+index;
+		u1->state=UNIT_FREEZING_ROARINGED;
+		for_all_effect(ep,h->effects){
+			if(ep->dest!=u)
+				continue;
+			effect_remove(&h->effects,ep);
+			effect_free(ep,bf);
+		}
+		report(bf,MSG_UPDATE,u1);
+	}
+}
 int unit_setstate(struct unit *u,int state){
 	struct player *p;
-	struct battle_field *bf;
-	int index;
 	switch(state){
 		case UNIT_NORMAL:
 		case UNIT_CONTROLLED:
@@ -118,22 +138,7 @@ int unit_setstate(struct unit *u,int state){
 			if(u->hp)
 				clearhp(u);
 			p=u->owner;
-			bf=p->field;
-			if(bf->ht_size){
-				struct unit *u1;
-				index=u-p->units;
-				for(struct history *h=bf->ht,*endh=h+bf->ht_size;h<endh;++h){
-					u1=(p==bf->p?&h->p:&h->e)->units+index;
-					u1->state=UNIT_FREEZING_ROARINGED;
-					for_each_effect(ep,h->effects){
-						if(ep->dest!=u)
-							continue;
-						effect_remove(&h->effects,ep);
-						effect_free(ep,bf);
-					}
-					report(bf,MSG_UPDATE,u1);
-				}
-			}
+			unit_set_freezing_roaringed_in_each_history(u);
 			if(u==p->front)
 				p->action=ACT_ABORT;
 			unit_state_update(u,UNIT_FREEZING_ROARINGED);
@@ -209,27 +214,27 @@ static void addspi_action(struct unit *dest,struct unit *src,long value,int dama
 const struct damage_type damage_types[]={
 	[DAMAGE_REAL]={
 		.action=damage_action_default,
-		.xflag=AF_INHIBIT|AF_NODEF|AF_EFFECT|AF_WEAK|AF_POSITIVE,
+		.xflag=AF_INHIBIT|AF_POSITIVE,
 		.hpmod_flag=HPMOD_DAMAGE,
 		.index=DAMAGE_REAL,
 	},
 	[DAMAGE_PHYSICAL]={
 		.derate_eval=derate_eval_physical,
 		.action=damage_action_default,
-		.xflag=AF_INHIBIT|AF_FLOAT|AF_POSITIVE,
+		.xflag=AF_DEF|AF_INHIBIT|AF_FLOAT|AF_POSITIVE|AF_TYPE,
 		.hpmod_flag=HPMOD_DAMAGE,
 		.index=DAMAGE_PHYSICAL,
 	},
 	[DAMAGE_MAGICAL]={
 		.derate_eval=derate_eval_magical,
 		.action=damage_action_default,
-		.xflag=AF_INHIBIT|AF_FLOAT|AF_POSITIVE,
+		.xflag=AF_DEF|AF_INHIBIT|AF_FLOAT|AF_POSITIVE|AF_TYPE,
 		.hpmod_flag=HPMOD_DAMAGE,
 		.index=DAMAGE_MAGICAL,
 	},
 	[DAMAGE_HEAL]={
 		.action=heal_action,
-		.xflag=AF_INHIBIT|AF_NODEF|AF_EFFECT|AF_WEAK|AF_NODERATE|ADF_NONHOOKABLE|ADF_NOCALLBACK,
+		.xflag=AF_INHIBIT|AF_NODERATE|ADF_NONHOOKABLE|ADF_NOCALLBACK,
 		.hpmod_flag=HPMOD_HEAL,
 		.index=DAMAGE_HEAL,
 	},
@@ -253,7 +258,7 @@ const struct damage_type damage_types[]={
 	},
 	[DAMAGE_ADDSPI]={
 		.action=addspi_action,
-		.xflag=DF_NONHOOKABLE|DF_NOCALLBACK|DF_IGNOREHP,
+		.xflag=ADF_NONHOOKABLE|ADF_NOCALLBACK|DF_IGNOREHP,
 		.hpmod_flag=0,
 		.index=DAMAGE_ADDSPI,
 	},
@@ -320,24 +325,26 @@ long attack(struct unit *dest,struct unit *src,long value,int damage_type,int af
 	aflag^=dtp->xflag;
 	if(aflag&AF_CRIT)
 		value*=crit_coef(src?src->crit_effect:2.0);
-	dest_type=(aflag&(AF_EFFECT|AF_WEAK));
-	if(dest_type){
-		if(dest_type==(AF_EFFECT|AF_WEAK)){
-			aflag&=~(AF_EFFECT|AF_WEAK);
-		}
-	}else {
-		x=effect_weak_level(dest->type0|dest->type1,type);
-		if(x<0){
-			value*=effect_weak_coef(x);
-			aflag|=AF_WEAK;
-		}else if(x>0){
-			if(x>1&&(type&TYPES_DEVINE))
-				x=1;
-			value*=effect_weak_coef(x);
-			aflag|=AF_EFFECT;
+	if((aflag&AF_TYPE)){
+		dest_type=(aflag&(AF_EFFECT|AF_WEAK));
+		if(dest_type){
+			if(dest_type==(AF_EFFECT|AF_WEAK)){
+				aflag&=~(AF_EFFECT|AF_WEAK);
+			}
+		}else {
+			x=effect_weak_level(dest->type0|dest->type1,type);
+			if(x<0){
+				value*=effect_weak_coef(x);
+				aflag|=AF_WEAK;
+			}else if(x>0){
+				if(x>1&&(type&TYPES_DEVINE))
+					x=1;
+				value*=effect_weak_coef(x);
+				aflag|=AF_EFFECT;
+			}
 		}
 	}
-	if(!(aflag&AF_NODEF)){
+	if(aflag&AF_DEF){
 		x=dest->def;
 		if(src)
 			x+=dest->level-src->level;
@@ -512,7 +519,7 @@ static void effect_insert(struct effect *ep,struct battle_field *f){
 		f->effects=ep;
 		return;
 	}
-	for_each_effect(e,f->effects){
+	for_all_effect(e,f->effects){
 		if(e->next&&e->next->base->prior>=ep->base->prior)
 			continue;
 		ep->next=e->next;
@@ -845,7 +852,7 @@ int effect_final(struct effect *e){
 struct effect *effect_copyall(struct effect *head){
 	struct effect *r=NULL,*p,*prev;
 	size_t sz;
-	for_each_effect(ep,head){
+	for_all_effect(ep,head){
 			sz=effect_size(ep->base);
 		if(r){
 			p->next=malloc(sz);
@@ -889,8 +896,9 @@ int unit_wipeeffect(struct unit *u,int mask){
 	}
 	return r;
 }
-void effect_freeall(struct effect **head,struct battle_field *bf){
-	for_each_effect(ep,*head){
+void effect_freeall(struct effect **head){
+	struct battle_field *bf=effect_field(*head);
+	for_all_effect(ep,*head){
 		effect_remove(head,ep);
 		effect_free(ep,bf);
 	}
@@ -1066,25 +1074,6 @@ void unit_effect_in_roundend(struct unit *u){
 			e->base->roundend(e);
 	}
 }
-/*
-void unit_effect_round_decrease(struct unit *u,int round){
-	struct battle_field *f=u->owner->field;
-	for_each_effect(v,f->effects){
-		if(v->dest!=u)
-			continue;
-		if(v->round>0){
-			if(v->round>round)
-				v->round-=round;
-			else
-				v->round=0;
-			report(u->owner->field,MSG_UPDATE,v);
-		}
-		if(!v->round){
-			if(!v->base->end_in_roundend||!v->base->end_in_roundend(v))
-				effect_end(v);
-		}
-	}
-}*/
 void effect_round_decrease(struct effect *effects,int round){
 	for_each_effect(v,effects){
 		if(v->round>0){
@@ -1101,21 +1090,21 @@ void effect_round_decrease(struct effect *effects,int round){
 	}
 }
 struct effect *unit_findeffect(const struct unit *u,const struct effect_base *base){
-	for_each_effect(e,u->owner->field->effects){
+	for_all_effect(e,u->owner->field->effects){
 		if(e->base==base&&e->dest==u)
 			return e;
 	}
 	return NULL;
 }
 struct effect *unit_findeffectf(const struct unit *u,int flag){
-	for_each_effect(e,u->owner->field->effects){
+	for_all_effect(e,u->owner->field->effects){
 		if(e->base->flag&flag)
 			return e;
 	}
 	return NULL;
 }
 struct effect *findeffect(const struct effect *head,const struct effect_base *base){
-	for_each_effect(e,(struct effect *)head){
+	for_all_effect(e,(struct effect *)head){
 		if(e->base==base)
 			return e;
 	}
@@ -1149,7 +1138,7 @@ int effect_ispositive(const struct effect *e){
 }
 int unit_hasnegative(const struct unit *u){
 	int r=0;
-	for_each_effect(e,u->owner->field->effects){
+	for_all_effect(e,u->owner->field->effects){
 		if(e->dest==u&&effect_isnegative(e))
 			++r;
 	}
@@ -1671,7 +1660,7 @@ void history_add(struct battle_field *f){
 }
 void field_free(struct battle_field *field){
 	struct history *h;
-	for_each_effect(ep,field->effects){
+	for_all_effect(ep,field->effects){
 		effect_remove(&field->effects,ep);
 		effect_free(ep,field);
 	}
@@ -1680,7 +1669,7 @@ void field_free(struct battle_field *field){
 	if((h=field->ht)){
 		for(struct history *endh=h+field->ht_size;h<endh;++h){
 			if(h->effects)
-				effect_freeall(&h->effects,field);
+				effect_freeall(&h->effects);
 		}
 		free(field->ht);
 	}

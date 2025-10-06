@@ -336,18 +336,14 @@ void angry(struct unit *s){
 }
 void spi_fcrack(struct unit *s){
 	struct unit *t=gettarget(s);
-	long x=0,y=0;
-	long ds;
+	long x,y;
 	if(hittest(t,s,1.0)){
-		x=attack(t,s,0.45*s->atk,DAMAGE_PHYSICAL,0,TYPE_MACHINE);
-	}
+		x=attack(t,s,0.45*s->atk,DAMAGE_PHYSICAL,0,TYPE_LIGHT);
+	}else x=0;
 	if(hittest(t,s,1.0)){
 		y=attack(t,s,0.45*s->atk,DAMAGE_PHYSICAL,0,TYPE_MACHINE);
-	}
-	ds=0.015*s->def;
-	if(x<20||y<20||gcdul(x,y)==1)
-		ds*=2;
-	addspi(t,-ds);
+	}else y=0;
+	attack(t,NULL,-0.015*s->def,DAMAGE_ADDSPI,(x<=20||y<=20||gcdul(x,y)==1)?AF_CRIT:0,TYPE_MACHINE);
 }
 int natural_shield_damage(struct effect *e,struct unit *dest,struct unit *src,long *value,int *damage_type,int *aflag,int *type){
 	if(dest!=e->dest||!e->round)
@@ -577,7 +573,7 @@ const struct effect_base primordial_breath[1]={{
 	.prior=-32
 }};
 void primordial_breath_action(struct unit *s){
-	attack(s->osite,s,0,DAMAGE_PHYSICAL,ADF_NONHOOKABLE|AF_INHIBIT|AF_FLOAT|AF_EFFECT|AF_WEAK|AF_NODERATE|AF_NODEF,TYPE_ICE);
+	attack(s->osite,s,0,DAMAGE_PHYSICAL,ADF_NONHOOKABLE|AF_INHIBIT|AF_FLOAT|AF_TYPE|AF_NODERATE|AF_DEF,TYPE_ICE);
 }
 void primordial_breath_init(struct unit *s){
 	effect(primordial_breath,s,s,0,-1);
@@ -1355,7 +1351,7 @@ void time_back(struct unit *s){
 	back(f->e,&h->e,eds);
 	head=f->effects;
 	f->effects=effect_copyall(h->effects);
-	effect_freeall(&head,f);
+	effect_freeall(&head);
 	report(f,MSG_UPDATE,&f->effects);
 	update_attr_all(f);
 	for(int i=0;i<6;++i){
@@ -2167,7 +2163,7 @@ int derate_counter(struct effect *e,struct unit *dest,struct unit *src,long *val
 int def_counter(struct effect *e,struct unit *dest,struct unit *src,long *value,int *damage_type,int *aflag,int *type){
 	struct u_l ul;
 	long def;
-	if(*aflag&AF_NODEF)
+	if(*aflag&AF_DEF)
 		return 0;
 	def=dest->def+dest->level-src->level;
 	ul.l=def;
@@ -2176,7 +2172,7 @@ int def_counter(struct effect *e,struct unit *dest,struct unit *src,long *value,
 	ul.type=*type;
 	event_callback(def_count,src,&ul);
 	*value*=def_coef(ul.l);
-	*aflag|=AF_NODEF;
+	*aflag|=AF_DEF;
 	return 0;
 }
 const struct effect_base dcounter[1]={{
@@ -2434,7 +2430,7 @@ void uniform_base(struct unit *s){
 void uniform_base_a(struct unit *s){
 	struct unit *t=s->osite;
 	long sd;
-	attack(t,s,0.5*s->atk+7.5*labs(s->spi),DAMAGE_PHYSICAL,AF_FLOAT|AF_EFFECT|AF_WEAK,TYPE_MACHINE);
+	attack(t,s,0.5*s->atk+7.5*labs(s->spi),DAMAGE_PHYSICAL,AF_FLOAT|AF_TYPE,TYPE_MACHINE);
 	sd=40+(8*SHEAR_COEF)*t->max_hp;
 	if(s->spi){
 		sd+=(long)(SHEAR_COEF*t->max_hp*labs(s->spi)+1);
@@ -2775,7 +2771,7 @@ void linear_blast(struct unit *s){
 	for(int i=0;i<10;++i){
 		if(!vec_s[i]!=!vec_t[i]){
 			t=s->osite;
-			attack(t,s,0.3*t->max_hp,DAMAGE_MAGICAL,AF_EFFECT|AF_WEAK,TYPE_GHOST);
+			attack(t,s,0.3*t->max_hp,DAMAGE_MAGICAL,AF_TYPE,TYPE_GHOST);
 			return;
 		}
 	}
@@ -3305,7 +3301,7 @@ void three_phase_connector(struct unit *s){
 }
 void crater_roundend(struct effect *e){
 	effect_ev(e){
-		attack(e->dest,NULL,0.3*(e->dest->max_hp-e->dest->hp),DAMAGE_MAGICAL,AF_EFFECT|AF_WEAK,TYPE_MACHINE);
+		attack(e->dest,NULL,0.3*(e->dest->max_hp-e->dest->hp),DAMAGE_MAGICAL,AF_TYPE,TYPE_MACHINE);
 	}
 }
 const struct effect_base crater[1]={{
@@ -3318,7 +3314,7 @@ ava_spi(91);
 void disintegrate(struct unit *s){
 	struct unit *t=gettarget(s);
 	if(hittest(t,s,1.0)&&spi_check_dec(s,91)){
-		attack(t,s,750+15*s->atk,DAMAGE_PHYSICAL,AF_EFFECT|AF_WEAK,TYPE_MACHINE);
+		attack(t,s,750+15*s->atk,DAMAGE_PHYSICAL,AF_TYPE,TYPE_MACHINE);
 		effect(radiated,t,s,0,1);
 	}
 }
@@ -3605,7 +3601,7 @@ void globality_reset(struct unit *s){
 	back(f->e,&h->e,NULL);
 	head=f->effects;
 	f->effects=effect_copyall(h->effects);
-	effect_freeall(&head,f);
+	effect_freeall(&head);
 	report(f,MSG_UPDATE,&f->effects);
 	update_attr_all(f);
 	if(s->moves[off].action==globality_reset)
@@ -4187,7 +4183,8 @@ void air_breaking_thorn_a(struct unit *s){
 	}else {
 		t=gettarget(s);
 		if(hittest(t,s,1.5)){
-			dmg=attack(t,s,1.4*s->atk,DAMAGE_PHYSICAL,AF_NODEF,TYPE_WIND);
+			dmg=attack(t,s,1.4*s->atk,DAMAGE_PHYSICAL,AF_DEF,TYPE_WIND);
+			effectx(PDD,t,NULL,0,0,EFFECT_REMOVE|EFFECT_POSITIVE);
 			if(dmg>128)
 				heal(s,dmg-128);
 		}

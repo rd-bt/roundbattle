@@ -277,7 +277,7 @@ long damage(struct unit *dest,struct unit *src,long value,int damage_type,int af
 		}
 	}
 	dtp=damage_types+damage_type;
-	aflag^=dtp->xflag;
+	aflag^=(dtp->xflag&DF_ALL);
 	if(aflag&DF_TEST)
 		return value;
 	ohp=dest->hp;
@@ -322,7 +322,7 @@ long attack(struct unit *dest,struct unit *src,long value,int damage_type,int af
 		}
 	}
 	dtp=damage_types+damage_type;
-	aflag^=dtp->xflag;
+	aflag^=(dtp->xflag&AF_ALL);
 	if(aflag&AF_CRIT)
 		value*=crit_coef(src?src->crit_effect:2.0);
 	if((aflag&AF_TYPE)){
@@ -332,7 +332,7 @@ long attack(struct unit *dest,struct unit *src,long value,int damage_type,int af
 				aflag&=~(AF_EFFECT|AF_WEAK);
 			}
 		}else {
-			x=effect_weak_level(dest->type0|dest->type1,type);
+			x=effect_weak_level(unit_type(dest),type);
 			if(x<0){
 				value*=effect_weak_coef(x);
 				aflag|=AF_WEAK;
@@ -425,7 +425,7 @@ void normal_attack(struct unit *src){
 	am.id="";
 	am.action=do_normal_attack;
 	am.init=NULL;
-	am.getprior=NULL;
+	am.fprior=NULL;
 	am.type=src->type0;
 	am.mlevel=MLEVEL_REGULAR;
 	am.prior=0;
@@ -1389,8 +1389,8 @@ struct player *getprior(struct player *p,struct player *e){
 			if(!p->front->moves[p->action].id)
 				pp=0;
 			else
-				pp=p->front->moves[p->action].getprior?
-					p->front->moves[p->action].getprior(p->front):
+				pp=p->front->moves[p->action].fprior?
+					p->front->moves[p->action].fprior(p->front):
 					p->front->moves[p->action].prior;
 			if(iffr(p->front,p->front->moves+p->action))
 				frp=1;
@@ -1404,8 +1404,8 @@ struct player *getprior(struct player *p,struct player *e){
 			if(!e->front->moves[e->action].id)
 				pe=0;
 			else
-				pe=e->front->moves[e->action].getprior?
-					e->front->moves[e->action].getprior(e->front):
+				pe=e->front->moves[e->action].fprior?
+					e->front->moves[e->action].fprior(e->front):
 					e->front->moves[e->action].prior;
 			if(iffr(e->front,e->front->moves+e->action))
 				fre=1;

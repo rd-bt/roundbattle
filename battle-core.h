@@ -60,6 +60,10 @@
 #define DF_TEST (1<<16)
 #define AF_TYPE (1<<17)
 
+#define AF_ALL (AF_CRIT|AF_DEF|AF_EFFECT|AF_WEAK|AF_NORMAL|AF_FLOAT|AF_IDEATH|AF_INHIBIT|AF_NONHOOKABLE|AF_NODERATE|AF_NOCALLBACK|AF_POSITIVE|AF_TYPE)
+#define DF_ALL (DF_KEEPALIVE|DF_NONHOOKABLE|DF_NOCALLBACK|DF_IGNOREHP|DF_TEST)
+#define ADF_ALL (AF_ALL|DF_ALL)
+
 #define ADF_NONHOOKABLE (AF_NONHOOKABLE|DF_NONHOOKABLE)
 #define ADF_NOCALLBACK (AF_NOCALLBACK|DF_NOCALLBACK)
 
@@ -287,6 +291,12 @@
 		int _d=(d),_s=(s);\
 		__builtin_popcount(_d&effect_types(_s))\
 		-__builtin_popcount(_d&weak_types(_s));\
+}\
+)
+#define effect_weak_flag(l) (\
+{\
+		int _r=(l);\
+		_r?(_r>0?AF_EFFECT:AF_WEAK):0;\
 }\
 )
 #define def_coef(d) (\
@@ -607,7 +617,7 @@ struct move {
 	const char *id;
 	void (*action)(struct unit *);
 	void (*init)(struct unit *);
-	int (*getprior)(const struct unit *);
+	int (*fprior)(const struct unit *);
 	int (*available)(struct unit *u,struct move *m);
 	int type,mlevel,prior,cooldown,flag,unused;
 };

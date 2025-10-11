@@ -121,7 +121,7 @@ int move_enchanced(const struct unit *u,const struct move *m){
 			return 0;
 	}
 }
-static int cur=ACT_NORMALATTACK,arg=0;
+static int cur=ACT_NORMALATTACK,arg=0,arg1=0;
 static const char *sstr[6]={"normal","controlled","spuuressed","fading","failed","freezing_roaringed"};
 void frash(const struct player *p,FILE *fp,int current){
 	struct player *e=p->enemy;
@@ -319,9 +319,11 @@ void frash(const struct player *p,FILE *fp,int current){
 		fputs(WHITE,fp);
 	switch(current){
 		case ACT_MOVE0 ... ACT_MOVE7:
-			r1=snprintf(buf,buflen,"prior:%d",u->moves[current].prior);
+			r1=snprintf(buf,buflen,"prior:%d ",u->moves[current].prior);
 			if(arg)
-				r1+=snprintf(buf+r1,buflen-r1," %d",(arg-1)/2);
+				r1+=snprintf(buf+r1,buflen-r1," %d",arg);
+			if(arg1)
+				r1+=snprintf(buf+r1,buflen-r1,"/%d",arg1);
 			break;
 		case ACT_UNIT0 ... ACT_UNIT5:
 			r1=p->units[current-ACT_UNIT0].base?
@@ -841,6 +843,10 @@ refrash:
 					x|=arg<<8;
 					arg=0;
 				}
+				if(arg1){
+					x|=arg1<<16;
+					arg1=0;
+				}
 				return x;
 			}else {
 				wmf(0,RED "the action is unavailable" WHITE);
@@ -939,18 +945,31 @@ refrash:
 			goto refrash;
 		case 'n':
 			switch(arg){
-				case 0:
-					arg=1;
-					break;
-				case 1:
-				case 3:
-				case 5:
-				case 7:
-				case 9:
-					arg+=2;
+				case 0 ... 5:
+					++arg;
 					break;
 				default:
 					arg=0;
+					break;
+			}
+			goto refrash;
+		case 'z':
+			switch(arg){
+				case 0 ... 16:
+					++arg;
+					break;
+				default:
+					arg=0;
+					break;
+			}
+			goto refrash;
+		case 'Z':
+			switch(arg1){
+				case 0 ... 16:
+					++arg1;
+					break;
+				default:
+					arg1=0;
 					break;
 			}
 			goto refrash;

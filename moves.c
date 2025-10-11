@@ -371,8 +371,11 @@ void kaleido_move_end(struct effect *e,struct unit *u,struct move *m){
 	struct player *p;
 	if(e->active||u!=e->dest||(p=u->owner)->move_recursion||isalive(p->enemy->front->state))
 		return;
-	effect_ev(e)
+	effect_ev(e){
 		heal(u,(u->max_hp-u->hp)/2);
+		if(!effectx(ATK,u,NULL,0,0,EFFECT_FIND|EFFECT_NEGATIVE))
+			effectx(ATK,u,u,1,-1,EFFECT_NONHOOKABLE);
+	}
 	e->active=1;
 }
 void kaleido_attack_end0(struct effect *e,struct unit *dest,struct unit *src,long value,int damage_type,int aflag,int type){
@@ -643,16 +646,11 @@ void thunder_roaring(struct unit *s){
 	}
 }
 static struct unit *get_unit_by_arg(struct player *p,int isenemy){
-	int a=p->arg;
+	int a=p->arg&0x0ff;
 	struct unit *t;
 	switch(a){
-		case 1:
-		case 3:
-		case 5:
-		case 7:
-		case 9:
-		case 11:
-			t=(isenemy?p->enemy:p)->units+(a-1)/2;
+		case 1 ... 6:
+			t=(isenemy?p->enemy:p)->units+(a-1);
 			if(t->base)
 				return t;
 		default:
@@ -663,7 +661,6 @@ void freezing_roaring(struct unit *s){
 	struct unit *t;
 	struct effect *e;
 	long n,n1;
-	unsigned long hp;
 	struct move *mp;
 	struct player **p1;
 	if(!((mp=s->move_cur)->mlevel&MLEVEL_FREEZING_ROARING)||!unit_hasnegative(s)){
@@ -674,9 +671,7 @@ void freezing_roaring(struct unit *s){
 	t=get_unit_by_arg(s->owner,1);
 	if(!t||t->state==UNIT_FREEZING_ROARINGED)
 		t=s->osite;
-	hp=t->hp;
-	t->hp=0;
-	report(s->owner->field,MSG_DAMAGE,t,s,(long)hp,DAMAGE_MAGICAL,AF_CRIT,TYPE_ICE);
+	damage(t,s,t->hp,DAMAGE_MAGICAL,effect_weak_flag(effect_weak_level(unit_type(t),TYPE_ICE))|AF_CRIT|DF_NONHOOKABLE|DF_KEEPALIVE|DF_IGNOREHP|DF_NOCALLBACK,TYPE_ICE);
 	//show as a critical magical damage corresponding with other roarings.
 	unit_setstate(t,UNIT_FREEZING_ROARINGED);
 	effectx(NULL,s,NULL,0,0,EFFECT_REMOVE|EFFECT_NEGATIVE|EFFECT_NONHOOKABLE|EFFECT_NODESTRUCT|EFFECT_UNPURIFIABLE);
@@ -787,7 +782,7 @@ void bm_update_attr(struct effect *e,struct unit *u){
 }
 const struct effect_base blood_moon[1]={{
 	.id="blood_moon",
-	.inited=effect_update_attr_all,
+//	.inited=effect_update_attr_all,
 	.roundend=bm_roundend,
 	.update_attr=bm_update_attr,
 	.flag=EFFECT_ENV,
@@ -4191,6 +4186,85 @@ void air_breaking_thorn_a(struct unit *s){
 	}
 	setcooldown(s,s->move_cur,6);
 }
+long unit_positive_level(const struct unit *s){
+	long level=0;
+	for_all_effect(e,s->owner->field->effects){
+		if((e->base->flag&EFFECT_ATTR)&&
+				e->dest==s&&
+				e->level>0)
+			level+=e->level;
+	}
+	return level;
+}
+void bonus_release(struct unit *s){
+	long level=unit_positive_level(s);
+	struct unit *t=gettarget(s);
+	if(hittest(t,s,1.0+0.4*level)){
+		attack(t,s,(1.0+0.3*level)*s->atk,DAMAGE_PHYSICAL,AF_TYPE,TYPE_GHOST);
+	}
+	if(level){
+		heal(s,0.08*level*s->max_hp);
+		attr_clear_positive(s);
+	}
+}
+int bonus_release_prior(const struct unit *s){
+	return (int)limit(unit_positive_level(s),INT_MIN,INT_MAX);
+}
+void tswitch_update_attr(struct effect *e,struct unit *u){
+	if(u!=e->dest)
+		return;
+	if(e->level>0)
+		u->type0=1<<(e->level-1);
+	if(e->unused>0)
+		u->type1=1<<(e->unused-1);
+	else if(!e->unused)
+		u->type1=0;
+}
+/*
+const struct event type_switch_st[1]={{
+	.id="type_switch_st",
+}};
+void tswitch_move_end(struct effect *e,struct unit *u,struct move *m){
+	if(e->dest==u&&m->flag&MOVE_NORMALATTACK){
+		effect_ev(e)
+			event_do(type_switch_st,u)
+				attack(gettarget(u),u,0.4*u->atk,DAMAGE_MAGICAL,AF_NORMAL,u->type1?u->type1:u->type0);
+	}
+}*/
+const struct effect_base type_switch[1]={{
+	.update_attr=tswitch_update_attr,
+//	.move_end=tswitch_move_end,
+	.flag=EFFECT_PASSIVE,
+	.prior=64,
+}};
+void tswitch_init(struct unit *s){
+	struct effect *e=effect(type_switch,s,s,0,-1);
+	if(e)
+		e->unused=-1;
+}
+void tswitch(struct unit *s){
+	struct effect *e=unit_findeffect(s,type_switch);
+	struct unit *t=gettarget(s);
+	int t0,t1;
+	if(e&&(t0=s->owner->arg)){
+		t1=(t0>>8)&0x0ff;
+		t0&=0x0ff;
+		if(t0&&t0!=t1){
+			if(!t1||(t1>0&&((1<<(t1-1))&TYPES_REGULAR)))
+				e->unused=t1;
+			if(t0>0&&((1<<(t0-1))&TYPES_REGULAR))
+				effect_setlevel(e,t0);
+		}
+		update_attr(s);
+	}
+	if(hittest(t,s,1.0)){
+		if(s->type1){
+			attack(t,s,s->atk/2+(s->atk&1),DAMAGE_PHYSICAL,AF_NORMAL,s->type0);
+			attack(t,s,s->atk/2,DAMAGE_PHYSICAL,AF_NORMAL,s->type1);
+		}else
+			attack(t,s,s->atk,DAMAGE_PHYSICAL,AF_NORMAL,s->type0);
+	}
+}
 //list
 const struct move builtin_moves[]={
 	{
@@ -5443,6 +5517,24 @@ const struct move builtin_moves[]={
 		.action=air_breaking_thorn_a,
 		.init=air_breaking_thorn_i,
 		.type=TYPE_WIND,
+		.flag=0,
+		.mlevel=MLEVEL_REGULAR
+	},
+	{
+		.id="bonus_release",
+		.action=bonus_release,
+		.type=TYPE_GHOST,
+		.fprior=bonus_release_prior,
+		.prior=0,
+		.flag=0,
+		.mlevel=MLEVEL_REGULAR
+	},
+	{
+		.id="type_switch",
+		.action=tswitch,
+		.init=tswitch_init,
+		.type=TYPE_NORMAL,
+		.prior=0,
 		.flag=0,
 		.mlevel=MLEVEL_REGULAR
 	},

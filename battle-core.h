@@ -17,7 +17,8 @@
 #define UNIT_SUPPRESSED 2
 #define UNIT_FADING 3
 #define UNIT_FAILED 4
-#define UNIT_FREEZING_ROARINGED 5
+#define UNIT_VANISHED 5
+#define UNIT_FREEZING_ROARINGED 6
 
 #define MLEVEL_REGULAR 1
 #define MLEVEL_CONCEPTUAL 2
@@ -234,13 +235,13 @@
 {\
 		int _r;\
 		switch(s){\
-			case UNIT_FAILED:\
-			case UNIT_FADING:\
-			case UNIT_FREEZING_ROARINGED:\
-				_r=0;\
+			case UNIT_NORMAL:\
+			case UNIT_CONTROLLED:\
+			case UNIT_SUPPRESSED:\
+				_r=1;\
 				break;\
 			default:\
-				_r=1;\
+				_r=0;\
 				break;\
 		}\
 		_r;\
@@ -251,12 +252,29 @@
 {\
 		int _r;\
 		switch(s){\
-			case UNIT_FAILED:\
-			case UNIT_FREEZING_ROARINGED:\
-				_r=0;\
+			case UNIT_NORMAL:\
+			case UNIT_CONTROLLED:\
+			case UNIT_SUPPRESSED:\
+			case UNIT_FADING:\
+				_r=1;\
 				break;\
 			default:\
+				_r=0;\
+				break;\
+		}\
+		_r;\
+}\
+)
+#define isvanished(s) (\
+{\
+		int _r;\
+		switch(s){\
+			case UNIT_VANISHED:\
+			case UNIT_FREEZING_ROARINGED:\
 				_r=1;\
+				break;\
+			default:\
+				_r=0;\
 				break;\
 		}\
 		_r;\
@@ -728,7 +746,7 @@ struct player {
 	struct battle_field *field;
 	unsigned int move_recursion;
 	int action,arg;
-	unsigned int acted:1,:0;
+	unsigned int acted:1,acting:1,:0;
 	char data[64];
 };
 struct history {

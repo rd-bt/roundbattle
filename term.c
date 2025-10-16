@@ -397,6 +397,9 @@ no_move:
 					case UNIT_FAILED:
 						strncpy(buf+r,"[X]",buflen-r);
 						break;
+					case UNIT_VANISHED:
+						strncpy(buf+r,"[V]",buflen-r);
+						break;
 					case UNIT_FREEZING_ROARINGED:
 						strncpy(buf+r,"[F]",buflen-r);
 						break;

@@ -35,9 +35,10 @@ static void unit_state_update(struct unit *u,int new){
 		case UNIT_FAILED:
 			unit_wipeeffect(u,EFFECT_KEEP);
 			break;
+		case UNIT_VANISHED:
 		case UNIT_FREEZING_ROARINGED:
 			unit_wipeeffect(u,0);
-			return;
+			break;
 		default:
 			break;
 	}
@@ -100,7 +101,7 @@ int unit_setstate(struct unit *u,int state){
 		case UNIT_CONTROLLED:
 		case UNIT_SUPPRESSED:
 		case UNIT_FADING:
-			if(u->state==UNIT_FREEZING_ROARINGED)
+			if(isvanished(u->state))
 				return -1;
 			if(u->state!=state)
 				unit_state_update(u,state);
@@ -109,6 +110,7 @@ int unit_setstate(struct unit *u,int state){
 			switch(u->state){
 				case UNIT_FAILED:
 					return 0;
+				case UNIT_VANISHED:
 				case UNIT_FREEZING_ROARINGED:
 					return -1;
 				default:
@@ -128,6 +130,17 @@ int unit_setstate(struct unit *u,int state){
 				p->action=ACT_ABORT;
 			unit_state_update(u,UNIT_FAILED);
 			return 0;
+		case UNIT_VANISHED:
+			switch(u->state){
+				case UNIT_FAILED:
+					break;
+				case UNIT_VANISHED:
+					return 0;
+				default:
+					return -1;
+			}
+			unit_state_update(u,UNIT_VANISHED);
+			return 0;
 		case UNIT_FREEZING_ROARINGED:
 			switch(u->state){
 				case UNIT_FREEZING_ROARINGED:
@@ -135,10 +148,8 @@ int unit_setstate(struct unit *u,int state){
 				default:
 					break;
 			}
-			if(u->hp)
-				clearhp(u);
-			p=u->owner;
 			unit_set_freezing_roaringed_in_each_history(u);
+			p=u->owner;
 			if(u==p->front)
 				p->action=ACT_ABORT;
 			unit_state_update(u,UNIT_FREEZING_ROARINGED);
@@ -163,7 +174,7 @@ int unit_kill(struct unit *u){
 	return 0;
 }
 static int checkalive(struct unit *dest,struct unit *src){
-	if(src&&src->state==UNIT_FREEZING_ROARINGED)
+	if(src&&isvanished(src->state))
 		return 0;
 	if(!dest)
 		return 1;
@@ -535,7 +546,7 @@ struct effect *effect(const struct effect_base *base,struct unit *dest,struct un
 	return effectx(base,dest,src,level,round,0);
 }
 static int checkalive3(struct unit *dest,struct unit *src,int xflag){
-	if(src&&src->state==UNIT_FREEZING_ROARINGED)
+	if(src&&isvanished(src->state))
 		return 0;
 	if(!dest)
 		return 1;
@@ -543,6 +554,7 @@ static int checkalive3(struct unit *dest,struct unit *src,int xflag){
 		case UNIT_FADING:
 		case UNIT_FAILED:
 			return !!(xflag&EFFECT_ALLOWFAILED);
+		case UNIT_VANISHED:
 		case UNIT_FREEZING_ROARINGED:
 			return 0;
 		default:
@@ -713,6 +725,7 @@ struct effect *effectx(const struct effect_base *base,struct unit *dest,struct u
 	if(new){
 		effect_insert(ep,f);
 	}
+	update_attr_all(f);
 	report(f,MSG_EFFECT,ep,level,round);
 	if(base->inited)
 		base->inited(ep);
@@ -772,6 +785,7 @@ int effect_reinitx(struct effect *ep,struct unit *src,long level,int round,int x
 		else
 			ep->round=round;
 	}
+	update_attr_all(f);
 	report(f,MSG_EFFECT,ep,level,round);
 	if(ep->base->inited)
 		ep->base->inited(ep);
@@ -964,8 +978,6 @@ int event_callback(const struct event *ev,struct unit *src,void *arg){
 	return r;
 }
 int event(const struct event *ev,struct unit *src){
-	if(src->state==UNIT_FREEZING_ROARINGED)
-		return -1;
 //	report(src->owner->field,MSG_EVENT,ev,src);
 	event_start(ev,src);
 	if(ev->action)
@@ -976,7 +988,7 @@ int event(const struct event *ev,struct unit *src){
 }
 void unit_cooldown_decrease(struct unit *u,int round){
 	int r,r1,r2;
-	if(u->state==UNIT_FREEZING_ROARINGED)
+	if(isvanished(u->state))
 		return;
 	for(r=0;r<8;++r){
 		if(!u->moves[r].id)
@@ -1021,7 +1033,7 @@ void update_attr_init(struct unit *u){
 	u->type1=u->base->type1;
 }
 void update_attr(struct unit *u){
-	if(u->state==UNIT_FREEZING_ROARINGED)
+	if(isvanished(u->state))
 		return;
 	update_attr_init(u);
 	for_each_effectf(e,u->owner->field->effects,update_attr){
@@ -1046,15 +1058,15 @@ void update_state(struct unit *u){
 		return;
 	r=UNIT_NORMAL;
 	u->blockade=0;
+	for_each_effectf(e,u->owner->field->effects,update_state){
+		e->base->update_state(e,u,&r);
+	}
 	for(int i=0;i<8;++i){
 		m=u->moves+i;
 		if(!m->id||!m->available)
 			continue;
 		if(!m->available(u,m))
 			u->blockade|=1<<i;
-	}
-	for_each_effectf(e,u->owner->field->effects,update_state){
-		e->base->update_state(e,u,&r);
 	}
 	unit_setstate(u,r);
 }
@@ -1118,7 +1130,7 @@ int effect_isnegative_base(const struct effect_base *base,const struct unit *des
 	else if(base->flag&EFFECT_ATTR)
 		return level<0;
 	else
-		return src&&dest&&src->owner==dest->owner->enemy;
+		return src&&dest&&src->owner!=dest->owner;
 }
 int effect_isnegative(const struct effect *e){
 	return effect_isnegative_base(e->base,e->dest,e->src,e->level);
@@ -1164,6 +1176,7 @@ int unit_move_nonhookable(struct unit *u,struct move *m){
 	struct player *p;
 	switch(u->state){
 		case UNIT_FAILED:
+		case UNIT_VANISHED:
 		case UNIT_FREEZING_ROARINGED:
 			return -1;
 		default:
@@ -1189,6 +1202,7 @@ int unit_move(struct unit *u,struct move *m){
 	ptrdiff_t md;
 	switch(u->state){
 		case UNIT_FAILED:
+		case UNIT_VANISHED:
 		case UNIT_FREEZING_ROARINGED:
 			return -1;
 		case UNIT_SUPPRESSED:
@@ -1259,6 +1273,7 @@ int canaction2(const struct player *p,int act){
 						return 0;
 					return 1;
 				case UNIT_FAILED:
+				case UNIT_VANISHED:
 				case UNIT_FREEZING_ROARINGED:
 					return 0;
 			}
@@ -1267,6 +1282,7 @@ int canaction2(const struct player *p,int act){
 				case UNIT_CONTROLLED:
 				case UNIT_SUPPRESSED:
 				case UNIT_FAILED:
+				case UNIT_VANISHED:
 				case UNIT_FREEZING_ROARINGED:
 					return 0;
 				default:
@@ -1285,6 +1301,7 @@ int canaction2(const struct player *p,int act){
 					if(blockade)
 						return 0;
 				case UNIT_FAILED:
+				case UNIT_VANISHED:
 				case UNIT_FREEZING_ROARINGED:
 					return 1;
 			}
@@ -1347,6 +1364,7 @@ fr:
 		default:
 			break;
 	}
+	p->acting=1;
 	switch(p->action){
 		case ACT_MOVE0 ... ACT_MOVE7:
 			(nonh?unit_move_nonhookable:unit_move)(p->front,p->front->moves+p->action);
@@ -1363,6 +1381,7 @@ fr:
 		default:
 			break;
 	}
+	p->acting=0;
 	p->acted=1;
 	for_each_effectf(e,p->field->effects,action_end){
 		e->base->action_end(e,p);

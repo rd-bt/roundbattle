@@ -1,77 +1,60 @@
 #include "strmap.h"
 #include <string.h>
+#include <err.h>
 #include <stdlib.h>
-#define ssize_t ptrdiff_t
-struct strmap *strmap_add(struct strmap *map,const char *from,size_t fl,const char *to,size_t tl){
-	int sum,sum0;
-	struct strmap *c,*new,**p;
-	sum0=-fl;
-	for(ssize_t i=fl-1;i>=0;--i)
-		sum0+=(signed char)from[i];
-	new=malloc(sizeof(struct strmap)+fl+tl+2);
-	new->from=fl;
-	new->to=tl;
-	new->gt=NULL;
-	new->lt=NULL;
-	new->eq=NULL;
-	memcpy(new->data,from,fl);
-	memcpy(new->data+fl+1,to,tl);
-	new->data[fl]=0;
-	new->data[fl+tl+1]=0;
-	if(!map)
-		return new;
-	else {
-		c=map;
-		while(c){
-			sum=-c->from;
-			for(ssize_t i=c->from-1;i>=0;--i)
-				sum+=(signed char)c->data[i];
-			if(sum0<sum)
-				p=&c->lt;
-			else if(sum0>sum)
-				p=&c->gt;
-			else
-				p=&c->eq;
-			if(*p){
-				c=*p;
-			}else
-				break;
-		}
-		*p=new;
-		return map;
+void *xmalloc(size_t size){
+	void *r;
+	r=malloc(size);
+	if(!r){
+		warn("IN xmalloc()\n"
+			"CANNOT ALLOCATE MEMORY");
+		warnx("ABORTING");
+		abort();
 	}
+	return r;
+}
+void *xrealloc(void *old,size_t size){
+	void *r;
+	r=realloc(old,size);
+	if(!r){
+		warn("IN xrealloc()\n"
+			"CANNOT REALLOCATE MEMORY");
+		warnx("ABORTING");
+		abort();
+	}
+	return r;
+}
+void __attribute__((constructor)) h_start(void){
+	expr_allocator=xmalloc;
+	expr_reallocator=xrealloc;
+}
+struct strmap *strmap_add(struct strmap *map,const char *from,size_t fl,const char *to,size_t tl){
+	char buf[EXPR_SYMLEN];
+	if(!map){
+		map=xmalloc(sizeof(struct strmap));
+		map->esp=new_expr_symset();
+	}
+	if(!expr_symset_addl(map->esp,from,fl,EXPR_ALIAS,EXPR_SF_INJECTION,to,tl)){
+		if(fl>=EXPR_SYMLEN)
+			fl=EXPR_SYMLEN-1;
+		memcpy(buf,from,fl);
+		buf[fl]=0;
+		warnx("conflict %s",buf);
+	}
+	return map;
 }
 const char *strmap_find(const struct strmap *map,const char *from,size_t fl){
-	const struct strmap *c;
-	int sum0=-fl,sum;
-	for(ssize_t i=fl-1;i>=0;--i)
-		sum0+=(signed char)from[i];
-	if(!map){
-		__builtin_unreachable();
-	}
-	c=map;
-	while(c){
-		if(fl==c->from&&!memcmp(c->data,from,fl)){
-			return c->data+fl+1;
-		}
-		sum=-c->from;
-		for(ssize_t i=c->from-1;i>=0;--i)
-			sum+=(signed char)c->data[i];
-		if(sum0<sum)
-			c=c->lt;
-		else if(sum0>sum)
-			c=c->gt;
-		else
-			c=c->eq;
-	}
-	return NULL;
+	struct expr_symbol *c;
+	if(!map->esp)
+		return NULL;
+	c=expr_symset_search(map->esp,from,fl);
+	if(!c)
+		return NULL;
+	return expr_symset_hot(c);
 }
 void strmap_free(struct strmap *map){
-	if(map->gt)
-		strmap_free(map->gt);
-	if(map->lt)
-		strmap_free(map->lt);
-	if(map->eq)
-		strmap_free(map->eq);
+	if(map->esp){
+		expr_symset_free(map->esp);
+	}
 	free(map);
 }

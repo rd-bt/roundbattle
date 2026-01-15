@@ -354,27 +354,6 @@ int natural_shield_damage(struct effect *e,struct unit *dest,struct unit *src,lo
 	}
 	return 0;
 }
-void natural_shield_statemod(struct effect *e,struct unit *u,int old){
-	if(u==e->dest&&!e->unused&&u->state==UNIT_FAILED){
-		effect_ev(e){
-			if(!revive_nonhookable(u,0.05*u->max_hp)){
-				effect_setround(e,e->round+3);
-				e->unused=50;
-			}
-		}
-	}
-}
-int natural_shield_kill(struct effect *e,struct unit *u){
-	if(u==e->dest&&!e->unused){
-		effect_ev(e){
-			addhp(u,0.05*u->max_hp);
-			effect_setround(e,e->round+3);
-			e->unused=50;
-		}
-		return -1;
-	}
-	return 0;
-}
 void kaleido_move_end(struct effect *e,struct unit *u,struct move *m){
 	struct player *p;
 	if(e->active||u!=e->dest||(p=u->owner)->move_recursion||isalive(p->enemy->front->state))
@@ -398,8 +377,6 @@ void kaleido_attack_end0(struct effect *e,struct unit *dest,struct unit *src,lon
 }
 void kaleido_roundend(struct effect *e){
 	long v;
-	if(isfront(e->dest)&&e->unused>0)
-		--e->unused;
 	if(e->active||!isfront(e->dest))
 		return;
 	v=(long)e->dest->max_hp-(long)e->dest->hp;
@@ -424,17 +401,59 @@ const struct effect_base natural_shield_effect[1]={{
 	.end_in_roundend=kaleido_end_in_roundend,
 	.move_end=kaleido_move_end,
 	.damage=natural_shield_damage,
-	.statemod=natural_shield_statemod,
-	.kill=natural_shield_kill,
 	.roundstart=kaleido_roundstart,
 	.flag=EFFECT_PASSIVE,
 	.prior=-128,
 }};
+void kaleido_roundend2(struct effect *e){
+	if(isfront(e->dest)&&e->unused>0)
+		--e->unused;
+}
+void natural_shield_statemod(struct effect *e,struct unit *u,int old){
+	struct effect *ep;
+	if(u==e->dest&&!e->unused&&u->state==UNIT_FAILED){
+		effect_ev(e){
+			if(!revive_nonhookable(u,0.05*u->max_hp)){
+				ep=unit_findeffect(u,natural_shield_effect);
+				if(ep){
+					effect_setround(ep,ep->round+3);
+					e->unused=50;
+				}
+			}
+		}
+	}
+}
+int natural_shield_kill(struct effect *e,struct unit *u){
+	struct effect *ep;
+	if(u==e->dest&&!e->unused){
+		effect_ev(e){
+			addhp(u,0.05*u->max_hp);
+			ep=unit_findeffect(u,natural_shield_effect);
+			if(ep){
+				effect_setround(ep,ep->round+3);
+				e->unused=50;
+			}
+		}
+		return -1;
+	}
+	return 0;
+}
+const struct effect_base natural_shield_effect2[1]={{
+	.roundend=kaleido_roundend2,
+	.statemod=natural_shield_statemod,
+	.kill=natural_shield_kill,
+	.flag=EFFECT_PASSIVE,
+	.prior=INT_MAX,
+}};
 void kaleido_init(struct unit *s){
 	effect(natural_shield_effect,s,s,0,0);
+	effect(natural_shield_effect2,s,s,0,-1);
 }
 void natural_shield(struct unit *s){
-	effectx(natural_shield_effect,s,s,0,*s->owner->field->stage==STAGE_PRIOR?5:6,EFFECT_ADDROUND);
+	struct effect *e=unit_findeffect(s,natural_shield_effect);
+	if(!e)
+		return;
+	effect_setround(e,e->round+(*s->owner->field->stage==STAGE_PRIOR?5:6));
 	setcooldown(s,s->move_cur,13);
 }
 void effect_destruct(struct effect *e){
@@ -986,7 +1005,8 @@ void ultimate_collapse(struct unit *s){
 		attack(t,s,0.75*s->atk,DAMAGE_PHYSICAL,0,TYPE_ROCK);
 		effect(DEF,t,s,-1,-1);
 	}
-	effect(black_hole,NULL,s,0,10);
+	if(isalive(s->state)&&isalive(t->state))
+		effect(black_hole,NULL,s,0,10);
 	setcooldown(s,s->move_cur,16);
 }
 int duckcheck(const struct unit *u){
@@ -1058,7 +1078,7 @@ void soul_back(struct unit *s){
 	if(t)
 		goto found;
 	for(const struct message *p=f->rec+f->rec_size-1;p>=f->rec;--p){
-		if(p->type!=MSG_FAIL
+		if(message_isfailed(p)
 		||p->un.u->owner!=s->owner
 		||isalive(p->un.u->state))
 			continue;
@@ -1240,7 +1260,7 @@ void time_back_locally(struct unit *s){
 	struct battle_field *f=s->owner->field;
 	struct unit *t;
 	for(const struct message *p=f->rec+f->rec_size-1;p>=f->rec;--p){
-		if(p->type!=MSG_FAIL
+		if(message_isfailed(p)
 		||p->un.u->owner!=s->owner
 		||isalive(p->un.u->state))
 			continue;
@@ -2489,9 +2509,9 @@ const struct move spatially_shatter_p={
 	.id="spatially_shatter",
 	.action=spatially_shatter_pm,
 	.type=TYPE_DRAGON,
-	.prior=0,
 	.flag=MOVE_NOCONTROL,
-	.mlevel=MLEVEL_CONCEPTUAL
+	.mlevel=MLEVEL_CONCEPTUAL,
+	.prior=-1024,
 };
 void spatially_shatter_action_end(struct effect *e,struct player *p){
 	struct move am;
@@ -4443,7 +4463,7 @@ void sentence(struct unit *s){
 		attack(t,s,0.7*s->atk,DAMAGE_PHYSICAL,0,TYPE_FIGHTING);
 		x=attr_clear(t);
 		if(x)
-			heal(s,0.08*x*s->max_hp);
+			heal(s,0.04*x*s->max_hp);
 	}
 	setcooldown(s,s->move_cur,2);
 }
@@ -5841,11 +5861,9 @@ crater,
 sunfyre,
 alkali_sunfyre,
 depositing,
-//life_limit,
 moonless_night,
 cm_effect,
 suppressed,
-//vanished,
 monoxide,
 karmic_fire,
 assimilation_progress,

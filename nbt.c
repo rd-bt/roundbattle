@@ -206,12 +206,10 @@ size_t nbt_count(const struct nbt_node *list){
 	return s;
 }
 void nbt_free(struct nbt_node *list){
-	//fprintf(stderr,"freeing %s %d\n",list->data,list->type);
 	if(list->prev)
 		nbt_free(list->prev);
 	if(list->next)
 		nbt_free(list->next);
-	//fprintf(stderr,"freeing pn %s %d\n",list->data,list->type);
 	switch(list->type){
 		case NBT_LIST:
 			nbt_free(list->un.v_list);
@@ -226,7 +224,6 @@ void nbt_free(struct nbt_node *list){
 			break;
 	}
 	free(list);
-	//fprintf(stderr,"freeing ok\n");
 }
 size_t nbt_detach(struct nbt_node *list,struct nbt_node *node){
 	struct nbt_node **e;

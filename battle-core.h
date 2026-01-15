@@ -280,41 +280,10 @@
 		_r;\
 }\
 )
-
-/*#define damage_type_check(s) (\
-{\
-		int _r;\
-		switch(s){\
-			case DAMAGE_REAL:\
-			case DAMAGE_PHYSICAL:\
-			case DAMAGE_MAGICAL:\
-				_r=0;\
-				break;\
-			default:\
-				_r=1;\
-				break;\
-		}\
-		_r;\
-}\
-)
-*/
 #define isfront(u) (\
 {\
 		const struct unit *_u=(u);\
 		_u->owner->front==_u;\
-}\
-)
-#define effect_weak_level(d,s) (\
-{\
-		int _d=(d),_s=(s);\
-		__builtin_popcount(_d&effect_types(_s))\
-		-__builtin_popcount(_d&weak_types(_s));\
-}\
-)
-#define effect_weak_flag(l) (\
-{\
-		int _r=(l);\
-		_r?(_r>0?AF_EFFECT:AF_WEAK):0;\
 }\
 )
 #define def_coef(d) (\
@@ -525,6 +494,19 @@
 		_r;\
 }\
 )
+#define effect_weak_level(d,s) (\
+{\
+		int _d=(d),_s=(s);\
+		__builtin_popcount(_d&effect_types(_s))\
+		-__builtin_popcount(_d&weak_types(_s));\
+}\
+)
+#define effect_weak_flag(l) (\
+{\
+		int _r=(l);\
+		_r?(_r>0?AF_EFFECT:AF_WEAK):0;\
+}\
+)
 
 #define EFFECT_RECURSION_DEFAULT 8
 #define effect_recursion_check(e) (\
@@ -572,6 +554,14 @@
 		(___e->dest?___e->dest:___e->src)->owner->field;\
 }\
 )
+#define message_isfailed(msg) (\
+{\
+		const struct message *_msg=(msg);\
+		_msg->type==MSG_STATEMOD\
+		&&!isalive_s(_msg->un.statemod.state)\
+		&&isalive_s(_msg->un.statemod.old);\
+}\
+)
 enum {
 	MSG_ACTION=0,
 	MSG_BATTLE_END,
@@ -583,7 +573,7 @@ enum {
 	MSG_EFFECT_ROUNDDEC,
 	MSG_EVENT,
 	MSG_EVENT_END,
-	MSG_FAIL,
+	MSG_STATEMOD,
 	MSG_HEAL,
 	MSG_HPMOD,
 	MSG_MISS,
@@ -762,6 +752,7 @@ struct message {
 			const struct unit *dest,*src;
 			long value;
 			int damage_type,aflag,type,unused;
+			unsigned long oldhp;
 		} damage;
 		const struct effect *e;
 		struct {
@@ -777,10 +768,12 @@ struct message {
 		struct {
 			const struct unit *dest;
 			long value;
+			unsigned long oldhp;
 		} heal;
 		struct {
 			const struct unit *dest;
 			long value;
+			unsigned long old;
 		} hpmod;
 		struct {
 			const struct unit *u;
@@ -789,8 +782,12 @@ struct message {
 		const struct player *p;
 		struct {
 			const struct unit *dest;
-			long value;
+			long value,old;
 		} spimod;
+		struct {
+			const struct unit *dest;
+			int state,old;
+		} statemod;
 		const struct unit *u;
 		struct {
 			const struct unit *dest,*src;

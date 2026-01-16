@@ -14,7 +14,7 @@ static void clearhp(struct unit *u){
 	long hp;
 	hp=(long)u->hp;
 	u->hp=0;
-	report(u->owner->field,MSG_HPMOD,u,-hp);
+	report(u->owner->field,MSG_HPMOD,u,-hp,(unsigned long)hp);
 }
 static int frindex(const struct unit *u){
 	const struct move *m;
@@ -30,7 +30,7 @@ static int frindex(const struct unit *u){
 static void unit_state_update(struct unit *u,int new){
 	int old=u->state;
 	u->state=new;
-	report(u->owner->field,(isalive_s(old)&&!isalive_s(new))?MSG_FAIL:MSG_UPDATE,u);
+	report(u->owner->field,MSG_STATEMOD,u,new,old);
 	switch(new){
 		case UNIT_FAILED:
 			unit_wipeeffect(u,EFFECT_KEEP);
@@ -193,16 +193,19 @@ static double derate_eval_magical(const struct unit *dest,const struct unit *src
 	return derate_coef(derate);
 }
 static void damage_action_default(struct unit *dest,struct unit *src,long value,int damage_type,int aflag,int type){
+	unsigned long hp=dest->hp;
 	dest->hp=limit((long)dest->hp-value,0,(long)dest->max_hp);
-	report(dest->owner->field,MSG_DAMAGE,dest,src,value,damage_type,aflag,type);
+	report(dest->owner->field,MSG_DAMAGE,dest,src,value,damage_type,aflag,type,hp);
 }
 static void heal_action(struct unit *dest,struct unit *src,long value,int damage_type,int aflag,int type){
+	unsigned long hp=dest->hp;
 	dest->hp=limit((long)dest->hp+value,0,(long)dest->max_hp);
-	report(dest->owner->field,MSG_HEAL,dest,value);
+	report(dest->owner->field,MSG_HEAL,dest,value,hp);
 }
 static void addhp_action(struct unit *dest,struct unit *src,long value,int damage_type,int aflag,int type){
+	unsigned long hp=dest->hp;
 	dest->hp=limit((long)dest->hp+value,0,(long)dest->max_hp);
-	report(dest->owner->field,MSG_HPMOD,dest,value);
+	report(dest->owner->field,MSG_HPMOD,dest,value,hp);
 }
 static void addspi_action(struct unit *dest,struct unit *src,long value,int damage_type,int aflag,int type){
 	long ospi,spi,ds;
@@ -212,9 +215,9 @@ static void addspi_action(struct unit *dest,struct unit *src,long value,int dama
 		return;
 	dest->spi=spi;
 	ds=spi-ospi;
-	report(dest->owner->field,MSG_SPIMOD,dest,value);
+	report(dest->owner->field,MSG_SPIMOD,dest,value,ospi);
 	event_do(spi_modified,dest)
-		damage(dest,NULL,SHEAR_COEF*dest->max_hp*labs(ds)+1,DAMAGE_SHEAR,0,TYPE_MACHINE);
+		damage(dest,NULL,SHEAR_COEF*dest->max_hp*labs(ds)+1,DAMAGE_SHEAR,0,TYPE_MACHINE,NULL);
 	if(type!=TYPE_VOID){
 		for_each_effectf(e,dest->owner->field->effects,spimod){
 			e->base->spimod(e,dest,ds);
@@ -275,7 +278,7 @@ const struct damage_type damage_types[]={
 	},
 };
 size_t damage_types_size=arrsize(damage_types);
-long damage(struct unit *dest,struct unit *src,long value,int damage_type,int aflag,int type){
+long damage(struct unit *dest,struct unit *src,long value,int damage_type,int aflag,int type,void *arg){
 	unsigned long ohp;
 	const struct damage_type *dtp;
 	if(!checkalive(dest,src))
@@ -283,7 +286,7 @@ long damage(struct unit *dest,struct unit *src,long value,int damage_type,int af
 	dtp=damage_types+damage_type;
 	if(!((aflag^dtp->xflag)&DF_NONHOOKABLE)){
 		for_each_effectf(e,dest->owner->field->effects,damage){
-			if(e->base->damage(e,dest,src,&value,&damage_type,&aflag,&type))
+			if(e->base->damage(e,dest,src,&value,&damage_type,&aflag,&type,&arg))
 				return 0;
 		}
 	}
@@ -302,22 +305,23 @@ long damage(struct unit *dest,struct unit *src,long value,int damage_type,int af
 	}
 	if(!(aflag&DF_NOCALLBACK)){
 		for_each_effectf(e,dest->owner->field->effects,damage_end){
-			e->base->damage_end(e,dest,src,value,damage_type,aflag,type);
+			e->base->damage_end(e,dest,src,value,damage_type,aflag,type,arg);
 		}
 	}
 	return value;
 }
-long attack(struct unit *dest,struct unit *src,long value,int damage_type,int aflag,int type){
+long attack(struct unit *dest,struct unit *src,long value,int damage_type,int aflag,int type,void *arg){
 	long x;
 	long value_backup;
 	const struct damage_type *dtp;
 	int dest_type,aflag_backup,damage_type_backup,type_backup;
+	void *arg_backup;
 	if(!checkalive(dest,src))
 			return 0;
 	dtp=damage_types+damage_type;
 	if(!((aflag^dtp->xflag)&AF_NONHOOKABLE)){
 		for_each_effectf(e,dest->owner->field->effects,attack0){
-			if(e->base->attack0(e,dest,src,&value,&damage_type,&aflag,&type))
+			if(e->base->attack0(e,dest,src,&value,&damage_type,&aflag,&type,&arg))
 				return 0;
 		}
 	}
@@ -325,10 +329,11 @@ long attack(struct unit *dest,struct unit *src,long value,int damage_type,int af
 	damage_type_backup=damage_type;
 	aflag_backup=aflag;
 	type_backup=type;
+	arg_backup=arg;
 	dtp=damage_types+damage_type;
 	if(!((aflag^dtp->xflag)&AF_NONHOOKABLE)){
 		for_each_effectf(e,dest->owner->field->effects,attack){
-			if(e->base->attack(e,dest,src,&value,&damage_type,&aflag,&type))
+			if(e->base->attack(e,dest,src,&value,&damage_type,&aflag,&type,&arg))
 				return 0;
 		}
 	}
@@ -371,15 +376,15 @@ long attack(struct unit *dest,struct unit *src,long value,int damage_type,int af
 		value=1;
 	if((aflag&AF_IDEATH)&&value<dest->hp&&value_backup>=dest->hp)
 		value=dest->hp;
-	value=damage(dest,src,value,damage_type,aflag,type);
+	value=damage(dest,src,value,damage_type,aflag,type,arg);
 	if(aflag&DF_TEST)
 		return value;
 	if(!(aflag&AF_NOCALLBACK)){
 		for_each_effectf(e,dest->owner->field->effects,attack_end){
-			e->base->attack_end(e,dest,src,value,damage_type,aflag,type);
+			e->base->attack_end(e,dest,src,value,damage_type,aflag,type,arg);
 		}
 		for_each_effectf(e,dest->owner->field->effects,attack_end0){
-			e->base->attack_end0(e,dest,src,value_backup,damage_type_backup,aflag_backup,type_backup);
+			e->base->attack_end0(e,dest,src,value_backup,damage_type_backup,aflag_backup,type_backup,arg_backup);
 		}
 	}
 	return value;
@@ -429,7 +434,7 @@ static void do_normal_attack(struct unit *src){
 	struct unit *dest=gettarget(src);
 	if(!hittest(dest,src,1.0))
 		return;
-	attack(dest,src,src->atk,DAMAGE_PHYSICAL,AF_NORMAL,src->type0);
+	attack(dest,src,src->atk,DAMAGE_PHYSICAL,AF_NORMAL,src->type0,NULL);
 }
 void normal_attack(struct unit *src){
 	struct move am;
@@ -456,7 +461,7 @@ long heal3(struct unit *dest,long value,int aflag){
 	}
 	else
 		aflag&=~AF_NONHOOKABLE;
-	value=attack(dest,NULL,value,DAMAGE_HEAL,aflag&~AF_NOCALLBACK,TYPE_VOID);
+	value=attack(dest,NULL,value,DAMAGE_HEAL,aflag&~AF_NOCALLBACK,TYPE_VOID,NULL);
 	if(!(aflag&AF_NOCALLBACK)){
 		for_each_effectf(e,dest->owner->field->effects,heal_end){
 			e->base->heal_end(e,dest,value);
@@ -470,22 +475,22 @@ long heal(struct unit *dest,long value){
 void addhp(struct unit *dest,long hp){
 	if(!hp)
 		return;
-	damage(dest,NULL,hp,DAMAGE_ADDHP,0,TYPE_VOID);
+	damage(dest,NULL,hp,DAMAGE_ADDHP,0,TYPE_VOID,NULL);
 }
 void sethp(struct unit *dest,unsigned long hp){
 	if(hp==dest->hp)
 		return;
-	damage(dest,NULL,hp-(long)dest->hp,DAMAGE_ADDHP,0,TYPE_VOID);
+	damage(dest,NULL,hp-(long)dest->hp,DAMAGE_ADDHP,0,TYPE_VOID,NULL);
 }
 void addspi(struct unit *dest,long spi){
 	if(!spi)
 		return;
-	damage(dest,NULL,spi,DAMAGE_ADDSPI,0,TYPE_MACHINE);
+	damage(dest,NULL,spi,DAMAGE_ADDSPI,0,TYPE_MACHINE,NULL);
 }
 void setspi(struct unit *dest,long spi){
 	if(spi==dest->spi)
 		return;
-	damage(dest,NULL,spi-dest->spi,DAMAGE_ADDSPI,0,TYPE_MACHINE);
+	damage(dest,NULL,spi-dest->spi,DAMAGE_ADDSPI,0,TYPE_MACHINE,NULL);
 }
 struct unit *gettarget(struct unit *u){
 	struct unit *r;
@@ -1503,6 +1508,7 @@ void report(struct battle_field *f,int type,...){
 			msg.un.damage.damage_type=va_arg(ap,int);
 			msg.un.damage.aflag=va_arg(ap,int);
 			msg.un.damage.type=va_arg(ap,int);
+			msg.un.damage.oldhp=va_arg(ap,unsigned long);
 			break;
 		case MSG_EFFECT:
 			msg.un.e=va_arg(ap,const struct effect *);
@@ -1523,16 +1529,15 @@ void report(struct battle_field *f,int type,...){
 			msg.un.event.ev=va_arg(ap,const struct event *);
 			msg.un.event.src=va_arg(ap,const struct unit *);
 			break;
-		case MSG_FAIL:
-			msg.un.u=va_arg(ap,const struct unit *);
-			break;
 		case MSG_HEAL:
 			msg.un.heal.dest=va_arg(ap,const struct unit *);
 			msg.un.heal.value=va_arg(ap,long);
+			msg.un.heal.oldhp=va_arg(ap,unsigned long);
 			break;
 		case MSG_HPMOD:
 			msg.un.hpmod.dest=va_arg(ap,const struct unit *);
 			msg.un.hpmod.value=va_arg(ap,long);
+			msg.un.hpmod.old=va_arg(ap,unsigned long);
 			break;
 		case MSG_MISS:
 		case MSG_SWITCH:
@@ -1550,6 +1555,12 @@ void report(struct battle_field *f,int type,...){
 		case MSG_SPIMOD:
 			msg.un.spimod.dest=va_arg(ap,const struct unit *);
 			msg.un.spimod.value=va_arg(ap,long);
+			msg.un.spimod.old=va_arg(ap,long);
+			break;
+		case MSG_STATEMOD:
+			msg.un.statemod.dest=va_arg(ap,const struct unit *);
+			msg.un.statemod.state=va_arg(ap,int);
+			msg.un.statemod.old=va_arg(ap,int);
 			break;
 		case MSG_UPDATE:
 			msg.un.uaddr=va_arg(ap,const void *);

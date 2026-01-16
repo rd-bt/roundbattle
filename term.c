@@ -622,7 +622,9 @@ attr_end:
 //			wmf(0,"event_end %p",msg->un.event.ev);
 //			goto delay;
 			break;
-		case MSG_FAIL:
+		case MSG_STATEMOD:
+			if(!message_isfailed(msg))
+				break;
 			wmf(msg->un.u->owner==p?0:1,"[%ld]%s %s",msg->un.u-msg->un.u->owner->units,unit_ts(msg->un.u->base->id),ts("failed"));
 			goto delay;
 		case MSG_HEAL:

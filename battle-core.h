@@ -660,13 +660,13 @@ struct effect_base {
 	int (*action)(struct effect *e,struct player *p);
 	void (*action_end)(struct effect *e,struct player *p);
 	void (*action_fail)(struct effect *e,struct player *p);
-	int (*attack)(struct effect *e,struct unit *dest,struct unit *src,long *value,int *damage_type,int *aflag,int *type);
-	int (*attack0)(struct effect *e,struct unit *dest,struct unit *src,long *value,int *damage_type,int *aflag,int *type);
-	void (*attack_end)(struct effect *e,struct unit *dest,struct unit *src,long value,int damage_type,int aflag,int type);
-	void (*attack_end0)(struct effect *e,struct unit *dest,struct unit *src,long value,int damage_type,int aflag,int type);
+	int (*attack)(struct effect *e,struct unit *dest,struct unit *src,long *value,int *damage_type,int *aflag,int *type,void **arg);
+	int (*attack0)(struct effect *e,struct unit *dest,struct unit *src,long *value,int *damage_type,int *aflag,int *type,void **arg);
+	void (*attack_end)(struct effect *e,struct unit *dest,struct unit *src,long value,int damage_type,int aflag,int type,void *arg);
+	void (*attack_end0)(struct effect *e,struct unit *dest,struct unit *src,long value,int damage_type,int aflag,int type,void *arg);
 	void (*cooldown_decrease)(struct effect *e,struct unit *u,struct move *m,int *round);
-	int (*damage)(struct effect *e,struct unit *dest,struct unit *src,long *value,int *damage_type,int *aflag,int *type);
-	void (*damage_end)(struct effect *e,struct unit *dest,struct unit *src,long value,int damage_type,int aflag,int type);
+	int (*damage)(struct effect *e,struct unit *dest,struct unit *src,long *value,int *damage_type,int *aflag,int *type,void **arg);
+	void (*damage_end)(struct effect *e,struct unit *dest,struct unit *src,long value,int damage_type,int aflag,int type,void *arg);
 	int (*effect)(struct effect *e,const struct effect_base *base,struct unit *dest,struct unit *src,long *level,int *round,int *xflag);
 	void (*effect_end)(struct effect *e,struct effect *ep,struct unit *dest,struct unit *src,long level,int round);
 	void (*effect_end0)(struct effect *e,struct effect *ep,struct unit *dest,struct unit *src,long level,int round);
@@ -815,9 +815,9 @@ int unit_setstate(struct unit *u,int state);
 
 int unit_kill(struct unit *up);
 
-long damage(struct unit *dest,struct unit *src,long value,int damage_type,int aflag,int type);
+long damage(struct unit *dest,struct unit *src,long value,int damage_type,int aflag,int type,void *arg);
 
-long attack(struct unit *dest,struct unit *src,long value,int damage_type,int aflag,int type);
+long attack(struct unit *dest,struct unit *src,long value,int damage_type,int aflag,int type,void *arg);
 
 int hittest(struct unit *dest,struct unit *src,double hit_rate);
 

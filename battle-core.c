@@ -192,22 +192,22 @@ static double derate_eval_magical(const struct unit *dest,const struct unit *src
 		derate-=src->magical_bonus;
 	return derate_coef(derate);
 }
-static void damage_action_default(struct unit *dest,struct unit *src,long value,int damage_type,int aflag,int type){
+static void damage_action_default(struct unit *dest,struct unit *src,long value,int damage_type,int aflag,int type,void *arg){
 	unsigned long hp=dest->hp;
 	dest->hp=limit((long)dest->hp-value,0,(long)dest->max_hp);
-	report(dest->owner->field,MSG_DAMAGE,dest,src,value,damage_type,aflag,type,hp);
+	report(dest->owner->field,MSG_DAMAGE,dest,src,value,damage_type,aflag,type,hp,arg);
 }
-static void heal_action(struct unit *dest,struct unit *src,long value,int damage_type,int aflag,int type){
+static void heal_action(struct unit *dest,struct unit *src,long value,int damage_type,int aflag,int type,void *arg){
 	unsigned long hp=dest->hp;
 	dest->hp=limit((long)dest->hp+value,0,(long)dest->max_hp);
 	report(dest->owner->field,MSG_HEAL,dest,value,hp);
 }
-static void addhp_action(struct unit *dest,struct unit *src,long value,int damage_type,int aflag,int type){
+static void addhp_action(struct unit *dest,struct unit *src,long value,int damage_type,int aflag,int type,void *arg){
 	unsigned long hp=dest->hp;
 	dest->hp=limit((long)dest->hp+value,0,(long)dest->max_hp);
 	report(dest->owner->field,MSG_HPMOD,dest,value,hp);
 }
-static void addspi_action(struct unit *dest,struct unit *src,long value,int damage_type,int aflag,int type){
+static void addspi_action(struct unit *dest,struct unit *src,long value,int damage_type,int aflag,int type,void *arg){
 	long ospi,spi,ds;
 	ospi=dest->spi;
 	spi=limit(ospi+value,-dest->max_spi,dest->max_spi);
@@ -278,7 +278,7 @@ const struct damage_type damage_types[]={
 	},
 };
 size_t damage_types_size=arrsize(damage_types);
-long damage(struct unit *dest,struct unit *src,long value,int damage_type,int aflag,int type,void *arg){
+long damage(struct unit *dest,struct unit *src,long value,int damage_type,int aflag,int type,const void *arg){
 	unsigned long ohp;
 	const struct damage_type *dtp;
 	if(!checkalive(dest,src))
@@ -286,7 +286,7 @@ long damage(struct unit *dest,struct unit *src,long value,int damage_type,int af
 	dtp=damage_types+damage_type;
 	if(!((aflag^dtp->xflag)&DF_NONHOOKABLE)){
 		for_each_effectf(e,dest->owner->field->effects,damage){
-			if(e->base->damage(e,dest,src,&value,&damage_type,&aflag,&type,&arg))
+			if(e->base->damage(e,dest,src,&value,&damage_type,&aflag,&type,(void **)&arg))
 				return 0;
 		}
 	}
@@ -295,7 +295,7 @@ long damage(struct unit *dest,struct unit *src,long value,int damage_type,int af
 	if(aflag&DF_TEST)
 		return value;
 	ohp=dest->hp;
-	dtp->action(dest,src,value,damage_type,aflag,type);
+	dtp->action(dest,src,value,damage_type,aflag,type,(void *)arg);
 	if(!(aflag&DF_KEEPALIVE)&&!dest->hp)
 		unit_kill(dest);
 	if(!(aflag&DF_IGNOREHP)&&dest->hp!=ohp){
@@ -305,23 +305,23 @@ long damage(struct unit *dest,struct unit *src,long value,int damage_type,int af
 	}
 	if(!(aflag&DF_NOCALLBACK)){
 		for_each_effectf(e,dest->owner->field->effects,damage_end){
-			e->base->damage_end(e,dest,src,value,damage_type,aflag,type,arg);
+			e->base->damage_end(e,dest,src,value,damage_type,aflag,type,(void *)arg);
 		}
 	}
 	return value;
 }
-long attack(struct unit *dest,struct unit *src,long value,int damage_type,int aflag,int type,void *arg){
+long attack(struct unit *dest,struct unit *src,long value,int damage_type,int aflag,int type,const void *arg){
 	long x;
 	long value_backup;
 	const struct damage_type *dtp;
 	int dest_type,aflag_backup,damage_type_backup,type_backup;
-	void *arg_backup;
+	const void *arg_backup;
 	if(!checkalive(dest,src))
 			return 0;
 	dtp=damage_types+damage_type;
 	if(!((aflag^dtp->xflag)&AF_NONHOOKABLE)){
 		for_each_effectf(e,dest->owner->field->effects,attack0){
-			if(e->base->attack0(e,dest,src,&value,&damage_type,&aflag,&type,&arg))
+			if(e->base->attack0(e,dest,src,&value,&damage_type,&aflag,&type,(void **)&arg))
 				return 0;
 		}
 	}
@@ -333,7 +333,7 @@ long attack(struct unit *dest,struct unit *src,long value,int damage_type,int af
 	dtp=damage_types+damage_type;
 	if(!((aflag^dtp->xflag)&AF_NONHOOKABLE)){
 		for_each_effectf(e,dest->owner->field->effects,attack){
-			if(e->base->attack(e,dest,src,&value,&damage_type,&aflag,&type,&arg))
+			if(e->base->attack(e,dest,src,&value,&damage_type,&aflag,&type,(void **)&arg))
 				return 0;
 		}
 	}
@@ -381,10 +381,10 @@ long attack(struct unit *dest,struct unit *src,long value,int damage_type,int af
 		return value;
 	if(!(aflag&AF_NOCALLBACK)){
 		for_each_effectf(e,dest->owner->field->effects,attack_end){
-			e->base->attack_end(e,dest,src,value,damage_type,aflag,type,arg);
+			e->base->attack_end(e,dest,src,value,damage_type,aflag,type,(void *)arg);
 		}
 		for_each_effectf(e,dest->owner->field->effects,attack_end0){
-			e->base->attack_end0(e,dest,src,value_backup,damage_type_backup,aflag_backup,type_backup,arg_backup);
+			e->base->attack_end0(e,dest,src,value_backup,damage_type_backup,aflag_backup,type_backup,(void *)arg_backup);
 		}
 	}
 	return value;
@@ -1509,6 +1509,7 @@ void report(struct battle_field *f,int type,...){
 			msg.un.damage.aflag=va_arg(ap,int);
 			msg.un.damage.type=va_arg(ap,int);
 			msg.un.damage.oldhp=va_arg(ap,unsigned long);
+			msg.un.damage.arg=va_arg(ap,void *);
 			break;
 		case MSG_EFFECT:
 			msg.un.e=va_arg(ap,const struct effect *);

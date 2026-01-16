@@ -1,5 +1,5 @@
 CC := gcc
-CFLAG := -Wall -O3 -fsanitize=address
+CFLAG := -Wall -Werror -O3 -fsanitize=address
 all: rdbt nbtdump nbtedit list
 rdbt: main.c battle.c battle.h battle-core.o term.c strmap.o locale.o species.c species.h info.c info.h utils.h utils.c menu.h menu.c player_data.h player_data.c nbt.o item.h item.c fun.c expr.o moves.o
 	$(CC) $(CFLAG) main.c battle.c battle-core.o moves.o term.c strmap.o locale.o species.c info.c utils.c menu.c player_data.c nbt.o item.c expr.o -lm -lncursesw -o rdbt

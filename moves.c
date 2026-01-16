@@ -36,8 +36,31 @@ int isprime(unsigned long n){
 		if(!(n%i))return 0;
 	return 1;
 }
+struct damage_category {
+	const char *id;
+};
+#define register_category(_cname) \
+const struct damage_category _cname##_category[1]={{\
+	.id=#_cname,\
+}};\
+const struct damage_category *const _cname[2]={_cname##_category,NULL}
+register_category(laser);
+register_category(roaring);
+register_category(explode);
+register_category(gravity);
+register_category(nature);
 long instant_death(struct unit *dest){
 	return damage(dest,NULL,dest->max_hp*64,DAMAGE_REAL,AF_IDEATH|AF_INHIBIT,TYPE_VOID,NULL);
+}
+int category_check(const struct damage_category *const *arg,const struct damage_category *category){
+	if(!arg)
+		return 0;
+	while(*arg){
+		if(*arg==category)
+			return -1;
+		++arg;
+	}
+	return 0;
 }
 int abnormal_init(struct effect *e,long level,int round){
 	if(!e->round)
@@ -339,7 +362,7 @@ void spi_fcrack(struct unit *s){
 		x=attack(t,s,0.45*s->atk,DAMAGE_PHYSICAL,0,TYPE_LIGHT,NULL);
 	}else x=0;
 	if(hittest(t,s,1.0)){
-		y=attack(t,s,0.45*s->atk,DAMAGE_PHYSICAL,0,TYPE_MACHINE,NULL);
+		y=attack(t,s,0.45*s->atk,DAMAGE_PHYSICAL,0,TYPE_MACHINE,laser);
 	}else y=0;
 	attack(t,NULL,-0.015*s->def,DAMAGE_ADDSPI,(x<=20||y<=20||gcdul(x,y)==1)?AF_CRIT:0,TYPE_MACHINE,NULL);
 }
@@ -373,7 +396,7 @@ void kaleido_attack_end0(struct effect *e,struct unit *dest,struct unit *src,lon
 	if(dmg<=0)
 		return;
 	effect_ev(e)
-		attack(dest,src,dmg,DAMAGE_MAGICAL,0,TYPE_DEVINEGRASS,NULL);	
+		attack(dest,src,dmg,DAMAGE_MAGICAL,0,TYPE_DEVINEGRASS,nature);	
 }
 void kaleido_roundend(struct effect *e){
 	long v;
@@ -491,7 +514,7 @@ void metal_bomb_inited(struct effect *e){
 }
 void metal_bomb_end(struct effect *e){
 	effect_ev(e){
-		attack(e->dest,e->src,1.15*e->src->atk,DAMAGE_PHYSICAL,0,TYPE_ALKALIFIRE,NULL);
+		attack(e->dest,e->src,1.15*e->src->atk,DAMAGE_PHYSICAL,0,TYPE_ALKALIFIRE,explode);
 		if(unit_findeffect(e->dest,alkali_fire_seal))
 			event(real_fire_disillusion_fr,e->src);
 		else
@@ -604,7 +627,7 @@ const struct effect_base primordial_breath[1]={{
 	.prior=-32
 }};
 void primordial_breath_action(struct unit *s){
-	attack(s->osite,s,0,DAMAGE_PHYSICAL,ADF_NONHOOKABLE|AF_INHIBIT|AF_FLOAT|AF_TYPE|AF_NODERATE|AF_DEF,TYPE_ICE,NULL);
+	attack(s->osite,s,0,DAMAGE_PHYSICAL,ADF_NONHOOKABLE|AF_INHIBIT|AF_FLOAT|AF_TYPE|AF_NODERATE|AF_DEF,TYPE_ICE,laser);
 }
 void primordial_breath_init(struct unit *s){
 	effect(primordial_breath,s,s,0,-1);
@@ -626,7 +649,7 @@ void damage_recur(struct unit *s){
 #define roaring_common_a(_T) \
 		t=gettarget(s);\
 		if(hittest(t,s,2.5)){\
-			attack(t,s,0.75*s->atk,DAMAGE_PHYSICAL,0,_T,NULL);\
+			attack(t,s,0.75*s->atk,DAMAGE_PHYSICAL,0,_T,roaring);\
 			if(test(0.2))
 
 #define roaring_common_b \
@@ -652,7 +675,7 @@ void scorching_roaring(struct unit *s){
 		roaring_common_b;
 	}
 	t=s->osite;
-	attack(t,s,(0.6+0.2*n)*s->atk,DAMAGE_MAGICAL,AF_CRIT,TYPE_FIRE,NULL);
+	attack(t,s,(0.6+0.2*n)*s->atk,DAMAGE_MAGICAL,AF_CRIT,TYPE_FIRE,roaring);
 	heal(s,0.18*n*s->max_hp);
 	effect(ATK,s,s,1+n,-1);
 }
@@ -668,9 +691,9 @@ void thunder_roaring(struct unit *s){
 		roaring_common_b;
 	}
 	t=s->osite;
-	dmg=attack(t,s,(0.6+0.2*n)*s->atk,DAMAGE_MAGICAL,AF_CRIT,TYPE_ELECTRIC,NULL);
+	dmg=attack(t,s,(0.6+0.2*n)*s->atk,DAMAGE_MAGICAL,AF_CRIT,TYPE_ELECTRIC,roaring);
 	for_each_unit(u,t->owner){
-		attack(t,s,0.15*dmg+n*0.06*u->max_hp,DAMAGE_REAL,0,TYPE_ELECTRIC,NULL);
+		attack(t,s,0.15*dmg+n*0.06*u->max_hp,DAMAGE_REAL,0,TYPE_ELECTRIC,roaring);
 	}
 }
 static struct unit *get_unit_by_arg(struct player *p,int isenemy){
@@ -699,7 +722,7 @@ void freezing_roaring(struct unit *s){
 	t=get_unit_by_arg(s->owner,1);
 	if(!t||t->state==UNIT_FREEZING_ROARINGED)
 		t=s->osite;
-	damage(t,s,t->hp,DAMAGE_MAGICAL,effect_weak_flag(effect_weak_level(unit_type(t),TYPE_ICE))|AF_CRIT|DF_NONHOOKABLE|DF_KEEPALIVE|DF_IGNOREHP|DF_NOCALLBACK,TYPE_ICE,NULL);
+	damage(t,s,t->hp,DAMAGE_MAGICAL,effect_weak_flag(effect_weak_level(unit_type(t),TYPE_ICE))|AF_CRIT|DF_NONHOOKABLE|DF_KEEPALIVE|DF_IGNOREHP|DF_NOCALLBACK,TYPE_ICE,roaring);
 	//show as a critical magical damage corresponding with other roarings.
 	unit_setstate(t,UNIT_FREEZING_ROARINGED);
 	effectx(NULL,s,NULL,0,0,EFFECT_REMOVE|EFFECT_NEGATIVE|EFFECT_NONHOOKABLE|EFFECT_NODESTRUCT|EFFECT_UNPURIFIABLE);
@@ -1002,7 +1025,7 @@ const struct effect_base black_hole[1]={{
 void ultimate_collapse(struct unit *s){
 	struct unit *t=gettarget(s);
 	if(hittest(t,s,2.5)){
-		attack(t,s,0.75*s->atk,DAMAGE_PHYSICAL,0,TYPE_ROCK,NULL);
+		attack(t,s,0.75*s->atk,DAMAGE_PHYSICAL,0,TYPE_ROCK,gravity);
 		effect(DEF,t,s,-1,-1);
 	}
 	if(isalive(s->state)&&isalive(t->state))
@@ -1591,7 +1614,7 @@ void nether_roaring(struct unit *s){
 		roaring_common_b;
 	}
 	t=s->osite;
-	attack(t,s,(0.6+0.2*n)*s->atk,DAMAGE_MAGICAL,AF_CRIT,TYPE_GHOST,NULL);
+	attack(t,s,(0.6+0.2*n)*s->atk,DAMAGE_MAGICAL,AF_CRIT,TYPE_GHOST,roaring);
 	effect(AVOID,s,s,n*2,-1);
 }
 #define attr_clear(_u) ((int)(size_t)effectx(NULL,(_u),NULL,0,0,EFFECT_REMOVE|EFFECT_ATTR))
@@ -1600,9 +1623,9 @@ void tidal(struct unit *s){
 	struct unit *t=gettarget(s);
 	int r=attr_clear_positive(t);
 	if(r){
-		attack(t,s,s->atk,DAMAGE_PHYSICAL,0,TYPE_DEVINEWATER,NULL);
+		attack(t,s,s->atk,DAMAGE_PHYSICAL,0,TYPE_DEVINEWATER,gravity);
 	}else {
-		attack(t,s,1.15*s->atk,DAMAGE_PHYSICAL,0,TYPE_DEVINEWATER,NULL);
+		attack(t,s,1.15*s->atk,DAMAGE_PHYSICAL,0,TYPE_DEVINEWATER,gravity);
 		heal(s,0.35*s->atk);
 	}
 }
@@ -1667,7 +1690,7 @@ void anger_roaring(struct unit *s){
 		roaring_common_b;
 	}
 	t=s->osite;
-	attack(t,s,(0.6+0.2*n)*s->atk,DAMAGE_MAGICAL,AF_CRIT,TYPE_FIGHTING,NULL);
+	attack(t,s,(0.6+0.2*n)*s->atk,DAMAGE_MAGICAL,AF_CRIT,TYPE_FIGHTING,roaring);
 	if((double)t->hp/t->max_hp<=0.15+n*0.03)
 		instant_death(t);
 }
@@ -2612,7 +2635,7 @@ void natural_decay_pm(struct unit *s){
 		return;
 	if(e->level<2){
 		t=gettarget(s);
-		attack(t,s,0.4122*s->atk+0.01832*t->max_hp,DAMAGE_PHYSICAL,0,TYPE_DEVINEGRASS,NULL);
+		attack(t,s,0.4122*s->atk+0.01832*t->max_hp,DAMAGE_PHYSICAL,0,TYPE_DEVINEGRASS,nature);
 		effect_addlevel(e,1);
 	}else {
 		t=s->osite;
@@ -2660,7 +2683,7 @@ const struct effect_base natural_decay_effect[1]={{
 void natural_decay(struct unit *s){
 	struct unit *t=gettarget(s);
 	if(hittest(t,s,1.0))
-		attack(t,s,0.4122*s->atk+0.01832*t->max_hp,DAMAGE_PHYSICAL,0,TYPE_DEVINEGRASS,NULL);
+		attack(t,s,0.4122*s->atk+0.01832*t->max_hp,DAMAGE_PHYSICAL,0,TYPE_DEVINEGRASS,nature);
 	effect(natural_decay_effect,s,s,0,-1);
 }
 void dmts_impact(struct unit *s){
@@ -3292,7 +3315,7 @@ void time_space_roaring(struct unit *s){
 		roaring_common_b;
 	}
 	t=s->osite;
-	attack(t,s,(0.6+0.2*n)*s->atk,DAMAGE_MAGICAL,AF_CRIT,TYPE_DRAGON,NULL);
+	attack(t,s,(0.6+0.2*n)*s->atk,DAMAGE_MAGICAL,AF_CRIT,TYPE_DRAGON,roaring);
 	for_each_effect(e,s->owner->field->effects){
 		if(e->dest!=s)
 			continue;
@@ -3402,23 +3425,23 @@ void ice_bullet(struct unit *s){
 		attack(t,s,2*s->atk,DAMAGE_PHYSICAL,0,TYPE_ICE,NULL);
 	}
 }
-void laser(struct unit *s){
+void laser_a(struct unit *s){
 	struct unit *t=gettarget(s);
 	if(hittest(t,s,1.0)&&rec_check_dec(mana,s,10)){
-		attack(t,s,2*s->atk,DAMAGE_PHYSICAL,0,TYPE_LIGHT,NULL);
+		attack(t,s,2*s->atk,DAMAGE_PHYSICAL,0,TYPE_LIGHT,laser);
 	}
 }
 void laser_ray(struct unit *s){
 	struct unit *t=gettarget(s);
 	if(hittest(t,s,1.0)&&rec_check_dec(youkai,s,800)){
-		attack(t,s,2*s->atk,DAMAGE_PHYSICAL,0,TYPE_LIGHT,NULL);
+		attack(t,s,2*s->atk,DAMAGE_PHYSICAL,0,TYPE_LIGHT,laser);
 	}
 }
 ava_rec(youkai,1600);
 void high_powered_hit(struct unit *s){
 	struct unit *t=gettarget(s);
 	if(hittest(t,s,1.5)&&rec_check_dec(youkai,s,1600)){
-		attack(t,s,1.6*s->atk,DAMAGE_PHYSICAL,0,TYPE_LIGHT,NULL);
+		attack(t,s,1.6*s->atk,DAMAGE_PHYSICAL,0,TYPE_LIGHT,laser);
 		attr_clear_positive(t);
 		setcooldown(s,s->move_cur,6);
 	}
@@ -3971,7 +3994,7 @@ void star_elf_ray(struct unit *s){
 	}
 	cd=mp?mp->cooldown:0;
 	if(hittest(t,s,0.9+0.1*(cd+!cd)))
-		attack(t,s,s->atk,DAMAGE_PHYSICAL,0,TYPE_STEEL,NULL);
+		attack(t,s,s->atk,DAMAGE_PHYSICAL,0,TYPE_STEEL,laser);
 	if(cd){
 		setcooldown(s,mp,0);
 		setcooldown(s,s->move_cur,cd);
@@ -4138,9 +4161,19 @@ int fairyland_gate_event(struct effect *e,const struct event *ev,struct unit *sr
 	}
 	return 0;
 }
+void fairyland_gate_statemod(struct effect *e,struct unit *u,int old){
+	if(u==e->dest&&!isalive(u->state)){
+		effect_ev(e){
+			attack(gettarget(u),u,4.5*u->atk,DAMAGE_PHYSICAL,0,TYPE_NORMAL,NULL);
+			e->active=1;
+		}
+	}
+}
 const struct effect_base fairyland_gate[1]={{
 	.id="fairyland_gate",
 	.event=fairyland_gate_event,
+	.statemod=fairyland_gate_statemod,
+	.roundstart=kaleido_roundstart,
 	.flag=EFFECT_PASSIVE,
 }};
 void fairyland_gate_p(struct unit *s){
@@ -4185,29 +4218,29 @@ void air_force(struct unit *s){
 	switch(randi()%5){
 		case 0:
 			if(hittest(t,s,2.0)){
-				attack(t,s,2*s->atk,DAMAGE_MAGICAL,0,TYPE_POISON,NULL);
+				attack(t,s,2*s->atk,DAMAGE_MAGICAL,0,TYPE_POISON,explode);
 				effect(poisoned,t,s,0,5);
 			}
 			break;
 		case 1:
 			if(hittest(t,s,2.0)){
-				attack(t,s,2*s->atk,DAMAGE_PHYSICAL,0,TYPE_LIGHT,NULL);
+				attack(t,s,2*s->atk,DAMAGE_PHYSICAL,0,TYPE_LIGHT,explode);
 				effect(stunned,t,s,0,4);
 			}
 			break;
 		case 2:
 			if(hittest(t,s,2.0))
-				attack(t,s,2*s->atk,DAMAGE_PHYSICAL,0,TYPE_FIRE,NULL);
+				attack(t,s,2*s->atk,DAMAGE_PHYSICAL,0,TYPE_FIRE,explode);
 			effect(blood_moon,NULL,s,0,8);
 			break;
 		case 3:
 			if(hittest(t,s,2.0))
-				attack(t,s,2*s->atk,DAMAGE_PHYSICAL,0,TYPE_MACHINE,NULL);
+				attack(t,s,2*s->atk,DAMAGE_PHYSICAL,0,TYPE_MACHINE,explode);
 			addspi(t,t->spi>0?-20:+20);
 			break;
 		case 4:
 			if(hittest(t,s,2.0))
-				attack(t,s,2*s->atk,DAMAGE_PHYSICAL,0,TYPE_ALKALIFIRE,NULL);
+				attack(t,s,2*s->atk,DAMAGE_PHYSICAL,0,TYPE_ALKALIFIRE,explode);
 			event(real_fire_disillusion_fr,s);
 			break;
 	}
@@ -4261,13 +4294,7 @@ const struct effect_base air_breaking_thorn[1]={{
 	.flag=EFFECT_PASSIVE,
 }};
 void oxidate(struct unit *dest,struct unit *src){
-	struct effect *e=unit_findeffect(dest,reduced);
-	if(e){
-		effect_end(e);
-		damage(dest,src,dest->max_hp/3,DAMAGE_MAGICAL,0,TYPE_POISON,NULL);
-	}else
-		damage(dest,src,64*dest->max_hp,DAMAGE_MAGICAL,AF_IDEATH|AF_CRIT,TYPE_POISON,NULL);
-	effect(reduced,src,dest,0,4);
+	damage(dest,src,64*dest->max_hp,DAMAGE_MAGICAL,AF_IDEATH|AF_DEF|AF_TYPE|AF_NODERATE,TYPE_POISON,NULL);
 }
 void air_breaking_thorn_i(struct unit *s){
 	effect(air_breaking_thorn,s,s,0,0);
@@ -5494,7 +5521,7 @@ const struct move builtin_moves[]={
 	},
 	{
 		.id="laser",
-		.action=laser,
+		.action=laser_a,
 		.type=TYPE_LIGHT,
 		.flag=0,
 		.available=ava_mana_10,
@@ -5668,6 +5695,7 @@ const struct move builtin_moves[]={
 	},
 	{
 		.id="fairyland_gate",
+		.action=byebye,
 		.init=fairyland_gate_p,
 		.type=TYPE_NORMAL,
 		.flag=0,

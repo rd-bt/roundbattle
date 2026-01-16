@@ -643,7 +643,7 @@ struct unit_base {
 };
 struct damage_type {
 	double (*derate_eval)(const struct unit *dest,const struct unit *src);
-	void (*action)(struct unit *dest,struct unit *src,long value,int damage_type,int aflag,int type);
+	void (*action)(struct unit *dest,struct unit *src,long value,int damage_type,int aflag,int type,void *arg);
 	size_t index;
 	int xflag,hpmod_flag;
 };
@@ -753,6 +753,7 @@ struct message {
 			long value;
 			int damage_type,aflag,type,unused;
 			unsigned long oldhp;
+			void *arg;
 		} damage;
 		const struct effect *e;
 		struct {
@@ -815,9 +816,9 @@ int unit_setstate(struct unit *u,int state);
 
 int unit_kill(struct unit *up);
 
-long damage(struct unit *dest,struct unit *src,long value,int damage_type,int aflag,int type,void *arg);
+long damage(struct unit *dest,struct unit *src,long value,int damage_type,int aflag,int type,const void *arg);
 
-long attack(struct unit *dest,struct unit *src,long value,int damage_type,int aflag,int type,void *arg);
+long attack(struct unit *dest,struct unit *src,long value,int damage_type,int aflag,int type,const void *arg);
 
 int hittest(struct unit *dest,struct unit *src,double hit_rate);
 
